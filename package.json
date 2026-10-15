@@ -1,0 +1,7 @@
+{
+  "name": "inventario-pana",
+  "private": true,
+  "version": "1.0.0",
+  "description": "App de inventario de panaderia: foto -> Excel -> columna IA de Toma_Inv",
+  "type": "module"
+}
