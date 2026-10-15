@@ -97,9 +97,12 @@
     FAMILIAS.forEach((f) => { familias[f.id] = { vidaUtil: f.vidaUtil, minDespacho: f.minDespacho, colchon: f.colchon }; });
     return {
       factorTemporada: 1,
-      horizonteModo: 'calendario',   // 'calendario' | 'fijo'
+      horizonteModo: 'calendario',   // 'calendario' | 'fijo' | 'tabla'
       horizonteFijo: 3,
       cortePorProduccion: 2,         // cubrir hasta la 2ª corrida
+      /* Modo 'tabla': para cada día de cálculo se marca qué días de venta entran.
+         `general` aplica a todas las familias; `familias[X]` la pisa si no es null. */
+      cobertura: { general: null, familias: {} },
       prod, turnos, familias,
       calendario: CALENDARIO_INICIAL.map((c) => ({ ...c })),
       feriados: [],                  // ['AAAA-MM-DD', ...]
@@ -137,8 +140,20 @@
     });
     if (!Array.isArray(out.calendario) || out.calendario.length !== 7) out.calendario = base.calendario;
     if (!Array.isArray(out.feriados)) out.feriados = [];
+    const cob = guardado.cobertura;
+    out.cobertura = {
+      general: matrizValida(cob && cob.general) ? cob.general : null,
+      familias: Object.fromEntries(FAMILIAS.map((f) => {
+        const m = cob && cob.familias && cob.familias[f.id];
+        return [f.id, matrizValida(m) ? m : null];
+      })),
+    };
     return out;
   }
+
+  /** Matriz 7x7 de booleanos: fila = día de cálculo, columna = día de venta. */
+  const matrizValida = (m) => Array.isArray(m) && m.length === 7 && m.every((f) => Array.isArray(f) && f.length === 7);
+  const matrizVacia = () => Array.from({ length: 7 }, () => Array(7).fill(false));
 
   const estado = {
     params: fusionarParams(leer('params', null)),
@@ -215,7 +230,7 @@
     paramsPorDefecto, fusionarParams,
     estado, guardarParams, guardarProm, guardarDias, leer, grabar,
     hoyISO, desdeISO, aISO, sumarDias, indiceDia, nombreDia, fechaCorta,
-    registro, registroVacio, num, vacio,
+    registro, registroVacio, num, vacio, matrizValida, matrizVacia,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Datos = api;

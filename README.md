@@ -33,8 +33,25 @@ de la foto de la hoja, importar del Excel o traer del día anterior.
 **Promedios** es la venta de un día normal por clave, igual que la pestaña PROM_VD del libro.
 Se puede escribir a mano o traer del libro de cálculo.
 
-**Ajustes** tiene todo lo parametrizable: horizonte, topes y mínimos por turno, vida útil y
-colchón por familia, calendario, múltiplos y rendimientos por clave, y el lector de fotos.
+**Parámetros** tiene todo lo parametrizable: horizonte, **días de venta a cubrir**, topes y
+mínimos por turno, vida útil y colchón por familia, calendario, múltiplos y rendimientos por
+clave, y el lector de fotos.
+
+### Días de venta a cubrir
+
+Con el modo **Según la tabla de días**, cada día de cálculo marca exactamente qué días de venta
+tiene que aguantar lo que se produce. La tabla es de 7×7: las filas son el día en que se calcula
+y las columnas los días de venta que entran en la demanda.
+
+Cada familia puede llevar su propia tabla. Mientras no se marque **Tabla propia de esta familia**,
+la familia sigue la tabla general. Así, el viernes puede cubrir viernes, sábado, lunes y martes
+para todo, y el domingo de Dulces y especial cubrir sólo lunes y martes.
+
+**Generar desde el calendario** llena la tabla con los días que salen del calendario de producción,
+como punto de partida para ajustarla a mano.
+
+El recuadro de la diagonal es el mismo día del cálculo. Marcarlo suma la venta de hoy, que el
+teórico PM ya había restado, así que en la práctica funciona como un día extra de colchón.
 
 ## Cómo se calcula el sugerido
 
@@ -71,7 +88,7 @@ corriendo con sus 12 qq de 10HD7, como en la operación real.
 Los valores de fábrica salen del comportamiento observado, pero **el sugerido necesita
 calibrarse con tus propios días**. Las primeras semanas conviene comparar en el Detalle del
 historial la columna de sugerido contra la de decidido: si siempre le agregas a una clave,
-súbele el colchón en Ajustes; si siempre le quitas, bájaselo.
+súbele el colchón en Parámetros; si siempre le quitas, bájaselo.
 
 ## Publicar
 
@@ -89,8 +106,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2';`
-2. `sw.js` → `const CACHE = 'panprod-V.2';`
+1. `js/ui.js` → `const VERSION = 'V.3';`
+2. `sw.js` → `const CACHE = 'panprod-V.3';`
 
 ## Respaldos
 

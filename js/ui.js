@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2';
+  const VERSION = 'V.3';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -15,7 +15,7 @@
     try { const f = localStorage.getItem('panprod_fecha'); return /^\d{4}-\d{2}-\d{2}$/.test(f || '') ? f : null; }
     catch (_) { return null; }
   })();
-  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null };
+  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, famMatriz: '' };
   const recordarFecha = () => { try { localStorage.setItem('panprod_fecha', ui.fecha); } catch (_) {} };
 
   // ---------- avisos ----------
@@ -70,10 +70,9 @@
     $('#inFecha').value = ui.fecha;
     $('#inFactor').value = D.estado.params.factorTemporada;
     $('#lblDia').textContent = D.nombreDia(ui.fecha);
-    const nd = C.diasACubrir(D.estado.params, ui.fecha);
-    const dias = [];
-    for (let i = 1; i <= nd; i++) dias.push(D.fechaCorta(D.sumarDias(ui.fecha, i)));
-    $('#lblCubrir').textContent = `Cubre ${nd} día${nd > 1 ? 's' : ''}: ${dias.join(', ')}`;
+    const offs = C.offsetsACubrir(D.estado.params, ui.fecha, null);
+    $('#lblCubrir').textContent = `Cubre ${offs.length} día${offs.length > 1 ? 's' : ''}: `
+      + offs.map((o) => D.fechaCorta(D.sumarDias(ui.fecha, o))).join(', ');
 
     // --- indicadores ---
     const sug = t.filas.reduce((a, f) => a + f.sugeridoQQ, 0);
@@ -109,7 +108,7 @@
     if (ui.sinCupo && ui.sinCupo.length) {
       av.push(['warn', `No cupo todo: faltan ${n2(ui.sinCupo.reduce((a, x) => a + x.qq, 0))} qq de turno`,
         ui.sinCupo.map((x) => `${x.clave} ${n2(x.qq)} qq`).join(' · ')
-        + '. Se puede subir un tope en Ajustes, mover claves a otro turno, o dejarlo así y vigilar la cobertura.']);
+        + '. Se puede subir un tope en Parámetros, mover claves a otro turno, o dejarlo así y vigilar la cobertura.']);
     }
     $('#avisosProd').innerHTML = av.map(([c, h, p]) => `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p)}</p></div>`).join('');
 
@@ -125,10 +124,13 @@
         <th>Decidido qq</th><th>Teórico PM mañana</th><th>Cobertura</th><th class="l">Alerta</th></tr>`;
       const tb = filas.map((f) => filaProd(f, turnos)).join('');
       const sumFam = filas.reduce((a, f) => a + f.decididoQQ, 0);
+      const offsFam = C.offsetsACubrir(D.estado.params, ui.fecha, fam.id);
+      const cubre = offsFam.map((o) => D.fechaCorta(D.sumarDias(ui.fecha, o))).join(', ');
       return `<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
-        <div style="display:flex;align-items:baseline;gap:12px;padding:12px 16px">
+        <div style="display:flex;align-items:baseline;gap:12px;padding:12px 16px;flex-wrap:wrap">
           <h3 style="margin:0">${esc(fam.nombre)}</h3>
           <span class="dim" style="font-size:.86rem">${filas.length} claves · ${n2(sumFam)} qq decididos</span>
+          <span class="dim" style="font-size:.86rem;margin-left:auto">Cubre: ${esc(cubre)}</span>
         </div>
         <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0">
           <table><thead>${th}</thead><tbody>${tb}</tbody></table>
@@ -329,6 +331,7 @@
           <div class="campo"><label for="inModo">Modo</label>
             <select id="inModo" style="min-width:210px">
               <option value="calendario">Hasta la próxima corrida</option>
+              <option value="tabla">Según la tabla de días</option>
               <option value="fijo">Número fijo de días</option>
             </select></div>
           <div class="campo"><label for="inCorte">Cubrir hasta la corrida N°</label>
@@ -338,6 +341,26 @@
           <div class="campo"><label for="inFactor2">Factor temporada</label>
             <input type="number" id="inFactor2" step="0.05" min="0" style="width:110px" value="${P.factorTemporada}"></div>
         </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <h3>Días de venta a cubrir</h3>
+        <p class="sub">
+          Para cada día de cálculo se marca qué días de venta tiene que aguantar la producción.
+          Cada familia puede tener su propia tabla.
+        </p>
+        <div class="fila" style="margin-bottom:10px">
+          <div class="campo"><label for="selFam">Tabla de</label>
+            <select id="selFam" style="min-width:200px">
+              <option value="">General (todas las familias)</option>
+              ${D.FAMILIAS.map((f) => `<option value="${f.id}">${esc(f.nombre)}</option>`).join('')}
+            </select></div>
+          <div class="campo" id="cpPropia" hidden><label>&nbsp;</label>
+            <label class="sw"><input type="checkbox" id="chkPropia"> Tabla propia de esta familia</label></div>
+          <div class="campo"><label>&nbsp;</label>
+            <button class="btn sec mini" type="button" id="btnDesdeCal">Generar desde el calendario</button></div>
+        </div>
+        <div id="matrizCont"></div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -399,7 +422,44 @@
       </div>`;
 
     $('#inModo').value = P.horizonteModo;
+    $('#selFam').value = ui.famMatriz || '';
+    pintarMatriz();
     pintarLector();
+  }
+
+  /** Tabla 7x7: fila = día de cálculo, columna = día de venta. */
+  function pintarMatriz() {
+    const P = D.estado.params;
+    const fam = ui.famMatriz || '';
+    const propia = fam ? D.matrizValida(P.cobertura.familias[fam]) : true;
+    $('#cpPropia').hidden = !fam;
+    $('#chkPropia').checked = propia;
+
+    const m = fam
+      ? (propia ? P.cobertura.familias[fam] : (P.cobertura.general || C.matrizDesdeCalendario(P)))
+      : (P.cobertura.general || C.matrizDesdeCalendario(P));
+    const editable = !fam || propia;
+
+    const filas = D.DIAS.map((dia, i) => `<tr>
+      <td class="l clave">${esc(dia)}</td>
+      ${D.DIAS.map((dv, j) => `<td style="text-align:center">
+        <input type="checkbox" data-mx="${i}" data-my="${j}" ${m[i][j] ? 'checked' : ''}
+          ${editable ? '' : 'disabled'} aria-label="${esc(dia)} cubre ${esc(dv)}"
+          style="${i === j ? 'outline:2px solid var(--line-2);outline-offset:2px' : ''}"></td>`).join('')}
+      <td class="num dim">${D.DIAS.filter((_, j) => m[i][j]).length} d</td></tr>`).join('');
+
+    $('#matrizCont').innerHTML = `
+      ${P.horizonteModo !== 'tabla'
+        ? '<div class="aviso warn"><h4>Esta tabla no se está usando</h4><p>Arriba, en <b>Modo</b>, hay que elegir «Según la tabla de días». Al marcar algo aquí se cambia solo.</p></div>'
+        : ''}
+      ${fam && !propia ? '<div class="aviso"><p>Esta familia sigue la tabla general. Marca «Tabla propia» para darle sus propios días.</p></div>' : ''}
+      <div class="tablabox"><table><thead><tr>
+        <th class="l">Día del cálculo</th>
+        ${D.DIAS.map((d) => `<th>${esc(d.slice(0, 3))}</th>`).join('')}
+        <th>Días</th></tr></thead><tbody>${filas}</tbody></table></div>
+      <p class="dim" style="font-size:.84rem;margin:9px 2px">
+        El recuadro marcado en cada fila es el mismo día del cálculo. Marcarlo cuenta la venta de hoy,
+        que ya se restó en el teórico PM, así que funciona como un día extra de colchón.</p>`;
   }
 
   function pintarLector() {
@@ -433,11 +493,46 @@
   }
 
   // ================= eventos =================
+  /** La matriz que se está editando; la crea copiando lo que se ve si no existía. */
+  function matrizDestino(crear) {
+    const P = D.estado.params, fam = ui.famMatriz || '';
+    const base = () => JSON.parse(JSON.stringify(
+      D.matrizValida(P.cobertura.general) ? P.cobertura.general : C.matrizDesdeCalendario(P)));
+    if (fam) {
+      if (!D.matrizValida(P.cobertura.familias[fam])) {
+        if (!crear) return null;
+        P.cobertura.familias[fam] = base();
+      }
+      return P.cobertura.familias[fam];
+    }
+    if (!D.matrizValida(P.cobertura.general)) {
+      if (!crear) return null;
+      P.cobertura.general = base();
+    }
+    return P.cobertura.general;
+  }
+
   function cambiosParametros(e) {
     const t = e.target, P = D.estado.params;
     const v = t.type === 'checkbox' ? t.checked : t.value.trim();
     const num = (x, d) => { const n = Number(String(x).replace(',', '.')); return Number.isFinite(n) ? n : d; };
     const d = t.dataset;
+
+    if (t.id === 'selFam') { ui.famMatriz = t.value; pintarMatriz(); return true; }
+    if (t.id === 'chkPropia') {
+      const fam = ui.famMatriz || '';
+      if (!fam) return true;
+      if (v) matrizDestino(true); else P.cobertura.familias[fam] = null;
+      D.guardarParams(); pintarMatriz(); return true;
+    }
+    if (d.mx != null && d.my != null) {
+      const m = matrizDestino(true);
+      m[+d.mx][+d.my] = v;
+      P.horizonteModo = 'tabla';
+      $('#inModo').value = 'tabla';
+      D.guardarParams(); pintarMatriz(); return true;
+    }
+
     let toco = true;
     if (d.cal != null) P.calendario[+d.cal].produce = v;
     else if (d.calf != null) P.calendario[+d.calf].factor = num(v, 1);
@@ -534,6 +629,17 @@
     });
 
     document.addEventListener('click', (e) => {
+      if (e.target.closest('#btnDesdeCal')) {
+        const P = D.estado.params;
+        const fam = ui.famMatriz || '';
+        const nueva = C.matrizDesdeCalendario(P);
+        if (fam) P.cobertura.familias[fam] = nueva; else P.cobertura.general = nueva;
+        P.horizonteModo = 'tabla';
+        $('#inModo').value = 'tabla';
+        D.guardarParams(); pintarMatriz();
+        aviso('Tabla armada con los días del calendario. Ahora se puede ajustar a mano.');
+        return;
+      }
       const b = e.target.closest('.verDet');
       if (b) { ui.abierta = ui.abierta === b.dataset.clave ? null : b.dataset.clave; pintarProduccion(); return; }
       const ab = e.target.closest('[data-abrir]');
@@ -657,7 +763,7 @@
       if (e.target.closest('#btnImportRend')) $('#fileRend').click();
       if (e.target.closest('#btnResetParam')) {
         preguntar('Volver a los ajustes de fábrica', '<p>Se pierden topes, múltiplos, vida útil y calendario que hayas cambiado.</p>', 'Restaurar')
-          .then((si) => { if (si) { D.estado.params = D.paramsPorDefecto(); D.guardarParams(); pintarParametros(); aviso('Ajustes restaurados.'); } });
+          .then((si) => { if (si) { D.estado.params = D.paramsPorDefecto(); D.guardarParams(); pintarParametros(); aviso('Parámetros restaurados.'); } });
       }
     });
     document.addEventListener('change', (e) => {

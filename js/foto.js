@@ -1,6 +1,6 @@
 /* Lectura de la foto del inventario: manda la imagen al lector y llena la
    columna de inventario del día. La llave puede vivir en un servidor propio o
-   en este dispositivo; se configura en Ajustes. */
+   en este dispositivo; se configura en Parámetros. */
 (function () {
   'use strict';
   const D = window.Datos;
@@ -82,7 +82,7 @@ Incluye TODAS las claves de ambas listas, aunque su valor sea null.`;
 
   async function viaServidor(b64) {
     const url = cfg('url').trim();
-    if (!url) throw new Error('Falta la dirección del lector. Configúrala en Ajustes.');
+    if (!url) throw new Error('Falta la dirección del lector. Configúrala en Parámetros.');
     const r = await fetch(url.replace(/\/+$/, ''), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ image_base64: b64, media_type: 'image/jpeg' }),
@@ -94,7 +94,7 @@ Incluye TODAS las claves de ambas listas, aunque su valor sea null.`;
 
   async function viaLlave(b64) {
     const key = cfg('key').trim();
-    if (!key) throw new Error('Falta la llave. Pégala en Ajustes.');
+    if (!key) throw new Error('Falta la llave. Pégala en Parámetros.');
     let r;
     try {
       r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -191,7 +191,7 @@ Incluye TODAS las claves de ambas listas, aunque su valor sea null.`;
       q('#fRes').innerHTML = '<div class="aviso"><p>Leyendo la foto…</p></div>';
       try {
         const modo = cfg('modo', '');
-        if (!modo) throw new Error('Primero elige en Ajustes dónde vive la llave del lector.');
+        if (!modo) throw new Error('Primero elige en Parámetros dónde vive la llave del lector.');
         const data = modo === 'llave' ? await viaLlave(b64) : await viaServidor(b64);
         const { inv, falta } = aClaves(data);
         leido = { inv, fecha: data.fecha || null, dudosas: data.dudosas || [] };

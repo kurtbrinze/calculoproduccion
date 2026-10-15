@@ -54,8 +54,8 @@
     return !!(c && c.produce);
   };
 
-  /** Días de venta a cubrir: desde mañana hasta la N-ésima corrida siguiente. */
-  function diasACubrir(params, fecha) {
+  /** Cuántos días seguidos hay que cubrir según el calendario de producción. */
+  function tramoCalendario(params, fecha) {
     if (params.horizonteModo === 'fijo') return Math.max(1, params.horizonteFijo || 1);
     const corte = Math.max(1, params.cortePorProduccion || 1);
     let vistas = 0;
@@ -66,6 +66,50 @@
       }
     }
     return 7;
+  }
+
+  /** La matriz que rige para esa familia: la suya si la tiene, si no la general. */
+  function matrizDe(params, familia) {
+    const c = params.cobertura || {};
+    const propia = c.familias && c.familias[familia];
+    if (D.matrizValida(propia)) return propia;
+    return D.matrizValida(c.general) ? c.general : null;
+  }
+
+  /**
+   * Qué días de venta entran en el cálculo, como desplazamientos desde la fecha.
+   * Con la tabla, un día marcado se busca en su próxima aparición: marcar el
+   * mismo día del cálculo da desplazamiento 0, o sea la venta de hoy.
+   */
+  function offsetsACubrir(params, fecha, familia) {
+    if (params.horizonteModo === 'tabla') {
+      const m = matrizDe(params, familia);
+      if (m) {
+        const hoy = D.indiceDia(fecha);
+        const offs = [];
+        for (let d = 0; d < 7; d++) if (m[hoy][d]) offs.push((d - hoy + 7) % 7);
+        if (offs.length) return offs.sort((a, b) => a - b);
+      }
+    }
+    const n = tramoCalendario(params, fecha);
+    return Array.from({ length: n }, (_, i) => i + 1);
+  }
+
+  /** Compatibilidad: cuántos días cubre el cálculo. */
+  function diasACubrir(params, fecha, familia) {
+    return offsetsACubrir(params, fecha, familia).length;
+  }
+
+  /** Construye la matriz por defecto a partir del calendario, para arrancar igual. */
+  function matrizDesdeCalendario(params) {
+    const m = D.matrizVacia();
+    const base = '2026-10-12';   // un lunes cualquiera: sólo importa el día de la semana
+    for (let w = 0; w < 7; w++) {
+      const f = D.sumarDias(base, w);
+      const n = tramoCalendario(params, f);
+      for (let i = 1; i <= n; i++) m[w][(w + i) % 7] = true;
+    }
+    return m;
   }
 
   const ventaDe = (estado, params, clave, iso) => {
@@ -88,9 +132,9 @@
     const ventaHoy = ventaDe(estado, params, clave, fecha);
     const teoricoHoy = Math.max(0, disponible - ventaHoy);
 
-    const nDias = diasACubrir(params, fecha);
-    const ventas = [];
-    for (let d = 1; d <= nDias; d++) ventas.push(ventaDe(estado, params, clave, D.sumarDias(fecha, d)));
+    const offs = offsetsACubrir(params, fecha, cfg.familia);
+    const nDias = offs.length;
+    const ventas = offs.map((d) => ventaDe(estado, params, clave, D.sumarDias(fecha, d)));
     const demanda = ventas.reduce((a, b) => a + b, 0);
     const conVenta = ventas.filter((v) => v > 0).length;
     const promDia = conVenta ? demanda / conVenta : 0;
@@ -128,7 +172,7 @@
       clave, familia: cfg.familia, rend, mult,
       inv, prodHoyQQ, prodHoyB, disponible,
       ventaHoy, teoricoHoy,
-      nDias, ventas, demanda, promDia, seguridad,
+      nDias, offs, ventas, demanda, promDia, seguridad,
       necesidad, topeVida, cobMax, vidaUtil: vu, minDespacho, colchon,
       objetivoDias: nDias + colchon,
       sugeridoB, sugeridoQQcrudo, sugeridoQQ,
@@ -301,7 +345,8 @@
   }
 
   const api = {
-    redondea, alMultiploArriba, alMultiploAbajo, politica, vidaUtil, produceEse, diasACubrir,
+    redondea, alMultiploArriba, alMultiploAbajo, politica, vidaUtil, produceEse,
+    diasACubrir, offsetsACubrir, tramoCalendario, matrizDesdeCalendario, matrizDe,
     ventaDe, calcularFila, calcularTodo, resumenTurnos, repartir, limpiarReparto, cupos,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
