@@ -15,6 +15,11 @@
   --accent-2:#56C9F0;
   --grad:linear-gradient(135deg,#4ADE9B 0%,#56C9F0 100%);
   --on-accent:#06281C;
+  /* Botones en tonos apagados: el mismo verde y cian, bajados de intensidad. */
+  --btn:linear-gradient(135deg,#2E8468 0%,#2F7795 100%);
+  --btn-ink:#E9F3EF;
+  --btn-borde:rgba(74,222,155,.22);
+  --btn-texto:#7CCDAC;
   --warn:#EBB75F;
   --warn-soft:rgba(235,183,95,.12);
   --danger:#F08098;
@@ -53,8 +58,8 @@ h1,h2,h3{letter-spacing:-.01em}
 .marca .wm b{font-size:1rem;font-weight:700}
 .marca .wm span{font-size:.62rem;letter-spacing:.22em;color:var(--muted);margin-top:3px}
 .ver{
-  font-size:.8rem;font-weight:700;color:var(--accent);white-space:nowrap;
-  background:rgba(74,222,155,.09);border:1px solid rgba(74,222,155,.28);
+  font-size:.8rem;font-weight:700;color:var(--btn-texto);white-space:nowrap;
+  background:rgba(74,222,155,.07);border:1px solid var(--btn-borde);
   border-radius:999px;padding:5px 12px;
 }
 
@@ -64,10 +69,10 @@ h1,h2,h3{letter-spacing:-.01em}
   min-height:46px;padding:0 18px;border-radius:var(--r-sm);border:0;cursor:pointer;
   font-weight:650;font-size:.97rem;transition:filter .15s,background .15s,border-color .15s;
 }
-.btn:not(.ghost){background:var(--grad);color:var(--on-accent)}
-.btn:not(.ghost):hover{filter:brightness(1.07)}
-.btn.ghost{background:transparent;color:var(--accent);border:1.5px solid rgba(74,222,155,.3)}
-.btn.ghost:hover{border-color:var(--accent);background:rgba(74,222,155,.07)}
+.btn:not(.ghost){background:var(--btn);color:var(--btn-ink)}
+.btn:not(.ghost):hover{filter:brightness(1.14)}
+.btn.ghost{background:transparent;color:var(--btn-texto);border:1.5px solid var(--btn-borde)}
+.btn.ghost:hover{border-color:rgba(74,222,155,.45);background:rgba(74,222,155,.06);color:var(--accent)}
 .btn.sec{background:var(--surface-2);color:var(--ink);border:1px solid var(--line-2)}
 .btn.sec:hover{background:var(--surface-3)}
 .btn.mini{min-height:38px;padding:0 13px;font-size:.88rem}
@@ -112,7 +117,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
 .turno .qq strong{font-size:1.45rem;font-variant-numeric:tabular-nums;line-height:1}
 .turno .qq span{color:var(--muted);font-size:.85rem}
 .barra{height:6px;border-radius:99px;background:var(--surface-3);margin-top:9px;overflow:hidden}
-.barra i{display:block;height:100%;border-radius:99px;background:var(--grad);transition:width .25s}
+.barra i{display:block;height:100%;border-radius:99px;background:var(--btn);transition:width .25s}
 .turno.lleno .barra i{background:var(--warn)}
 .turno.excedido{border-color:rgba(240,128,152,.5)}
 .turno.excedido .barra i{background:var(--danger)}

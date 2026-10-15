@@ -89,8 +89,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.1';`
-2. `sw.js` → `const CACHE = 'panprod-V.1';`
+1. `js/ui.js` → `const VERSION = 'V.2';`
+2. `sw.js` → `const CACHE = 'panprod-V.2';`
 
 ## Respaldos
 

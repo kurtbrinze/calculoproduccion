@@ -1,6 +1,6 @@
 /* Guarda la app para que abra sin señal.
    Al publicar una versión nueva hay que subir CACHE y APP_VERSION en js/ui.js. */
-const CACHE = 'panprod-V.1';
+const CACHE = 'panprod-V.2';
 const ASSETS = ['./', './index.html', './manifest.webmanifest',
   './css/app.css', './js/vendor/jszip.min.js', './js/datos.js', './js/calculo.js',
   './js/excel.js', './js/foto.js', './js/ui.js',
