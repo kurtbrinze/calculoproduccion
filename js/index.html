@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101823">
+<title>Producción de panadería</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Producción">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥖</text></svg>">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div class="wrap">
+  <div class="topbar">
+    <div class="marca">
+      <svg viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <defs><linearGradient id="rg" x1="0" y1="0" x2="32" y2="32">
+          <stop offset="0" stop-color="#4ADE9B"/><stop offset="1" stop-color="#56C9F0"/></linearGradient></defs>
+        <path d="M9 26V6h9a6 6 0 0 1 0 12H9m8 0 7 8" stroke="url(#rg)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle cx="9" cy="6" r="2.8" fill="url(#rg)"/><circle cx="24" cy="26" r="2.8" fill="url(#rg)"/>
+      </svg>
+      <span class="wm"><b>Rinze</b><span>STUDIO</span></span>
+    </div>
+    <button class="btn ghost mini" id="btnInstalar" type="button" hidden title="Instalar app" aria-label="Instalar app">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg>
+      <span class="lbl">Instalar app</span>
+    </button>
+    <span class="ver" id="badgeVer">V.1</span>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" id="tabProd"  aria-selected="true"  aria-controls="pProd">Producción</button>
+    <button type="button" role="tab" id="tabInv"   aria-selected="false" aria-controls="pInv">Inventario</button>
+    <button type="button" role="tab" id="tabHist"  aria-selected="false" aria-controls="pHist">Historial</button>
+    <button type="button" role="tab" id="tabProm"  aria-selected="false" aria-controls="pProm">Promedios</button>
+    <button type="button" role="tab" id="tabParam" aria-selected="false" aria-controls="pParam">Ajustes</button>
+  </div>
+
+  <!-- ============ PRODUCCIÓN ============ -->
+  <section class="panel" id="pProd" role="tabpanel" aria-labelledby="tabProd">
+    <div class="card" style="margin-bottom:14px">
+      <div class="fila">
+        <div class="campo">
+          <label for="inFecha">Día a producir</label>
+          <input type="date" id="inFecha" style="min-width:168px">
+        </div>
+        <div class="campo">
+          <label for="inFactor">Factor temporada</label>
+          <input type="number" id="inFactor" step="0.05" min="0" style="width:112px">
+        </div>
+        <div class="campo">
+          <label>&nbsp;</label>
+          <button class="btn" id="btnRepartir" type="button">Calcular y repartir</button>
+        </div>
+        <div class="campo">
+          <label>&nbsp;</label>
+          <button class="btn sec" id="btnLimpiar" type="button">Borrar reparto</button>
+        </div>
+        <div class="campo" style="margin-left:auto;align-items:flex-end">
+          <label id="lblDia">&nbsp;</label>
+          <span class="dim" id="lblCubrir"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpis"></div>
+    <div id="avisosProd"></div>
+    <div class="turnos" id="turnos"></div>
+
+    <div id="famCont"></div>
+    <p class="dim" style="font-size:.85rem;margin:10px 2px">
+      Toca una clave para ver de dónde sale su sugerido. Los quintales por turno se pueden escribir a mano;
+      todo lo demás se recalcula solo.
+    </p>
+  </section>
+
+  <!-- ============ INVENTARIO ============ -->
+  <section class="panel" id="pInv" role="tabpanel" aria-labelledby="tabInv" hidden>
+    <div class="card" style="margin-bottom:14px">
+      <h3>Inventario y producción del día</h3>
+      <p class="sub">
+        El inventario es el conteo de cierre en bolsas. La producción del día son los quintales que ya se hicieron
+        en esa fecha. De esos dos sale el teórico PM con el que se decide.
+      </p>
+      <div class="fila">
+        <button class="btn ghost" id="btnFoto" type="button">Leer foto del inventario</button>
+        <button class="btn sec" id="btnImportInv" type="button">Importar Excel de inventario</button>
+        <button class="btn sec" id="btnCopiarAyer" type="button">Traer inventario de ayer</button>
+        <input type="file" id="fileInv" accept=".xlsx" hidden>
+      </div>
+    </div>
+    <div id="avisosInv"></div>
+    <div class="tablabox">
+      <table>
+        <thead><tr>
+          <th class="l">Clave</th><th>Inventario (bolsas)</th><th>Producción hoy (qq)</th>
+          <th>= bolsas</th><th>Disponible</th><th>Conteo real</th><th>Diferencia</th>
+        </tr></thead>
+        <tbody id="tbodyInv"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ============ HISTORIAL ============ -->
+  <section class="panel" id="pHist" role="tabpanel" aria-labelledby="tabHist" hidden>
+    <div class="card" style="margin-bottom:14px">
+      <h3>Historial de producción</h3>
+      <p class="sub">Cada día guardado queda aquí para comparar temporadas y calibrar el sugerido.</p>
+      <div class="fila">
+        <button class="btn" id="btnExportHist" type="button">Exportar a Excel</button>
+        <button class="btn sec" id="btnRespaldo" type="button">Descargar respaldo</button>
+        <button class="btn sec" id="btnRestaurar" type="button">Restaurar respaldo</button>
+        <input type="file" id="fileResp" accept=".json" hidden>
+      </div>
+    </div>
+    <div class="kpis" id="kpisHist"></div>
+    <div id="avisosHist"></div>
+    <div class="tablabox">
+      <table><thead id="theadHist"></thead><tbody id="tbodyHist"></tbody></table>
+    </div>
+  </section>
+
+  <!-- ============ PROMEDIOS ============ -->
+  <section class="panel" id="pProm" role="tabpanel" aria-labelledby="tabProm" hidden>
+    <div class="card" style="margin-bottom:14px">
+      <h3>Promedios de venta</h3>
+      <p class="sub">
+        Bolsas que se venden en un día normal de cada clave, igual que la pestaña PROM_VD del libro.
+        Es el dato que más mueve el sugerido.
+      </p>
+      <div class="fila">
+        <button class="btn ghost" id="btnImportProm" type="button">Traer del libro de cálculo</button>
+        <button class="btn sec" id="btnResetProm" type="button">Volver a los valores de fábrica</button>
+        <input type="file" id="fileProm" accept=".xlsx" hidden>
+      </div>
+    </div>
+    <div id="avisosProm"></div>
+    <div class="tablabox">
+      <table><thead id="theadProm"></thead><tbody id="tbodyProm"></tbody></table>
+    </div>
+  </section>
+
+  <!-- ============ AJUSTES ============ -->
+  <section class="panel" id="pParam" role="tabpanel" aria-labelledby="tabParam" hidden>
+    <div id="paramCuerpo"></div>
+  </section>
+</div>
+
+<div class="bar">
+  <div class="in">
+    <span class="info" id="barInfo"></span>
+    <button class="btn sec" id="btnReiniciar" type="button">Empezar de nuevo</button>
+    <button class="btn" id="btnGuardarDia" type="button">Guardar el día</button>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="espera" aria-hidden="true"><div id="esperaMsg">Procesando…</div></div>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTit">
+  <div class="caja">
+    <h3 id="modalTit"></h3>
+    <div id="modalCuerpo"></div>
+    <div class="fila" style="margin-top:16px">
+      <button class="btn sec" type="button" id="modalNo" style="flex:1">Cancelar</button>
+      <button class="btn" type="button" id="modalSi" style="flex:1">Aceptar</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/vendor/jszip.min.js"></script>
+<script src="js/datos.js"></script>
+<script src="js/calculo.js"></script>
+<script src="js/excel.js"></script>
+<script src="js/foto.js"></script>
+<script src="js/ui.js"></script>
+<script>
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>
