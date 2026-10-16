@@ -163,6 +163,22 @@ dice en qué plantas se puede hacer, y el reparto sólo usa turnos de esas plant
 cuenta como clave de las dos plantas y la planta se define según dónde caiga el reparto. Su tope
 viene en 40 qq, que es el que se le vio a la máquina en la hoja del 14/oct — conviene revisarlo.
 
+### Cada planta tiene su calendario
+
+En Parámetros, el calendario de producción trae una columna por planta. De fábrica, Zona 18
+descansa sábado y domingo, y **Zona 2 trabaja el domingo**: así Byron, Julio y Máquina Z2 pueden
+producir ese día. Cualquiera de las dos se cambia marcando o desmarcando.
+
+Eso cambia tres cosas:
+
+- **El horizonte.** Un viernes, Zona 18 tiene que cubrir hasta el martes (4 días) mientras que
+  Zona 2 sólo hasta el lunes (3), porque vuelve a producir el domingo. El rótulo de arriba y el
+  de cada familia nombran la planta cuando los tramos no coinciden.
+- **El reparto.** Los turnos de una planta que descansa no reciben quintales, y su tarjeta sale
+  apagada con «no trabaja hoy».
+- **El aviso.** Las claves que ese día no se pueden producir salen en un aviso aparte, no
+  mezcladas con las que no cupieron por tope.
+
 Si una clave está marcada para una planta donde ninguno de sus turnos trabaja, la app lo avisa
 en el tablero y la marca en Parámetros en vez de dejarla sin producir: se sigue repartiendo en
 sus turnos de siempre, pero el sugerido por planta no cuadra con lo decidido hasta que se

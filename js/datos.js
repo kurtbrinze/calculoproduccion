@@ -118,12 +118,19 @@
     '6QU1': [39, 31, 35, 36, 45, 34, 0],
   };
 
-  /* Calendario: qué días trabaja la planta. Sábado y domingo no se produce. */
-  const CALENDARIO_INICIAL = DIAS.map((d) => ({ dia: d, produce: !['SABADO', 'DOMINGO'].includes(d), factor: 1 }));
+  /* Calendario: qué días trabaja cada planta. Zona 18 descansa sábado y domingo;
+     Zona 2 trabaja también el domingo. Todo se cambia en Parámetros. */
+  const CALENDARIO_INICIAL = DIAS.map((d) => {
+    const z18 = !['SABADO', 'DOMINGO'].includes(d);
+    const z2 = d !== 'SABADO';
+    return { dia: d, produce: z18 || z2, factor: 1, plantas: { Z18: z18, Z2: z2 } };
+  });
 
   /* Sube cuando hay un cambio de fábrica que debe alcanzar a quien ya tenía
-     parámetros guardados. 2 = llegó el turno Máquina Z2. */
-  const ESQUEMA = 2;
+     parámetros guardados.
+       2 = llegó el turno Máquina Z2.
+       3 = el calendario de producción pasó a ser por planta. */
+  const ESQUEMA = 3;
 
   /** Ficha de producto completa, con todos los campos en su lugar. */
   function fichaDe(p) {
@@ -229,6 +236,16 @@
       if (base.familias[k]) out.familias[k] = { ...base.familias[k], ...guardado.familias[k] };
     });
     if (!Array.isArray(out.calendario) || out.calendario.length !== 7) out.calendario = base.calendario;
+    /* Calendario por planta: lo que había pasa a Zona 18, y Zona 2 arranca
+       igual más el domingo, que es lo que de verdad trabaja. */
+    out.calendario = out.calendario.map((c, i) => {
+      const dia = DIAS[i];
+      const pl = c && c.plantas;
+      const z18 = pl && typeof pl.Z18 === 'boolean' ? pl.Z18 : !!(c && c.produce);
+      const z2 = pl && typeof pl.Z2 === 'boolean' ? pl.Z2
+        : (dia === 'DOMINGO' ? true : !!(c && c.produce));
+      return { dia, factor: Number(c && c.factor) || 1, plantas: { Z18: z18, Z2: z2 }, produce: z18 || z2 };
+    });
     if (!Array.isArray(out.feriados)) out.feriados = [];
 
     const dif = Array.isArray(guardado.diferenciados) ? guardado.diferenciados : null;

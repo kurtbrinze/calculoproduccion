@@ -15,7 +15,7 @@
     try { const f = localStorage.getItem('panprod_fecha'); return /^\d{4}-\d{2}-\d{2}$/.test(f || '') ? f : null; }
     catch (_) { return null; }
   })();
-  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, famMatriz: '', vistaHist: 'turno' };
+  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno' };
   const recordarFecha = () => { try { localStorage.setItem('panprod_fecha', ui.fecha); } catch (_) {} };
 
   // ---------- avisos ----------
@@ -77,9 +77,7 @@
     $('#inFecha').value = ui.fecha;
     $('#inFactor').value = D.estado.params.factorTemporada;
     $('#lblDia').textContent = D.nombreDia(ui.fecha);
-    const offs = C.offsetsACubrir(D.estado.params, ui.fecha, null);
-    $('#lblCubrir').textContent = `Cubre ${offs.length} día${offs.length > 1 ? 's' : ''}: `
-      + offs.map((o) => D.fechaCorta(D.sumarDias(ui.fecha, o))).join(', ');
+    $('#lblCubrir').innerHTML = rotuloCubre(t.filas, true);
 
     // --- indicadores ---
     const sug = t.filas.reduce((a, f) => a + f.sugeridoQQ, 0);
@@ -97,8 +95,8 @@
     const tarjetas = D.PLANTAS.map((x) => {
       const v = pl[x.id];
       const pct = v.tope > 0 ? Math.min(100, Math.round((v.decidido / v.tope) * 100)) : 0;
-      return `<div class="planta">
-        <b>${esc(v.nombre)}</b>
+      return `<div class="planta ${v.trabaja ? '' : 'apagado'}">
+        <b>${esc(v.nombre)}${v.trabaja ? '' : ' <span class="dim" style="font-weight:400;font-size:.8rem">no trabaja hoy</span>'}</b>
         <div class="qq"><strong>${n1(v.sugerido)}</strong><span>qq sugeridos</span></div>
         <div class="barra"><i style="width:${pct}%"></i></div>
         <span class="dim" style="font-size:.82rem">${n2(v.decidido)} decididos de ${n2(v.tope)} qq de capacidad</span>
@@ -117,7 +115,7 @@
       const pct = Math.min(100, Math.round(x.pct * 100));
       const cls = [!x.activo && 'apagado', x.excedido && 'excedido', !x.excedido && x.pct >= 0.999 && 'lleno', x.bajoMinimo && 'bajo'].filter(Boolean).join(' ');
       return `<div class="turno ${cls}">
-        <b>${esc(x.nombre)}</b><span class="papel">${esc(x.papel)}</span>
+        <b>${esc(x.nombre)}</b><span class="papel">${esc(x.papel)}${x.trabaja ? '' : ' · no trabaja hoy'}</span>
         <div class="qq"><strong>${n2(x.usado)}</strong><span>de ${n2(x.tope)} qq</span></div>
         <div class="barra"><i style="width:${pct}%"></i></div>
         ${x.excedido ? '<span class="chip falta" style="margin-top:7px">Pasa el tope</span>'
@@ -132,6 +130,9 @@
       'Sin él el teórico PM sale de cero. Cárgalo en la pestaña Inventario con «Cargar STOCK AYER».']);
     else if (sinInv) av.push(['warn', `${sinInv} claves sin stock de ayer`,
       'Las que están vacías se calculan como si no hubiera existencia.']);
+    const paran = D.PLANTAS.filter((x) => t.plantas[x.id] && !t.plantas[x.id].trabaja);
+    if (paran.length) av.push(['', `${paran.map((x) => x.nombre).join(' y ')} no trabaja${paran.length > 1 ? 'n' : ''} este día`,
+      'Sus turnos quedan fuera del reparto. El calendario de cada planta se cambia en Parámetros.']);
     const desaj = t.filas.filter((f) => C.turnosUtiles(D.estado.params, f.clave).desajuste);
     if (desaj.length) av.push(['warn',
       desaj.length === 1 ? `${desaj[0].clave} está marcada para una planta donde ningún turno suyo trabaja`
@@ -141,6 +142,11 @@
       + 'Se arregla en Parámetros: o marcas la otra planta, o le das un turno de la planta marcada.']);
     const exc = Object.values(t.turnos).filter((x) => x.excedido);
     if (exc.length) av.push(['err', 'Hay turnos pasados de tope', exc.map((x) => `${x.nombre}: ${n2(x.usado)} de ${n2(x.tope)} qq`).join(' · ')]);
+    if (ui.sinTurnoHoy && ui.sinTurnoHoy.length) {
+      av.push(['', `${ui.sinTurnoHoy.length} claves no se pueden producir este día`,
+        ui.sinTurnoHoy.map((x) => `${x.clave} ${n2(x.qq)} qq`).join(' · ')
+        + '. Sus turnos son de una planta que hoy descansa, así que el sugerido queda para la próxima corrida.']);
+    }
     if (ui.sinCupo && ui.sinCupo.length) {
       av.push(['warn', `No cupo todo: faltan ${n2(ui.sinCupo.reduce((a, x) => a + x.qq, 0))} qq de turno`,
         ui.sinCupo.map((x) => `${x.clave} ${n2(x.qq)} qq`).join(' · ')
@@ -160,13 +166,12 @@
         <th>Decidido qq</th><th>Teórico PM mañana</th><th>Cobertura</th><th class="l">Alerta</th></tr>`;
       const tb = filas.map((f) => filaProd(f, turnos)).join('');
       const sumFam = filas.reduce((a, f) => a + f.decididoQQ, 0);
-      const offsFam = C.offsetsACubrir(D.estado.params, ui.fecha, fam.id);
-      const cubre = offsFam.map((o) => D.fechaCorta(D.sumarDias(ui.fecha, o))).join(', ');
+      const cubre = rotuloCubre(filas);
       return `<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
         <div style="display:flex;align-items:baseline;gap:12px;padding:12px 16px;flex-wrap:wrap">
           <h3 style="margin:0">${esc(fam.nombre)}</h3>
           <span class="dim" style="font-size:.86rem">${filas.length} claves · ${n2(sumFam)} qq decididos</span>
-          <span class="dim" style="font-size:.86rem;margin-left:auto">Cubre: ${esc(cubre)}</span>
+          <span class="dim" style="font-size:.86rem;margin-left:auto">Cubre: ${cubre}</span>
         </div>
         <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0">
           <table><thead>${th}</thead><tbody>${tb}</tbody></table>
@@ -180,6 +185,44 @@
   }
 
   const kpi = (t, v, cls = '') => `<div class="kpi ${cls}"><span>${esc(t)}</span><strong>${esc(v)}</strong></div>`;
+
+  /** Las plantas donde se produce algo de esa familia. */
+  function plantasDeFamilia(famId) {
+    const out = new Set();
+    D.activos().forEach((p) => {
+      if (famId && p.familia !== famId) return;
+      C.plantasDe(D.estado.params, p.clave).forEach((x) => out.add(x));
+    });
+    return [...out];
+  }
+
+  /**
+   * Qué días cubre el cálculo. Como cada planta tiene su calendario, las filas
+   * no siempre coinciden: cuando difieren se nombra la planta de cada tramo.
+   */
+  function rotuloCubre(filas, conPrefijo) {
+    if (!filas.length) return '';
+    const grupos = new Map();
+    filas.forEach((f) => {
+      const k = f.offs.join(',');
+      if (!grupos.has(k)) grupos.set(k, f.offs);
+    });
+    const dias = (offs) => offs.map((o) => D.fechaCorta(D.sumarDias(ui.fecha, o))).join(', ');
+    if (grupos.size === 1) {
+      const offs = [...grupos.values()][0];
+      return (conPrefijo ? `Cubre ${offs.length} día${offs.length > 1 ? 's' : ''}: ` : '') + esc(dias(offs));
+    }
+    /* Varios tramos: se nombra la planta cuyo propio calendario da cada uno,
+       que es lo que explica la diferencia. */
+    const nombre = (id) => (D.PLANTAS.find((x) => x.id === id) || {}).nombre || id;
+    return [...grupos.values()].map((offs) => {
+      const k = offs.join(',');
+      const suyas = D.PLANTAS
+        .filter((x) => C.offsetsACubrir(D.estado.params, ui.fecha, null, [x.id]).join(',') === k)
+        .map((x) => nombre(x.id));
+      return `<b>${esc(suyas.length ? suyas.join(' y ') : offs.length + ' días')}</b> ${esc(dias(offs))}`;
+    }).join(' · ');
+  }
 
   function filaProd(f, turnos) {
     const cfg = D.estado.params.prod[f.clave];
@@ -471,7 +514,9 @@
     const P = D.estado.params;
     const cal = P.calendario.map((c, i) => `<tr>
       <td class="l clave">${esc(D.DIAS[i])}</td>
-      <td><label class="sw"><input type="checkbox" data-cal="${i}" ${c.produce ? 'checked' : ''}> produce</label></td>
+      ${D.PLANTAS.map((x) => `<td class="l"><label class="sw">
+        <input type="checkbox" data-calp="${i}" data-pid="${x.id}" ${(c.plantas || {})[x.id] ? 'checked' : ''}>
+        produce</label></td>`).join('')}
       <td><input class="inqq" inputmode="decimal" data-calf="${i}" value="${c.factor}" aria-label="Factor de ${D.DIAS[i]}"></td>
     </tr>`).join('');
 
@@ -595,8 +640,14 @@
 
       <div class="card" style="margin-bottom:14px">
         <h3>Calendario de producción</h3>
-        <p class="sub">Los días sin producción alargan el horizonte: el viernes tiene que cubrir hasta el lunes.</p>
-        <div class="tablabox"><table><thead><tr><th class="l">Día</th><th class="l">Produce</th><th>Factor de venta</th></tr></thead><tbody>${cal}</tbody></table></div>
+        <p class="sub">
+          Cada planta tiene su propio calendario. Los días sin producción alargan el horizonte:
+          si Zona 18 no trabaja el domingo, su viernes tiene que cubrir hasta el lunes, mientras que
+          Zona 2, que sí trabaja el domingo, cubre menos días.
+        </p>
+        <div class="tablabox"><table><thead><tr><th class="l">Día</th>
+          ${D.PLANTAS.map((x) => `<th class="l">${esc(x.nombre)}</th>`).join('')}
+          <th>Factor de venta</th></tr></thead><tbody>${cal}</tbody></table></div>
         <div class="fila" style="margin-top:12px">
           <div class="campo"><label for="inFeriados">Fechas sin producción (una por línea, AAAA-MM-DD)</label>
             <textarea id="inFeriados" style="min-width:260px">${esc((P.feriados || []).join('\n'))}</textarea></div>
@@ -695,7 +746,7 @@
     $('#chkPropia').checked = propia;
 
     const m = fam
-      ? (propia ? P.cobertura.familias[fam] : (P.cobertura.general || C.matrizDesdeCalendario(P)))
+      ? (propia ? P.cobertura.familias[fam] : (P.cobertura.general || C.matrizDesdeCalendario(P, plantasDeFamilia(fam))))
       : (P.cobertura.general || C.matrizDesdeCalendario(P));
     const editable = !fam || propia;
 
@@ -756,7 +807,8 @@
   function matrizDestino(crear) {
     const P = D.estado.params, fam = ui.famMatriz || '';
     const base = () => JSON.parse(JSON.stringify(
-      D.matrizValida(P.cobertura.general) ? P.cobertura.general : C.matrizDesdeCalendario(P)));
+      D.matrizValida(P.cobertura.general) ? P.cobertura.general
+        : C.matrizDesdeCalendario(P, fam ? plantasDeFamilia(fam) : null)));
     if (fam) {
       if (!D.matrizValida(P.cobertura.familias[fam])) {
         if (!crear) return null;
@@ -793,6 +845,12 @@
     }
 
     let toco = true;
+    if (d.calp != null) {
+      const c = P.calendario[+d.calp];
+      c.plantas = { ...(c.plantas || {}), [d.pid]: v };
+      c.produce = D.PLANTAS.some((x) => c.plantas[x.id]);
+      D.guardarParams(); pintarParametros(); return true;
+    }
     if (d.cal != null) P.calendario[+d.cal].produce = v;
     else if (d.calf != null) P.calendario[+d.calf].factor = num(v, 1);
     else if (d.tope) P.turnos[d.tope].tope = Math.max(0, num(v, 0));
@@ -846,7 +904,7 @@
 
     // producción
     $('#inFecha').onchange = (e) => {
-      ui.fecha = e.target.value || D.hoyISO(); ui.abierta = null; ui.sinCupo = null;
+      ui.fecha = e.target.value || D.hoyISO(); ui.abierta = null; ui.sinCupo = null; ui.sinTurnoHoy = null;
       recordarFecha(); pintarProduccion();
     };
     $('#inFactor').onchange = (e) => {
@@ -855,12 +913,12 @@
     };
     $('#btnRepartir').onclick = () => {
       const r = C.repartir(D.estado, reg(), ui.fecha);
-      ui.sinCupo = r.sinCupo;
+      ui.sinCupo = r.sinCupo; ui.sinTurnoHoy = r.sinTurnoHoy;
       D.guardarDias(); pintarProduccion();
       aviso(r.sinCupo.length ? `Repartido. ${r.sinCupo.length} claves no cupieron completas.` : 'Repartido entre los turnos.');
     };
     $('#btnLimpiar').onclick = () => {
-      C.limpiarReparto(reg()); ui.sinCupo = null; D.guardarDias(); pintarProduccion(); aviso('Reparto borrado.');
+      C.limpiarReparto(reg()); ui.sinCupo = null; ui.sinTurnoHoy = null; D.guardarDias(); pintarProduccion(); aviso('Reparto borrado.');
     };
 
     document.addEventListener('change', (e) => {
@@ -903,7 +961,7 @@
       if (e.target.closest('#btnDesdeCal')) {
         const P = D.estado.params;
         const fam = ui.famMatriz || '';
-        const nueva = C.matrizDesdeCalendario(P);
+        const nueva = C.matrizDesdeCalendario(P, fam ? plantasDeFamilia(fam) : null);
         if (fam) P.cobertura.familias[fam] = nueva; else P.cobertura.general = nueva;
         P.horizonteModo = 'tabla';
         $('#inModo').value = 'tabla';

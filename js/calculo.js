@@ -50,19 +50,26 @@
   };
   const vidaUtil = politica;
 
-  const produceEse = (params, iso) => {
+  /**
+   * Si ese día se produce. Con `plantas` se pregunta por unas plantas en
+   * concreto: basta que una trabaje. Sin ellas, vale cualquiera.
+   */
+  const produceEse = (params, iso, plantas) => {
     if ((params.feriados || []).includes(iso)) return false;
     const c = params.calendario[D.indiceDia(iso)];
-    return !!(c && c.produce);
+    if (!c) return false;
+    const pl = c.plantas || {};
+    const lista = plantas && plantas.length ? plantas : D.PLANTAS.map((x) => x.id);
+    return lista.some((x) => (typeof pl[x] === 'boolean' ? pl[x] : !!c.produce));
   };
 
   /** Cuántos días seguidos hay que cubrir según el calendario de producción. */
-  function tramoCalendario(params, fecha) {
+  function tramoCalendario(params, fecha, plantas) {
     if (params.horizonteModo === 'fijo') return Math.max(1, params.horizonteFijo || 1);
     const corte = Math.max(1, params.cortePorProduccion || 1);
     let vistas = 0;
     for (let d = 1; d <= 14; d++) {
-      if (produceEse(params, D.sumarDias(fecha, d))) {
+      if (produceEse(params, D.sumarDias(fecha, d), plantas)) {
         vistas++;
         if (vistas >= corte) return d;
       }
@@ -83,7 +90,7 @@
    * Con la tabla, un día marcado se busca en su próxima aparición: marcar el
    * mismo día del cálculo da desplazamiento 0, o sea la venta de hoy.
    */
-  function offsetsACubrir(params, fecha, familia) {
+  function offsetsACubrir(params, fecha, familia, plantas) {
     if (params.horizonteModo === 'tabla') {
       const m = matrizDe(params, familia);
       if (m) {
@@ -93,22 +100,22 @@
         if (offs.length) return offs.sort((a, b) => a - b);
       }
     }
-    const n = tramoCalendario(params, fecha);
+    const n = tramoCalendario(params, fecha, plantas);
     return Array.from({ length: n }, (_, i) => i + 1);
   }
 
   /** Compatibilidad: cuántos días cubre el cálculo. */
-  function diasACubrir(params, fecha, familia) {
-    return offsetsACubrir(params, fecha, familia).length;
+  function diasACubrir(params, fecha, familia, plantas) {
+    return offsetsACubrir(params, fecha, familia, plantas).length;
   }
 
   /** Construye la matriz por defecto a partir del calendario, para arrancar igual. */
-  function matrizDesdeCalendario(params) {
+  function matrizDesdeCalendario(params, plantas) {
     const m = D.matrizVacia();
     const base = '2026-10-12';   // un lunes cualquiera: sólo importa el día de la semana
     for (let w = 0; w < 7; w++) {
       const f = D.sumarDias(base, w);
-      const n = tramoCalendario(params, f);
+      const n = tramoCalendario(params, f, plantas);
       for (let i = 1; i <= n; i++) m[w][(w + i) % 7] = true;
     }
     return m;
@@ -165,7 +172,8 @@
     const ventaHoy = ventaDe(estado, params, clave, fecha);
     const teoricoHoy = Math.max(0, disponible - ventaHoy);
 
-    const offs = offsetsACubrir(params, fecha, cfg.familia);
+    const plantas = plantasDe(params, clave);
+    const offs = offsetsACubrir(params, fecha, cfg.familia, plantas);
     const nDias = offs.length;
     const ventas = offs.map((d) => ventaDe(estado, params, clave, D.sumarDias(fecha, d)));
     const demanda = ventas.reduce((a, b) => a + b, 0);
@@ -209,7 +217,7 @@
 
     return {
       clave, familia: cfg.familia, rend, mult,
-      plantas: plantasDe(params, clave),
+      plantas,
       stockAyer, stockEsAuto, fechaStock: c.fStock,
       prodAyerQQ, prodAyerB, prodAyerBruto, prodEsAuto, fechaProd: c.fProd, yaContado,
       invPM: invPMv, difVenta,
@@ -227,7 +235,8 @@
   function calcularTodo(estado, reg, fecha) {
     const ctx = contexto(estado, fecha);
     const filas = D.activos().map((p) => calcularFila(estado, reg, p.clave, fecha, ctx));
-    return { filas, turnos: resumenTurnos(estado, filas), plantas: resumenPlantas(estado, filas), ctx };
+    return { filas, turnos: resumenTurnos(estado, filas, fecha),
+      plantas: resumenPlantas(estado, filas, fecha), ctx };
   }
 
   /** Las plantas donde esa clave se puede producir. */
@@ -254,13 +263,14 @@
   }
 
   /** Sugerido y decidido partidos por planta de producción. */
-  function resumenPlantas(estado, filas) {
+  function resumenPlantas(estado, filas, fecha) {
     const out = {};
     D.PLANTAS.forEach((p) => {
-      out[p.id] = { id: p.id, nombre: p.nombre, sugerido: 0, decidido: 0, tope: 0, claves: [] };
+      const trabaja = !fecha || produceEse(estado.params, fecha, [p.id]);
+      out[p.id] = { id: p.id, nombre: p.nombre, trabaja, sugerido: 0, decidido: 0, tope: 0, claves: [] };
       D.turnosDePlanta(p.id).forEach((t) => {
         const c = estado.params.turnos[t.id] || {};
-        if (c.activo !== false) out[p.id].tope = redondea(out[p.id].tope + (Number(c.tope) || 0), 2);
+        if (c.activo !== false && trabaja) out[p.id].tope = redondea(out[p.id].tope + (Number(c.tope) || 0), 2);
       });
     });
     out.AMBAS = { id: 'AMBAS', nombre: 'Cualquiera de las dos', sugerido: 0, decidido: 0, tope: 0, claves: [] };
@@ -280,14 +290,23 @@
     return out;
   }
 
+  /** Si ese turno trabaja esa fecha, según el calendario de su planta. */
+  function turnoTrabaja(params, turnoId, fecha) {
+    if (!fecha) return true;
+    return produceEse(params, fecha, [D.plantaDeTurno(turnoId)]);
+  }
+
   /** Cuánto lleva cada turno contra su tope. */
-  function resumenTurnos(estado, filas) {
+  function resumenTurnos(estado, filas, fecha) {
     const out = {};
     D.TURNOS.forEach((t) => {
       const cfg = estado.params.turnos[t.id] || {};
+      const trabaja = turnoTrabaja(estado.params, t.id, fecha);
       out[t.id] = {
         id: t.id, nombre: t.nombre, papel: t.papel, momento: t.momento,
-        tope: Number(cfg.tope) || 0, minimo: Number(cfg.minimo) || 0, activo: cfg.activo !== false,
+        planta: D.plantaDeTurno(t.id), trabaja,
+        tope: Number(cfg.tope) || 0, minimo: Number(cfg.minimo) || 0,
+        activo: cfg.activo !== false && trabaja,
         usado: 0, sugerido: 0, claves: [],
       };
     });
@@ -307,8 +326,8 @@
   }
 
   /** Lo que cada turno tiene libre ahora mismo. */
-  function cupos(estado, filas, soloClaves) {
-    const res = resumenTurnos(estado, filas);
+  function cupos(estado, filas, soloClaves, fecha) {
+    const res = resumenTurnos(estado, filas, fecha);
     const libre = {};
     Object.values(res).forEach((t) => {
       let usado = t.usado;
@@ -333,14 +352,24 @@
   function repartir(estado, reg, fecha, claves) {
     const base = calcularTodo(estado, reg, fecha).filas;
     const objetivo = claves && claves.length ? claves : base.map((f) => f.clave);
-    const libre = cupos(estado, base, objetivo);
+    const libre = cupos(estado, base, objetivo, fecha);
 
     const falta = {}, mult = {}, pref = {}, dado = {};
+    /* Las claves cuyos turnos no trabajan ese día no entran al reparto: no es
+       que no quepan, es que esa planta descansa. Se reportan aparte. */
+    const sinTurnoHoy = [];
     base.filter((f) => objetivo.includes(f.clave)).forEach((f) => {
       const cfg = estado.params.prod[f.clave];
+      const suyos = turnosUtiles(estado.params, f.clave).turnos;
+      const hoy = suyos.filter((t) => turnoTrabaja(estado.params, t, fecha));
+      if (!hoy.length) {
+        dado[f.clave] = {};
+        if (f.sugeridoQQ > 0) sinTurnoHoy.push({ clave: f.clave, qq: f.sugeridoQQ });
+        return;
+      }
       falta[f.clave] = f.sugeridoQQ;
       mult[f.clave] = Number(cfg.mult) || 0;
-      pref[f.clave] = turnosUtiles(estado.params, f.clave).turnos;
+      pref[f.clave] = hoy;
       dado[f.clave] = {};
     });
 
@@ -405,6 +434,7 @@
       const cfg = estado.params.turnos[t.id] || {};
       const minimo = Number(cfg.minimo) || 0;
       if (cfg.activo === false || minimo <= 0) return;
+      if (!turnoTrabaja(estado.params, t.id, fecha)) return;
       let usado = redondea((cfg.tope || 0) - (libre[t.id] || 0), 2);
       if (usado >= minimo - 1e-9) return;
       const aptas = base
@@ -429,7 +459,7 @@
     const sinCupo = Object.keys(falta)
       .filter((c) => falta[c] > 1e-9)
       .map((c) => ({ clave: c, qq: redondea(falta[c], 2) }));
-    return { sinCupo };
+    return { sinCupo, sinTurnoHoy };
   }
 
   function limpiarReparto(reg, claves) {
@@ -440,7 +470,7 @@
     redondea, alMultiploArriba, alMultiploAbajo, politica, vidaUtil, produceEse,
     diasACubrir, offsetsACubrir, tramoCalendario, matrizDesdeCalendario, matrizDe,
     ventaDe, contexto, calcularFila, calcularTodo, resumenTurnos, resumenPlantas,
-    plantasDe, turnosUtiles, repartir, limpiarReparto, cupos,
+    plantasDe, turnosUtiles, turnoTrabaja, repartir, limpiarReparto, cupos,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Calculo = api;
