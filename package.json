@@ -1,7 +1,10 @@
 {
   "name": "produccion-pana",
   "private": true,
-  "version": "4.0.0",
+  "version": "2026.6",
   "description": "App de produccion de panaderia: inventario, sugerido por turno y planta, e historial",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@vercel/blob": "^2.8.2"
+  }
 }

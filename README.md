@@ -150,8 +150,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.5';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.5';`
+1. `js/ui.js` → `const VERSION = 'V.2026.6';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.6';`
 
 ## Plantas, claves y productos nuevos
 
@@ -203,11 +203,25 @@ Al final de Parámetros hay tres botones:
 
 Los promedios y el historial no se tocan con ninguno de los tres.
 
+## Sincronizar entre equipos
+
+Con la app publicada en Vercel y un almacén Blob conectado, la laptop y la tablet trabajan
+sobre los mismos datos. Se enciende en **Parámetros → Sincronizar entre equipos**, con la misma
+clave en los dos. Los pasos completos están en [SINCRONIZAR.md](SINCRONIZAR.md).
+
+No copia el archivo entero: compara por partes, hasta la clave del producto, y se queda con la
+que cambió. Por eso el INV PM que capturaste en la tablet y el reparto que hiciste en la laptop
+el mismo día conviven sin pisarse. Cuando los dos equipos cambiaron lo mismo, gana aquel donde
+tocaste Sincronizar y la app lo avisa.
+
+Sincroniza al abrir, al guardar el día y con el botón. No más seguido: el plan gratis de Vercel
+da 2,000 guardados al mes y la tarjeta lleva la cuenta.
+
 ## Respaldos
 
-Los datos viven en el navegador de cada equipo, así que **no se sincronizan solos** entre la
-laptop y la tablet. El botón **Descargar respaldo** del historial guarda todo en un `.json`
-que se puede restaurar en otro equipo. Conviene bajar uno cada cierto tiempo.
+Aunque la sincronización esté encendida, conviene bajar un respaldo de vez en cuando. El botón
+**Descargar respaldo** del historial guarda todo en un `.json` que se puede restaurar en otro
+equipo. La sincronización mantiene a los dos iguales, así que un borrado por error se propaga.
 
 ## Archivos
 
@@ -217,6 +231,9 @@ que se puede restaurar en otro equipo. Conviene bajar uno cada cierto tiempo.
 | `js/calculo.js` | Motor del sugerido y del reparto por turno |
 | `js/excel.js` | Leer el libro de cálculo y escribir el historial |
 | `js/lector.js` | Lectura de la foto del inventario |
+| `js/sync.js` | Mezcla y sincronización entre equipos |
 | `js/ui.js` | Pantallas |
 | `api/extract.js` | El lector, para desplegar en Vercel |
+| `api/estado.js` | La sincronización, guardada en Vercel Blob |
 | `LECTOR.md` | Cómo conectar el lector de fotos |
+| `SINCRONIZAR.md` | Cómo encender la sincronización |

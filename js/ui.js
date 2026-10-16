@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.5';
+  const VERSION = 'V.2026.6';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -703,6 +703,24 @@
       </div>
 
       <div class="card" style="margin-bottom:14px">
+        <h3>Sincronizar entre equipos</h3>
+        <p class="sub">
+          Para que la laptop y la tablet trabajen sobre los mismos datos. Se mezcla por partes:
+          si capturaste el inventario en una y repartiste la producción en la otra, se conservan las dos.
+        </p>
+        <div class="fila">
+          <label class="sw"><input type="checkbox" id="chkSync"> Sincronización encendida</label>
+          <div class="campo"><label for="inSyncClave">Clave de sincronización</label>
+            <input type="password" id="inSyncClave" autocomplete="off" placeholder="la misma en los dos equipos" style="min-width:240px"></div>
+          <div class="campo"><label>&nbsp;</label>
+            <button class="btn ghost mini" type="button" id="btnSyncYa">Sincronizar ahora</button></div>
+          <div class="campo"><label>&nbsp;</label>
+            <button class="btn sec mini" type="button" id="btnSyncOlvidar">Empezar de cero</button></div>
+        </div>
+        <p class="dim" style="font-size:.84rem;margin:11px 2px 0" id="estadoSync"></p>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
         <h3>Mis valores por defecto</h3>
         <p class="sub">
           Cuando la configuración de arriba ya quedó como la quieres, guárdala como tu punto de partida.
@@ -727,6 +745,9 @@
 
     $('#inModo').value = P.horizonteModo;
     $('#selFam').value = ui.famMatriz || '';
+    $('#chkSync').checked = window.Sync.cfg('syncOn') === '1';
+    $('#inSyncClave').value = window.Sync.clave();
+    pintarSync();
     const g = D.misDefecto();
     $('#estadoDef').innerHTML = g
       ? `Guardados el <b>${esc(g.guardadoEn ? D.fechaCorta(g.guardadoEn.slice(0, 10)) : 'alguna vez')}</b>. `
@@ -770,6 +791,75 @@
       <p class="dim" style="font-size:.84rem;margin:9px 2px">
         El recuadro marcado en cada fila es el mismo día del cálculo. Marcarlo cuenta la venta de hoy,
         que ya se restó en el teórico PM, así que funciona como un día extra de colchón.</p>`;
+  }
+
+  /** Resumen de cómo va la sincronización. */
+  function pintarSync() {
+    const S = window.Sync;
+    if (!$('#estadoSync')) return;
+    const u = S.ultima();
+    const n = S.escrituras();
+    const partes = [];
+    if (!S.activo()) {
+      partes.push(ui.syncHay === false
+        ? 'Este despliegue no trae el módulo de sincronización. Hace falta publicarlo en Vercel con un almacén Blob; los pasos están en SINCRONIZAR.md.'
+        : 'Apagada. Enciéndela y escribe la misma clave en los dos equipos.');
+    } else {
+      partes.push(u ? `Última vez: <b>${esc(new Date(u).toLocaleString('es-GT'))}</b>.` : 'Todavía no se ha sincronizado.');
+      partes.push(`${n} de 2,000 guardados este mes.`);
+      if (n >= S.TOPE_AVISO) partes.push('<b class="neg">Vas cerca del límite del plan gratis.</b>');
+    }
+    $('#estadoSync').innerHTML = partes.join(' ');
+    const b = $('#btnSync');
+    if (b) b.hidden = !S.activo();
+  }
+
+  /** Una pasada de sincronización, con los avisos que correspondan. */
+  async function sincronizar(manual, eleccion) {
+    const S = window.Sync;
+    if (!S.activo()) { if (manual) aviso('La sincronización está apagada. Enciéndela en Parámetros.', 'err'); return; }
+    if (manual) espera(true, 'Sincronizando…');
+    try {
+      const r = await S.sincronizar({ manual, eleccion: eleccion || null });
+      if (!r.ok && r.motivo === 'eleccion' && !manual) {
+        /* Al abrir no se interrumpe con un cuadro: se avisa y él decide cuándo. */
+        aviso(r.total === 1
+          ? 'Hay algo distinto entre los dos equipos. Toca Sincronizar para resolverlo.'
+          : `Hay ${r.total} cosas distintas entre los dos equipos. Toca Sincronizar para resolverlo.`);
+        pintarSync();
+        return;
+      }
+      if (!r.ok && r.motivo === 'eleccion') {
+        espera(false);
+        const si = await preguntar('Primera sincronización de este equipo',
+          `<p>Hay <b>${r.total}</b> ${r.total === 1 ? 'cosa que está distinta' : 'cosas que están distintas'} aquí y allá,
+             y como este equipo nunca se había sincronizado no hay manera de saber cuál es la buena.</p>
+           <p class="dim">${esc(r.indecisos.slice(0, 12).join(' · '))}${r.indecisos.length > 12 ? ' …' : ''}</p>
+           <p>¿Con cuál me quedo?</p>`, 'Lo de este equipo');
+        $('#modalNo').textContent = 'Cancelar';
+        return sincronizar(manual, si ? 'local' : 'remoto');
+      }
+      if (!r.ok) { if (manual) aviso('No se sincronizó: ' + r.motivo, 'err'); return; }
+
+      pintarProduccion(); pintarInventario(); pintarHistorial(); pintarPromedios();
+      if (ui.tab === 'param') pintarParametros(); else pintarSync();
+
+      const t = [];
+      if (r.traidos.length) t.push(`${r.traidos.length} de la otra`);
+      if (r.subido) t.push('subido');
+      if (r.conflictos.length) t.push(`${r.conflictos.length} en conflicto`);
+      if (manual || r.traidos.length || r.conflictos.length) {
+        aviso(t.length ? `Sincronizado: ${t.join(', ')}.` : 'Sincronizado, no había nada nuevo.');
+      }
+      if (r.conflictos.length) {
+        preguntar('Se cambió lo mismo en los dos equipos',
+          `<p>Quedó lo de <b>este</b> equipo en: ${esc(r.conflictos.join(', '))}.</p>
+           <p>Si lo bueno era lo de la otra, cámbialo ahí y vuelve a sincronizar.</p>`, 'Entendido');
+      }
+    } catch (err) {
+      if (manual) aviso('No se sincronizó: ' + err.message, 'err');
+      else console.warn('sync', err);
+    } finally { if (manual) espera(false); }
   }
 
   function pintarLector() {
@@ -995,7 +1085,7 @@
         };
       });
       r.cerrado = true; r.guardadoEn = new Date().toISOString();
-      if (D.guardarDias()) { aviso(`Guardado ${D.fechaCorta(ui.fecha)}.`); pintarProduccion(); }
+      if (D.guardarDias()) { aviso(`Guardado ${D.fechaCorta(ui.fecha)}.`); pintarProduccion(); sincronizar(false); }
       else aviso('No se pudo guardar: el almacenamiento del navegador está lleno. Descarga un respaldo y borra días viejos.', 'err');
     };
     $('#btnReiniciar').onclick = async () => {
@@ -1162,6 +1252,14 @@
           });
         return;
       }
+      if (e.target.closest('#btnSyncYa') || e.target.closest('#btnSync')) { sincronizar(true); return; }
+      if (e.target.closest('#btnSyncOlvidar')) {
+        preguntar('Empezar de cero la sincronización',
+          '<p>Se olvida lo que este equipo sabía de la otra. En la próxima sincronización se vuelve a preguntar con cuál quedarse.</p>'
+          + '<p>No borra datos: sólo la memoria de la comparación.</p>', 'Olvidar')
+          .then((si) => { if (si) { window.Sync.reiniciar(); pintarSync(); aviso('Listo, la próxima vez vuelve a preguntar.'); } });
+        return;
+      }
       if (e.target.closest('#btnFijarDef')) {
         const hay = D.hayDefecto();
         preguntar('Sobrescribir mis valores por defecto',
@@ -1192,6 +1290,19 @@
       }
     });
     document.addEventListener('change', (e) => {
+      const S = window.Sync, id0 = e.target.id;
+      if (id0 === 'chkSync') {
+        S.setCfg('syncOn', e.target.checked ? '1' : '0');
+        pintarSync();
+        if (e.target.checked && S.clave()) sincronizar(true);
+        return;
+      }
+      if (id0 === 'inSyncClave') {
+        S.setCfg('syncClave', e.target.value.trim());
+        pintarSync();
+        aviso('Clave guardada en este equipo. Tiene que ser la misma en el otro.');
+        return;
+      }
       const F = window.Lector, id = e.target.id;
       if (id === 'modoLlave' || id === 'modoServidor') { F.setCfg('modo', id === 'modoLlave' ? 'llave' : 'servidor'); pintarLector(); return; }
       if (id === 'inKey') { F.setCfg('key', e.target.value.trim()); pintarLector(); aviso('Llave guardada en este dispositivo.'); return; }
@@ -1324,10 +1435,27 @@
     refrescar();
   }
 
+  /* Al abrir: se mira si este despliegue sabe sincronizar y, si está encendida,
+     se hace una pasada para arrancar con lo último. */
+  async function arrancarSync() {
+    const S = window.Sync;
+    try {
+      const d = await S.disponible();
+      ui.syncHay = !!d.hay;
+      if (d.hay && d.ok && S.cfg('syncOn') === '' && !S.clave()) {
+        /* Hay módulo pero nunca se configuró: se deja apagada y se avisa
+           una sola vez, sin estorbar. */
+        S.setCfg('syncOn', '0');
+      }
+    } catch (_) { ui.syncHay = false; }
+    pintarSync();
+    if (S.activo()) sincronizar(false);
+  }
+
   // ---------- arranque ----------
   function iniciar() {
     $('#badgeVer').textContent = VERSION;
-    enlazar(); instalacion(); autodetectarLector();
+    enlazar(); instalacion(); autodetectarLector(); arrancarSync();
     let t = 'prod';
     try { t = localStorage.getItem('panprod_tab') || 'prod'; } catch (_) {}
     window.irA(['prod', 'inv', 'hist', 'prom', 'param'].includes(t) ? t : 'prod');
