@@ -1,9 +1,9 @@
 /* Guarda la app para que abra sin señal.
    Al publicar una versión nueva hay que subir CACHE y APP_VERSION en js/ui.js. */
-const CACHE = 'panprod-V.3';
+const CACHE = 'panprod-V.2026.5';
 const ASSETS = ['./', './index.html', './manifest.webmanifest',
   './css/app.css', './js/vendor/jszip.min.js', './js/datos.js', './js/calculo.js',
-  './js/excel.js', './js/foto.js', './js/ui.js',
+  './js/excel.js', './js/lector.js', './js/ui.js',
   './icon-192.png', './icon-512.png', './icon-maskable.png'];
 
 self.addEventListener('install', (e) => {

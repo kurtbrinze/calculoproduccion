@@ -14,7 +14,7 @@ una tabla por familia con sólo los turnos que esa familia usa. De cada clave se
 
 | Columna | Qué es |
 |---|---|
-| Inv + prod | Inventario de cierre más lo que ya se produjo ese día |
+| Stock + prod | Cierre del día anterior más lo que se produjo ese día |
 | Teórico PM hoy | Lo anterior menos la venta de hoy |
 | Sugerido qq | Lo que el cálculo propone producir |
 | Turnos | Los quintales por turno, editables a mano |
@@ -23,12 +23,56 @@ una tabla por familia con sólo los turnos que esa familia usa. De cada clave se
 | Alerta | OK, FALTANTE, EXCESO, TOPE VIDA ÚTIL o MENOS DE UN LOTE |
 
 Al tocar una clave se abre la explicación de dónde salió su sugerido, paso a paso.
+El sugerido total también aparece partido entre **Zona 18** y **Zona 2**.
 
-**Inventario** captura el conteo en bolsas y la producción del día en quintales. Se puede leer
-de la foto de la hoja, importar del Excel o traer del día anterior.
+**Inventario** es la captura del día. Para producir el miércoles, parte del martes:
 
-**Historial** guarda cada día cerrado y lo exporta a Excel con las hojas `Hx Prod`,
-`Hx Prod_x_Turno`, `Hx Inv` y un `Detalle` con el sugerido contra lo decidido.
+| Columna | Qué es |
+|---|---|
+| STOCK AYER | El INV PM del día anterior. Trae la fecha en el encabezado |
+| PROD AYER (qq) | Los quintales que se produjeron ese día, tomados del historial |
+| BOLSAS | PROD AYER × rendimiento |
+| CONSUMO HOY | La venta promedio del día que se está calculando |
+| TEÓRICO PM | (STOCK AYER + BOLSAS) − CONSUMO HOY |
+| INV PM | El conteo de cierre de hoy, el de la foto |
+| DIFERENCIA | TEÓRICO PM − INV PM. Positivo quiere decir que se vendió más que el promedio |
+
+STOCK AYER y PROD AYER se llenan solos y salen en gris; al escribir encima, ese valor manda.
+
+Los tres botones:
+
+- **Leer INV PM** abre el lector de la foto, el mismo del app de Inventario: muestra las dos
+  tablas completas para cotejarlas, descarga el Excel con el nombre de la fecha y escribe la
+  columna INV PM.
+- **Importar Excel INV PM** es la contingencia: lee ese mismo Excel y llena INV PM.
+- **Cargar STOCK AYER** copia el INV PM del día anterior a la columna STOCK AYER.
+
+### Productos diferenciados
+
+Algunas claves son varias presentaciones del mismo producto. Debajo de la tabla, el bloque
+**Productos diferenciados** muestra de qué partes salió cada una y con qué factor. De fábrica:
+
+```
+S11   = S11 + S11T×21
+15PL1 = 15PL1 + PL1U÷15 + 15PL1U + 8PL1×8÷15 + PL1T×64÷15
+10HR3 = 10HR3 + 5HD2÷2
+CZ3   = CZ3×60 + CZ5×55
+```
+
+Cada total se aproxima al entero de abajo. Se agregan y se cambian en Parámetros.
+
+### El caso del 10CZ4
+
+El 10CZ4 se produce de mañana, así que el conteo de cierre de ese mismo día ya lo trae adentro.
+Por eso viene marcado **Prod. ya en el conteo** en Parámetros: sus BOLSAS se muestran tachadas
+y no se vuelven a sumar en el TEÓRICO PM. Cualquier otra clave que se comporte igual se marca
+en esa misma casilla.
+
+**Historial** guarda cada día cerrado, con cuatro vistas —por turno, por planta, por clave e
+inventario INV PM— y las exporta a Excel, cada tabla por separado o todas en un libro:
+`Hx Prod`, `Hx Prod_x_Planta`, `Hx Prod_x_Turno`, `Hx Prod_Clave_Planta`, `Hx Inv` y un
+`Detalle` con el sugerido contra lo decidido. **Subir historial de Excel** trae datos viejos
+desde `Hx Prod`, `Hx Prod_x_Turno` y `Hx Inv` sin pisar lo que ya esté guardado.
 
 **Promedios** es la venta de un día normal por clave, igual que la pestaña PROM_VD del libro.
 Se puede escribir a mano o traer del libro de cálculo.
@@ -56,7 +100,7 @@ teórico PM ya había restado, así que en la práctica funciona como un día ex
 ## Cómo se calcula el sugerido
 
 ```
-disponible       = inventario + producción del día
+disponible       = stock de ayer + producción de ayer × rendimiento
 teórico PM hoy   = disponible − venta de hoy
 demanda          = venta de los días hasta la próxima corrida
 stock seguridad  = venta promedio diaria × colchón
@@ -106,8 +150,42 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.3';`
-2. `sw.js` → `const CACHE = 'panprod-V.3';`
+1. `js/ui.js` → `const VERSION = 'V.2026.5';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.5';`
+
+## Plantas, claves y productos nuevos
+
+Cada turno pertenece a una planta: Magdalenas, Redondo AM, Sándwich AM, Panaderos PM y Redondo
+PM son de **Zona 18**; Byron, Julio y **Máquina Z2**, de **Zona 2**. En Parámetros cada producto
+dice en qué plantas se puede hacer, y el reparto sólo usa turnos de esas plantas.
+
+**Máquina Z2** hace el 5HM4 y el 10HD7. El 10HD7 se puede hacer ahí o en Panaderos PM, así que
+cuenta como clave de las dos plantas y la planta se define según dónde caiga el reparto. Su tope
+viene en 40 qq, que es el que se le vio a la máquina en la hoja del 14/oct — conviene revisarlo.
+
+Si una clave está marcada para una planta donde ninguno de sus turnos trabaja, la app lo avisa
+en el tablero y la marca en Parámetros en vez de dejarla sin producir: se sigue repartiendo en
+sus turnos de siempre, pero el sugerido por planta no cuadra con lo decidido hasta que se
+corrija.
+
+En la tabla de productos, **Editar** cambia la clave y arrastra promedios e historial — es lo
+que hace falta cuando IN16 pase a ser LS19B — y **Agregar producto** da de alta uno nuevo con
+su rendimiento, unidad, múltiplo y plantas. Los topes de producción salen de los turnos que se
+le marquen.
+
+## Mis valores por defecto
+
+Al final de Parámetros hay tres botones:
+
+- **Sobrescribir con lo que hay ahora** guarda toda la configuración de esa pantalla como tu
+  punto de partida: horizonte, días a cubrir, turnos y plantas, vida útil, calendario, productos
+  y diferenciados.
+- **Volver a mis valores** regresa a esa configuración guardada. Sirve para probar cambios sin
+  miedo a perder la calibración.
+- **Volver a los de fábrica** deja la configuración con la que viene la app. No borra lo que
+  guardaste como tuyo.
+
+Los promedios y el historial no se tocan con ninguno de los tres.
 
 ## Respaldos
 
@@ -122,7 +200,7 @@ que se puede restaurar en otro equipo. Conviene bajar uno cada cierto tiempo.
 | `js/datos.js` | Productos, turnos, familias, promedios y guardado |
 | `js/calculo.js` | Motor del sugerido y del reparto por turno |
 | `js/excel.js` | Leer el libro de cálculo y escribir el historial |
-| `js/foto.js` | Lectura de la foto del inventario |
+| `js/lector.js` | Lectura de la foto del inventario |
 | `js/ui.js` | Pantallas |
 | `api/extract.js` | El lector, para desplegar en Vercel |
 | `LECTOR.md` | Cómo conectar el lector de fotos |

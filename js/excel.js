@@ -85,7 +85,7 @@
       (porCodigo[String(cod)] = porCodigo[String(cod)] || {})[String(dia).toUpperCase()] = prom;
     });
     const out = {}; let n = 0;
-    D.PRODUCTOS.forEach((p) => {
+    D.productos().forEach((p) => {
       const fila = porCodigo[String(p.codigo)];
       if (!fila) return;
       out[p.clave] = D.DIAS.map((dia) => Math.round(fila[dia] || 0));
@@ -106,13 +106,13 @@
       if (cl && v && !(cl in porClave)) porClave[cl] = v;
     });
     const out = {}; let n = 0;
-    D.PRODUCTOS.forEach((p) => { if (porClave[p.clave]) { out[p.clave] = porClave[p.clave]; n++; } });
+    D.productos().forEach((p) => { if (porClave[p.clave]) { out[p.clave] = porClave[p.clave]; n++; } });
     return { rend: out, n };
   }
 
   /** Inventario en bolsas: primero Toma_Inv; si no, el archivo del módulo de foto. */
   async function leerInventario(libro) {
-    const out = {}; let n = 0;
+    const out = {}, crudo = {}; let n = 0;
     const toma = await filas(libro, 'TOMA_INVENTARIO');
     if (toma) {
       const porClave = {};
@@ -122,11 +122,12 @@
         const v = aNum(d.D) ?? aNum(d.C);
         if (v != null) porClave[String(d.A).trim().toUpperCase()] = v;
       });
-      D.PRODUCTOS.forEach((p) => {
+      Object.assign(crudo, porClave);
+      D.productos().forEach((p) => {
         const v = porClave[p.clave.toUpperCase()] ?? (p.alias ? porClave[p.alias.toUpperCase()] : undefined);
         if (v != null) { out[p.clave] = v; n++; }
       });
-      if (n) return { inv: out, n, origen: 'TOMA_INVENTARIO' };
+      if (n) return { inv: out, crudo, n, origen: 'TOMA_INVENTARIO' };
     }
     // archivo de inventario del día (PAN BLANCO / PASTEL Y MASAS DULCES)
     const porClave = {};
@@ -141,11 +142,12 @@
         if (v != null && !(cl in porClave)) porClave[cl] = v;
       });
     }
-    D.PRODUCTOS.forEach((p) => {
+    Object.assign(crudo, porClave);
+    D.productos().forEach((p) => {
       const v = porClave[p.clave.toUpperCase()] ?? (p.alias ? porClave[p.alias.toUpperCase()] : undefined);
       if (v != null) { out[p.clave] = v; n++; }
     });
-    return { inv: out, n, origen: 'hoja de inventario' };
+    return { inv: out, crudo, n: Object.keys(crudo).length, origen: 'hoja de inventario' };
   }
 
   // ================= escritura =================
@@ -215,49 +217,160 @@
     return { blob, nombre: nombreArchivo };
   }
 
-  /** Arma las tres hojas del historial con el mismo orden de columnas del libro. */
-  function hojasHistorial(dias) {
-    const fechas = Object.keys(dias).sort();
-    const claves = D.PRODUCTOS.map((p) => p.clave);
-    const nom = (c) => { const p = D.prodPorClave[c]; return p && p.alias ? p.alias : c; };
+  /* ================= historial ================= */
 
-    const prod = { nombre: 'Hx Prod', cols: ['FECHA', 'DIA', ...claves.map(nom), 'TOTAL'], filas: [] };
-    const turno = { nombre: 'Hx Prod_x_Turno', cols: ['FECHA', 'DIA', ...D.TURNOS.map((t) => t.nombre), 'TOTAL'], filas: [] };
-    const inv = { nombre: 'Hx Inv', cols: ['FECHA', 'DIA', ...claves.map(nom)], filas: [] };
-    const det = { nombre: 'Detalle', cols: ['FECHA', 'DIA', 'CLAVE', 'INVENTARIO', 'PROD HOY QQ', 'SUGERIDO QQ', 'DECIDIDO QQ', ...D.TURNOS.map((t) => t.nombre), 'TEORICO PM HOY', 'TEORICO PM MAÑANA', 'COBERTURA DIAS', 'ALERTA'], filas: [] };
+  /** Todas las tablas del historial, cada una con su nombre de hoja. */
+  function tablasHistorial(dias) {
+    const fechas = Object.keys(dias).sort();
+    const claves = D.claves();
+    const nom = (c) => { const f = D.fichaPorClave(c); return f && f.alias ? f.alias : c; };
+    const r2 = (v) => Math.round(v * 100) / 100;
+
+    const prod = { id: 'prod', nombre: 'Hx Prod', titulo: 'Producción por clave',
+      cols: ['FECHA', 'DIA', ...claves.map(nom), 'TOTAL'], filas: [] };
+    const planta = { id: 'planta', nombre: 'Hx Prod_x_Planta', titulo: 'Producción por planta',
+      cols: ['FECHA', 'DIA', ...D.PLANTAS.map((x) => x.nombre), 'TOTAL'], filas: [] };
+    const turno = { id: 'turno', nombre: 'Hx Prod_x_Turno', titulo: 'Producción por turno',
+      cols: ['FECHA', 'DIA', ...D.TURNOS.map((t) => t.nombre), 'TOTAL'], filas: [] };
+    const cp = { id: 'cp', nombre: 'Hx Prod_Clave_Planta', titulo: 'Producción por clave y planta',
+      cols: ['FECHA', 'DIA', 'CLAVE', 'PLANTA', 'TURNO', 'QQ'], filas: [] };
+    const inv = { id: 'inv', nombre: 'Hx Inv', titulo: 'Inventario INV PM por clave',
+      cols: ['FECHA', 'DIA', ...claves.map(nom)], filas: [] };
+    const det = { id: 'det', nombre: 'Detalle', titulo: 'Sugerido contra decidido',
+      cols: ['FECHA', 'DIA', 'CLAVE', 'STOCK AYER', 'PROD AYER QQ', 'TEORICO PM', 'INV PM', 'DIFERENCIA',
+        'SUGERIDO QQ', 'DECIDIDO QQ', ...D.TURNOS.map((t) => t.nombre),
+        'TEORICO PM MAÑANA', 'COBERTURA DIAS', 'ALERTA'], filas: [] };
 
     fechas.forEach((f) => {
-      const r = dias[f], dia = D.nombreDia(f);
-      const porClave = r.calc || {};
+      const r = D.migrar(dias[f]), dia = D.nombreDia(f);
+      const k = r.calc || {};
+      const porClave = D.produccionDe(f);
+      const porTurno = D.porTurnoDe(f);
+      const porPlanta = D.porPlantaDe(f);
+
       let tp = 0;
-      prod.filas.push([f, dia, ...claves.map((c) => {
-        const v = Object.values(r.turnos[c] || {}).reduce((a, b) => a + (Number(b) || 0), 0);
-        tp += v; return v || 0;
-      }), Math.round(tp * 100) / 100]);
-      let tt = 0;
-      turno.filas.push([f, dia, ...D.TURNOS.map((t) => {
-        const v = claves.reduce((a, c) => a + (Number((r.turnos[c] || {})[t.id]) || 0), 0);
-        tt += v; return Math.round(v * 100) / 100;
-      }), Math.round(tt * 100) / 100]);
-      inv.filas.push([f, dia, ...claves.map((c) => (r.inv[c] == null ? '' : Number(r.inv[c])))]);
+      prod.filas.push([f, dia, ...claves.map((c) => { const v = Number(porClave[c]) || 0; tp += v; return r2(v); }), r2(tp)]);
+      const tpl = D.PLANTAS.reduce((a, x) => a + (Number(porPlanta[x.id]) || 0), 0);
+      planta.filas.push([f, dia, ...D.PLANTAS.map((x) => r2(Number(porPlanta[x.id]) || 0)), r2(tpl)]);
+      const tt = D.TURNOS.reduce((a, t) => a + (Number(porTurno[t.id]) || 0), 0);
+      turno.filas.push([f, dia, ...D.TURNOS.map((t) => r2(Number(porTurno[t.id]) || 0)), r2(tt)]);
+      inv.filas.push([f, dia, ...claves.map((c) => (r.invPM[c] == null ? '' : Number(r.invPM[c])))]);
+
       claves.forEach((c) => {
-        const k = porClave[c] || {};
+        const asg = r.turnos[c] || {};
+        D.TURNOS.forEach((t) => {
+          const v = Number(asg[t.id]) || 0;
+          if (v) cp.filas.push([f, dia, c, D.plantaDeTurno(t.id), t.nombre, r2(v)]);
+        });
+      });
+
+      claves.forEach((c) => {
+        const d = k[c] || {};
         const asg = r.turnos[c] || {};
         const dec = Object.values(asg).reduce((a, b) => a + (Number(b) || 0), 0);
-        if (!dec && r.inv[c] == null && !k.sugeridoQQ) return;
+        if (!dec && r.invPM[c] == null && !d.sugeridoQQ) return;
         det.filas.push([f, dia, c,
-          r.inv[c] == null ? '' : Number(r.inv[c]),
-          r.prodHoy[c] == null ? '' : Number(r.prodHoy[c]),
-          k.sugeridoQQ ?? '', Math.round(dec * 100) / 100,
+          r.stockAyer[c] == null ? (d.stockAyer ?? '') : Number(r.stockAyer[c]),
+          r.prodAyer[c] == null ? (d.prodAyerQQ ?? '') : Number(r.prodAyer[c]),
+          d.teoricoHoy ?? '', r.invPM[c] == null ? '' : Number(r.invPM[c]),
+          d.difVenta ?? '',
+          d.sugeridoQQ ?? '', r2(dec),
           ...D.TURNOS.map((t) => Number(asg[t.id]) || 0),
-          k.teoricoHoy != null ? Math.round(k.teoricoHoy) : '',
-          k.teoricoManana != null ? Math.round(k.teoricoManana) : '',
-          k.cobertura != null ? Math.round(k.cobertura * 10) / 10 : '',
-          k.alerta || '']);
+          d.teoricoManana != null ? Math.round(d.teoricoManana) : '',
+          d.cobertura != null ? Math.round(d.cobertura * 10) / 10 : '',
+          d.alerta || '']);
       });
     });
-    return [prod, turno, inv, det];
+    return [prod, planta, turno, cp, inv, det];
   }
 
-  raiz.Excel = { abrir, filas, leerPromedios, leerRendimientos, leerInventario, escribirLibro, hojasHistorial };
+  /** Compatibilidad con la versión anterior. */
+  const hojasHistorial = (dias) => tablasHistorial(dias);
+
+  /**
+   * Trae un historial de un Excel. Reconoce las hojas que esta misma app
+   * exporta y las del libro de cálculo: Hx Prod, Hx Prod_x_Turno y Hx Inv.
+   * Devuelve los días listos para mezclar, sin tocar lo ya guardado.
+   */
+  async function leerHistorial(libro) {
+    const dias = {};
+    const resumen = { prod: 0, turno: 0, inv: 0, fechas: new Set(), hojas: [] };
+    const nomATurno = {};
+    D.TURNOS.forEach((t) => { nomATurno[t.nombre.toUpperCase()] = t.id; nomATurno[t.id.toUpperCase()] = t.id; });
+    const alias = {};
+    D.productos().forEach((p) => {
+      alias[p.clave.toUpperCase()] = p.clave;
+      if (p.alias) alias[p.alias.toUpperCase()] = p.clave;
+    });
+
+    const comoFecha = (v) => {
+      if (v == null || v === '') return null;
+      const s2 = String(v).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s2)) return s2;
+      const n = Number(s2);
+      if (Number.isFinite(n) && n > 20000 && n < 80000) {
+        const ms = Date.UTC(1899, 11, 30) + n * 86400000;
+        const d = new Date(ms);
+        return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+      }
+      const m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/.exec(s2);
+      if (m) {
+        const a = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+        return `${a}-${String(Number(m[2])).padStart(2, '0')}-${String(Number(m[1])).padStart(2, '0')}`;
+      }
+      return null;
+    };
+    const dia = (f) => {
+      if (!dias[f]) dias[f] = { fecha: f, invPM: {}, stockAyer: {}, prodAyer: {}, turnos: {},
+        crudo: {}, prodImport: {}, turnoImport: {}, nota: '', cerrado: true, guardadoEn: null, migrado: true };
+      return dias[f];
+    };
+
+    /* Cada hoja ancha: primera fila de encabezados, columna A con la fecha. */
+    async function hojaAncha(nombre, destino) {
+      const f = await filas(libro, nombre);
+      if (!f) return 0;
+      const nums = Object.keys(f).map(Number).sort((a, b) => a - b);
+      if (!nums.length) return 0;
+      const enc = f[nums[0]];
+      const cols = Object.keys(enc).map((c) => [c, String(enc[c]).trim()]).filter(([, v]) => v);
+      let n = 0;
+      nums.slice(1).forEach((r) => {
+        const d = f[r];
+        const fecha = comoFecha(d.A);
+        if (!fecha) return;
+        const reg = dia(fecha);
+        let algo = false;
+        cols.forEach(([col, titulo]) => {
+          if (col === 'A' || col === 'B') return;
+          const t = titulo.toUpperCase();
+          if (t === 'TOTAL' || t === 'DIA') return;
+          const v = aNum(d[col]);
+          if (v == null) return;
+          if (destino === 'turno') {
+            const id = nomATurno[t];
+            if (id) { reg.turnoImport[id] = v; algo = true; }
+          } else {
+            const cl = alias[t];
+            if (!cl) return;
+            if (destino === 'inv') reg.invPM[cl] = v;
+            else reg.prodImport[cl] = v;
+            algo = true;
+          }
+        });
+        if (algo) { n++; resumen.fechas.add(fecha); }
+      });
+      if (n) resumen.hojas.push(nombre);
+      return n;
+    }
+
+    resumen.inv = await hojaAncha('Hx Inv', 'inv');
+    resumen.prod = await hojaAncha('Hx Prod', 'prod');
+    resumen.turno = await hojaAncha('Hx Prod_x_Turno', 'turno');
+    resumen.dias = resumen.fechas.size;
+    return { dias, resumen };
+  }
+
+  raiz.Excel = { abrir, filas, leerPromedios, leerRendimientos, leerInventario,
+    escribirLibro, hojasHistorial, tablasHistorial, leerHistorial };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

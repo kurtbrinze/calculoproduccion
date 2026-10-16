@@ -1,20 +1,32 @@
 /* Datos maestros, parámetros y guardado.
-   Todo vive en el dispositivo (localStorage). El historial se exporta para respaldo. */
+   Todo vive en el dispositivo (localStorage). El historial se exporta para respaldo.
+
+   El catálogo de productos es editable: `params.catalogo` manda el orden y
+   `params.prod[clave]` guarda la ficha. PRODUCTOS es sólo la semilla de fábrica. */
 (function (raiz) {
   'use strict';
 
   const DIAS = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO'];
 
-  /* Turnos de planta 18. El tope es el máximo de quintales que ese turno alcanza a hacer. */
+  /* Las dos plantas. Cada turno pertenece a una. */
+  const PLANTAS = [
+    { id: 'Z18', nombre: 'Zona 18' },
+    { id: 'Z2',  nombre: 'Zona 2' },
+  ];
+
+  /* Turnos. El tope es el máximo de quintales que ese turno alcanza a hacer. */
   const TURNOS = [
-    { id: 'MGD',     nombre: 'Magdalenas',   papel: 'Pequeño AM', tope: 2,  minimo: 0,  momento: 'AM' },
-    { id: 'RED_AM',  nombre: 'Redondo AM',   papel: 'Máquina AM', tope: 40, minimo: 0,  momento: 'AM' },
-    { id: 'SAND_AM', nombre: 'Sándwich AM',  papel: 'Grande AM',  tope: 64, minimo: 0,  momento: 'AM' },
+    { id: 'MGD',     nombre: 'Magdalenas',   papel: 'Pequeño AM', tope: 2,  minimo: 0,  momento: 'AM', planta: 'Z18' },
+    { id: 'RED_AM',  nombre: 'Redondo AM',   papel: 'Máquina AM', tope: 40, minimo: 0,  momento: 'AM', planta: 'Z18' },
+    { id: 'SAND_AM', nombre: 'Sándwich AM',  papel: 'Grande AM',  tope: 64, minimo: 0,  momento: 'AM', planta: 'Z18' },
     /* Panaderos PM corre lleno con 10HD7 todos los días, por eso trae mínimo. */
-    { id: 'PAN_PM',  nombre: 'Panaderos PM', papel: 'Grande PM',  tope: 12, minimo: 12, momento: 'PM' },
-    { id: 'RED_PM',  nombre: 'Redondo PM',   papel: 'Máquina PM', tope: 34, minimo: 0,  momento: 'PM' },
-    { id: 'BYRON',   nombre: 'Byron',        papel: 'B',          tope: 12, minimo: 0,  momento: 'PM' },
-    { id: 'JULIO',   nombre: 'Julio',        papel: 'J',          tope: 12, minimo: 0,  momento: 'PM' },
+    { id: 'PAN_PM',  nombre: 'Panaderos PM', papel: 'Grande PM',  tope: 12, minimo: 12, momento: 'PM', planta: 'Z18' },
+    { id: 'RED_PM',  nombre: 'Redondo PM',   papel: 'Máquina PM', tope: 34, minimo: 0,  momento: 'PM', planta: 'Z18' },
+    { id: 'BYRON',   nombre: 'Byron',        papel: 'B',          tope: 12, minimo: 0,  momento: 'PM', planta: 'Z2' },
+    { id: 'JULIO',   nombre: 'Julio',        papel: 'J',          tope: 12, minimo: 0,  momento: 'PM', planta: 'Z2' },
+    /* Máquina de Zona 2: hace 5HM4 y 10HD7. El tope de 40 qq es el que se le vio
+       a la máquina en la hoja del 14/oct; cámbialo en Parámetros si es otro. */
+    { id: 'MAQ_Z2',  nombre: 'Máquina Z2',   papel: 'Máquina',    tope: 40, minimo: 0,  momento: 'AM', planta: 'Z2' },
   ];
 
   /* Familias: agrupan vida útil y ordenan la pantalla. */
@@ -26,29 +38,58 @@
   ];
 
   /* Un producto por fila. `turnos` va en orden de preferencia: el reparto
-     automático llena el primero que tenga cupo antes de pasar al siguiente. */
+     automático llena el primero que tenga cupo antes de pasar al siguiente.
+     z2 / z18 dicen en qué planta se puede producir.
+     prodEnConteo marca el producto que se hace de mañana y que el conteo
+     de cierre ya trae adentro, para no sumarlo dos veces. */
   const PRODUCTOS = [
-    { clave: 'S26',   codigo: 25,  familia: 'SANDWICH',  rend: 94,   mult: 2,    turnos: ['SAND_AM'] },
-    { clave: 'S19',   codigo: 26,  familia: 'SANDWICH',  rend: 120,  mult: 2,    turnos: ['SAND_AM'] },
-    { clave: 'S16',   codigo: 549, familia: 'SANDWICH',  rend: 150,  mult: 2,    turnos: ['SAND_AM'] },
-    { clave: 'S13',   codigo: 28,  familia: 'SANDWICH',  rend: 210,  mult: 2,    turnos: ['SAND_AM'] },
-    { clave: 'IN16',  codigo: 473, familia: 'SANDWICH',  rend: 110,  mult: 2,    turnos: ['SAND_AM'] },
-    { clave: 'S32',   codigo: 31,  familia: 'SANDWICH',  rend: 84,   mult: 0.5,  turnos: ['SAND_AM'] },
-    { clave: '10PM3', codigo: 32,  familia: 'REDONDO',   rend: 120,  mult: 1,    turnos: ['RED_AM', 'RED_PM'] },
-    { clave: '10HD7', codigo: 5,   familia: 'REDONDO',   rend: 110,  mult: 1,    turnos: ['PAN_PM', 'RED_AM', 'RED_PM'] },
-    { clave: '10HR3', codigo: 1,   familia: 'REDONDO',   rend: 150,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], alias: 'HR3' },
-    { clave: '12BLL', codigo: 436, familia: 'REDONDO',   rend: 200,  mult: 0.5,  turnos: ['RED_AM', 'RED_PM'] },
-    { clave: '15PL1', codigo: 34,  familia: 'REDONDO',   rend: 144,  mult: 1,    turnos: ['RED_AM', 'RED_PM'] },
-    { clave: '5HM4',  codigo: 9,   familia: 'REDONDO',   rend: 220,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], alias: 'HM4' },
-    { clave: 'MG1',   codigo: 77,  familia: 'MAGDALENA', rend: 130,  mult: 0.1,  turnos: ['MGD'] },
-    { clave: 'MG4',   codigo: 79,  familia: 'MAGDALENA', rend: 64,   mult: 0.1,  turnos: ['MGD'] },
-    { clave: 'MGN',   codigo: 414, familia: 'MAGDALENA', rend: 108,  mult: 0.1,  turnos: ['MGD'] },
-    { clave: 'CZ3',   codigo: 134, familia: 'DULCE',     rend: 1550, mult: 0.5,  turnos: ['JULIO', 'BYRON'] },
-    { clave: '10CZ4', codigo: 573, familia: 'DULCE',     rend: 226,  mult: 0.25, turnos: ['BYRON', 'JULIO'] },
-    { clave: '6CG2N', codigo: 391, familia: 'DULCE',     rend: 280,  mult: 0.25, turnos: ['BYRON'] },
-    { clave: '6CG2V', codigo: 390, familia: 'DULCE',     rend: 280,  mult: 0.25, turnos: ['BYRON'] },
-    { clave: '6CHO',  codigo: 355, familia: 'DULCE',     rend: 300,  mult: 0.25, turnos: ['BYRON'] },
-    { clave: '6QU1',  codigo: 490, familia: 'DULCE',     rend: 378,  mult: 0.25, turnos: ['JULIO'] },
+    { clave: 'S26',   codigo: 25,  familia: 'SANDWICH',  rend: 94,   mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
+    { clave: 'S19',   codigo: 26,  familia: 'SANDWICH',  rend: 120,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
+    { clave: 'S16',   codigo: 549, familia: 'SANDWICH',  rend: 150,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
+    { clave: 'S11',   codigo: 28,  familia: 'SANDWICH',  rend: 210,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
+    { clave: 'IN16',  codigo: 473, familia: 'SANDWICH',  rend: 110,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
+    { clave: 'S32',   codigo: 31,  familia: 'SANDWICH',  rend: 84,   mult: 0.5,  turnos: ['SAND_AM'], z18: true,  z2: true },
+    { clave: '10PM3', codigo: 32,  familia: 'REDONDO',   rend: 120,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], z18: true, z2: false },
+    { clave: '10HD7', codigo: 5,   familia: 'REDONDO',   rend: 110,  mult: 1,    turnos: ['PAN_PM', 'MAQ_Z2', 'RED_AM', 'RED_PM'], z18: true, z2: true },
+    { clave: '10HR3', codigo: 1,   familia: 'REDONDO',   rend: 150,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], z18: true, z2: false, alias: 'HR3' },
+    { clave: '12BLL', codigo: 436, familia: 'REDONDO',   rend: 200,  mult: 0.5,  turnos: ['RED_AM', 'RED_PM'], z18: true, z2: false },
+    { clave: '15PL1', codigo: 34,  familia: 'REDONDO',   rend: 144,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], z18: true, z2: false },
+    { clave: '5HM4',  codigo: 9,   familia: 'REDONDO',   rend: 220,  mult: 1,    turnos: ['MAQ_Z2'], z18: false, z2: true, alias: 'HM4' },
+    { clave: 'MG1',   codigo: 77,  familia: 'MAGDALENA', rend: 130,  mult: 0.1,  turnos: ['MGD'], z18: true, z2: false },
+    { clave: 'MG4',   codigo: 79,  familia: 'MAGDALENA', rend: 64,   mult: 0.1,  turnos: ['MGD'], z18: true, z2: false },
+    { clave: 'MGN',   codigo: 414, familia: 'MAGDALENA', rend: 108,  mult: 0.1,  turnos: ['MGD'], z18: true, z2: false },
+    { clave: 'CZ3',   codigo: 134, familia: 'DULCE',     rend: 1550, mult: 0.5,  turnos: ['JULIO', 'BYRON'], z18: false, z2: true },
+    { clave: '10CZ4', codigo: 573, familia: 'DULCE',     rend: 226,  mult: 0.25, turnos: ['BYRON', 'JULIO'], z18: false, z2: true, prodEnConteo: true },
+    { clave: '6CG2N', codigo: 391, familia: 'DULCE',     rend: 280,  mult: 0.25, turnos: ['BYRON'], z18: false, z2: true },
+    { clave: '6CG2V', codigo: 390, familia: 'DULCE',     rend: 280,  mult: 0.25, turnos: ['BYRON'], z18: false, z2: true },
+    { clave: '6CHO',  codigo: 355, familia: 'DULCE',     rend: 300,  mult: 0.25, turnos: ['BYRON'], z18: false, z2: true },
+    { clave: '6QU1',  codigo: 490, familia: 'DULCE',     rend: 378,  mult: 0.25, turnos: ['JULIO'], z18: false, z2: true },
+  ];
+
+  /* Productos diferenciados: presentaciones distintas del mismo producto.
+     El inventario de la clave destino sale de sumar sus partes, donde cada
+     parte aporta  valor × mult / div  de la clave tal como viene en la hoja.
+     El total se aproxima al entero de abajo. */
+  const DIFERENCIADOS = [
+    { destino: 'S11', activo: true, partes: [
+      { clave: 'S11',  mult: 1,  div: 1 },
+      { clave: 'S11T', mult: 21, div: 1 },
+    ] },
+    { destino: '15PL1', activo: true, partes: [
+      { clave: '15PL1',  mult: 1,  div: 1 },
+      { clave: 'PL1U',   mult: 1,  div: 15 },
+      { clave: '15PL1U', mult: 1,  div: 1 },
+      { clave: '8PL1',   mult: 8,  div: 15 },
+      { clave: 'PL1T',   mult: 64, div: 15 },
+    ] },
+    { destino: '10HR3', activo: true, partes: [
+      { clave: '10HR3', mult: 1, div: 1 },
+      { clave: '5HD2',  mult: 1, div: 2 },
+    ] },
+    { destino: 'CZ3', activo: true, partes: [
+      { clave: 'CZ3', mult: 60, div: 1 },
+      { clave: 'CZ5', mult: 55, div: 1 },
+    ] },
   ];
 
   /* Promedios de venta en bolsas por día, tomados de PROM_VD. Son el punto de
@@ -57,7 +98,7 @@
     S26:   [586, 398, 653, 461, 450, 324, 0],
     S19:   [3294, 1755, 3455, 2350, 2087, 1142, 0],
     S16:   [596, 291, 536, 557, 406, 201, 0],
-    S13:   [441, 154, 314, 192, 176, 156, 0],
+    S11:   [441, 154, 314, 192, 176, 156, 0],
     IN16:  [12, 9, 10, 9, 15, 9, 0],
     S32:   [6, 2, 11, 7, 26, 2, 0],
     '10PM3': [53, 504, 19, 825, 308, 1435, 0],
@@ -80,19 +121,35 @@
   /* Calendario: qué días trabaja la planta. Sábado y domingo no se produce. */
   const CALENDARIO_INICIAL = DIAS.map((d) => ({ dia: d, produce: !['SABADO', 'DOMINGO'].includes(d), factor: 1 }));
 
+  /* Sube cuando hay un cambio de fábrica que debe alcanzar a quien ya tenía
+     parámetros guardados. 2 = llegó el turno Máquina Z2. */
+  const ESQUEMA = 2;
+
+  /** Ficha de producto completa, con todos los campos en su lugar. */
+  function fichaDe(p) {
+    return {
+      clave: p.clave,
+      codigo: p.codigo ?? null,
+      familia: p.familia,
+      rend: p.rend,
+      mult: p.mult,
+      unidad: p.unidad || 'bolsas',
+      turnos: (p.turnos || []).slice(),
+      z18: p.z18 !== false,
+      z2: !!p.z2,
+      prodEnConteo: !!p.prodEnConteo,
+      alias: p.alias || '',
+      // null = hereda de la familia
+      vidaUtil: null, minDespacho: null, colchon: null,
+      activo: true,
+    };
+  }
+
   function paramsPorDefecto() {
     const prod = {};
-    PRODUCTOS.forEach((p) => {
-      prod[p.clave] = {
-        rend: p.rend, mult: p.mult,
-        turnos: p.turnos.slice(), familia: p.familia,
-        // null = hereda de la familia
-        vidaUtil: null, minDespacho: null, colchon: null,
-        activo: true,
-      };
-    });
+    PRODUCTOS.forEach((p) => { prod[p.clave] = fichaDe(p); });
     const turnos = {};
-    TURNOS.forEach((t) => { turnos[t.id] = { tope: t.tope, minimo: t.minimo || 0, activo: true }; });
+    TURNOS.forEach((t) => { turnos[t.id] = { tope: t.tope, minimo: t.minimo || 0, planta: t.planta, activo: true }; });
     const familias = {};
     FAMILIAS.forEach((f) => { familias[f.id] = { vidaUtil: f.vidaUtil, minDespacho: f.minDespacho, colchon: f.colchon }; });
     return {
@@ -103,7 +160,12 @@
       /* Modo 'tabla': para cada día de cálculo se marca qué días de venta entran.
          `general` aplica a todas las familias; `familias[X]` la pisa si no es null. */
       cobertura: { general: null, familias: {} },
+      catalogo: PRODUCTOS.map((p) => p.clave),
+      /* Claves de fábrica que el usuario quitó o renombró: no vuelven solas. */
+      quitados: [],
+      esquema: ESQUEMA,
       prod, turnos, familias,
+      diferenciados: JSON.parse(JSON.stringify(DIFERENCIADOS)),
       calendario: CALENDARIO_INICIAL.map((c) => ({ ...c })),
       feriados: [],                  // ['AAAA-MM-DD', ...]
     };
@@ -120,16 +182,44 @@
     catch (_) { return false; }
   };
 
-  /* Mezcla superficial pero respetando sub-objetos por clave, para que al agregar
-     un producto nuevo en una versión futura no se pierdan los ajustes guardados. */
+  /** Matriz 7x7 de booleanos: fila = día de cálculo, columna = día de venta. */
+  const matrizValida = (m) => Array.isArray(m) && m.length === 7 && m.every((f) => Array.isArray(f) && f.length === 7);
+  const matrizVacia = () => Array.from({ length: 7 }, () => Array(7).fill(false));
+
+  /* Mezcla lo guardado sobre los valores de fábrica, respetando el catálogo del
+     usuario: si agregó o quitó productos, eso manda sobre la lista de fábrica. */
   function fusionarParams(guardado) {
     const base = paramsPorDefecto();
     if (!guardado || typeof guardado !== 'object') return base;
     const out = { ...base, ...guardado };
-    out.prod = { ...base.prod };
-    Object.keys(guardado.prod || {}).forEach((k) => {
-      if (base.prod[k]) out.prod[k] = { ...base.prod[k], ...guardado.prod[k] };
+
+    /* El catálogo guardado manda. Al abrir una versión que trae claves nuevas,
+       se agregan al final para no perderlas. */
+    const guardadoProd = guardado.prod || {};
+    let cat = Array.isArray(guardado.catalogo) && guardado.catalogo.length
+      ? guardado.catalogo.filter((c) => typeof c === 'string')
+      : Object.keys(guardadoProd);
+    if (!cat.length) cat = base.catalogo.slice();
+    /* Versión vieja: la clave S13 pasó a llamarse S11. */
+    if (cat.includes('S13') && !cat.includes('S11')) {
+      cat = cat.map((c) => (c === 'S13' ? 'S11' : c));
+      if (Array.isArray(guardado.quitados)) guardado.quitados = guardado.quitados.filter((c) => c !== 'S11');
+      if (guardadoProd.S13) { guardadoProd.S11 = { ...guardadoProd.S13, clave: 'S11' }; delete guardadoProd.S13; }
+    }
+    /* Lo que de fábrica no está en el catálogo guardado se agrega al final,
+       salvo que se haya quitado o renombrado a propósito. */
+    const fuera = new Set(Array.isArray(guardado.quitados) ? guardado.quitados : []);
+    base.catalogo.forEach((c) => { if (!cat.includes(c) && !fuera.has(c)) cat.push(c); });
+    out.catalogo = cat;
+    out.quitados = [...fuera];
+
+    out.prod = {};
+    cat.forEach((c) => {
+      const b = base.prod[c] || fichaDe({ clave: c, familia: 'REDONDO', rend: 100, mult: 1, turnos: [] });
+      out.prod[c] = { ...b, ...(guardadoProd[c] || {}), clave: c };
+      if (!Array.isArray(out.prod[c].turnos)) out.prod[c].turnos = b.turnos.slice();
     });
+
     out.turnos = { ...base.turnos };
     Object.keys(guardado.turnos || {}).forEach((k) => {
       if (base.turnos[k]) out.turnos[k] = { ...base.turnos[k], ...guardado.turnos[k] };
@@ -140,6 +230,32 @@
     });
     if (!Array.isArray(out.calendario) || out.calendario.length !== 7) out.calendario = base.calendario;
     if (!Array.isArray(out.feriados)) out.feriados = [];
+
+    const dif = Array.isArray(guardado.diferenciados) ? guardado.diferenciados : null;
+    out.diferenciados = (dif || base.diferenciados)
+      .filter((d) => d && typeof d.destino === 'string' && Array.isArray(d.partes))
+      .map((d) => ({
+        destino: d.destino, activo: d.activo !== false,
+        partes: d.partes
+          .filter((p) => p && typeof p.clave === 'string')
+          .map((p) => ({ clave: p.clave, mult: Number(p.mult) || 0, div: Number(p.div) || 1 })),
+      }));
+
+    /* Máquina Z2: 5HM4 pasa a hacerse ahí y 10HD7 puede hacerse ahí o en
+       Panaderos PM. Se aplica una sola vez sobre los parámetros guardados. */
+    if ((Number(guardado.esquema) || 0) < 2) {
+      if (out.prod['5HM4']) {
+        out.prod['5HM4'].turnos = ['MAQ_Z2'];
+        out.prod['5HM4'].z2 = true; out.prod['5HM4'].z18 = false;
+      }
+      if (out.prod['10HD7']) {
+        const t = out.prod['10HD7'].turnos || [];
+        if (!t.includes('MAQ_Z2')) out.prod['10HD7'].turnos = ['PAN_PM', 'MAQ_Z2', ...t.filter((x) => x !== 'PAN_PM')];
+        out.prod['10HD7'].z2 = true;
+      }
+    }
+    out.esquema = ESQUEMA;
+
     const cob = guardado.cobertura;
     out.cobertura = {
       general: matrizValida(cob && cob.general) ? cob.general : null,
@@ -151,24 +267,50 @@
     return out;
   }
 
-  /** Matriz 7x7 de booleanos: fila = día de cálculo, columna = día de venta. */
-  const matrizValida = (m) => Array.isArray(m) && m.length === 7 && m.every((f) => Array.isArray(f) && f.length === 7);
-  const matrizVacia = () => Array.from({ length: 7 }, () => Array(7).fill(false));
-
   const estado = {
     params: fusionarParams(leer('params', null)),
     prom: leer('prom', null) || JSON.parse(JSON.stringify(PROM_INICIAL)),
     dias: leer('dias', {}),      // { 'AAAA-MM-DD': registro }
   };
+  /* Versión vieja de los promedios: S13 pasó a S11. */
+  if (estado.prom.S13 && !estado.prom.S11) { estado.prom.S11 = estado.prom.S13; delete estado.prom.S13; }
+
+  // ---------- catálogo vivo ----------
+  /** Lista de productos tal como está configurada hoy. */
+  function productos() {
+    return estado.params.catalogo.map((c) => estado.params.prod[c]).filter(Boolean);
+  }
+  /** Sólo los activos, que son los que entran al cálculo. */
+  function activos() {
+    return productos().filter((p) => p.activo !== false);
+  }
+  const claves = () => productos().map((p) => p.clave);
+  const fichaPorClave = (c) => estado.params.prod[c] || null;
+  /** La planta de un turno según los parámetros, con la de fábrica de respaldo. */
+  const plantaDeTurno = (id) => {
+    const c = estado.params.turnos[id] || {};
+    const t = TURNOS.find((x) => x.id === id);
+    return c.planta || (t && t.planta) || 'Z18';
+  };
+  const turnosDePlanta = (planta) => TURNOS.filter((t) => plantaDeTurno(t.id) === planta);
 
   const guardarParams = () => grabar('params', estado.params);
+
+  /* Los parámetros que el usuario declaró como suyos. Mientras no guarde
+     ninguno, "volver a los míos" devuelve los de fábrica. */
+  const misDefecto = () => leer('defecto', null);
+  const fijarDefecto = () => grabar('defecto', JSON.parse(JSON.stringify(estado.params)));
+  const borrarDefecto = () => { try { localStorage.removeItem(K + 'defecto'); return true; } catch (_) { return false; } };
+  const hayDefecto = () => !!misDefecto();
   const guardarProm = () => grabar('prom', estado.prom);
+
   /** Un día sin nada capturado no merece guardarse: ensucia el historial. */
   function vacio(r) {
     if (!r || r.cerrado) return false;
     const algo = (o) => Object.values(o || {}).some((v) => v != null && v !== '');
     const turnos = Object.values(r.turnos || {}).some((t) => Object.values(t || {}).some((v) => Number(v) > 0));
-    return !algo(r.inv) && !algo(r.prodHoy) && !algo(r.real) && !turnos && !(r.nota || '').trim();
+    return !algo(r.invPM) && !algo(r.stockAyer) && !algo(r.prodAyer) && !algo(r.crudo)
+      && !algo(r.prodImport) && !algo(r.turnoImport) && !turnos && !(r.nota || '').trim();
   }
   const guardarDias = () => {
     Object.keys(estado.dias).forEach((f) => { if (vacio(estado.dias[f])) delete estado.dias[f]; });
@@ -198,22 +340,154 @@
   };
 
   // ---------- registro del día ----------
+  /*  invPM     = conteo de cierre de ESE día (el de la foto)
+      stockAyer = conteo de cierre del día anterior; vacío = se toma solo
+      prodAyer  = quintales producidos el día anterior; vacío = sale del historial
+      turnos    = los quintales decididos para ESE día
+      crudo     = la hoja de inventario tal como se leyó, por clave impresa   */
   function registroVacio(fecha) {
-    const inv = {}, prodHoy = {}, turnos = {}, real = {};
-    PRODUCTOS.forEach((p) => { inv[p.clave] = null; prodHoy[p.clave] = null; real[p.clave] = null; turnos[p.clave] = {}; });
-    return { fecha, inv, prodHoy, turnos, real, nota: '', cerrado: false, guardadoEn: null };
+    const invPM = {}, stockAyer = {}, prodAyer = {}, turnos = {};
+    claves().forEach((c) => { invPM[c] = null; stockAyer[c] = null; prodAyer[c] = null; turnos[c] = {}; });
+    return { fecha, invPM, stockAyer, prodAyer, turnos, crudo: {}, nota: '', cerrado: false, guardadoEn: null };
   }
+
+  /** Trae registros de versiones anteriores al esquema de hoy. */
+  function migrar(r) {
+    if (!r || r.migrado) return r;
+    if (!r.invPM) r.invPM = r.real || {};
+    if (!r.stockAyer) r.stockAyer = r.inv || {};
+    if (!r.prodAyer) r.prodAyer = r.prodHoy || {};
+    if (!r.crudo) r.crudo = {};
+    ['inv', 'prodHoy', 'real'].forEach((k) => { delete r[k]; });
+    /* S13 pasó a S11 en todos los mapas del registro. */
+    ['invPM', 'stockAyer', 'prodAyer', 'turnos', 'calc'].forEach((k) => {
+      const o = r[k];
+      if (o && o.S13 !== undefined && o.S11 === undefined) { o.S11 = o.S13; delete o.S13; }
+    });
+    r.migrado = true;
+    return r;
+  }
+
   function registro(fecha) {
     if (!estado.dias[fecha]) estado.dias[fecha] = registroVacio(fecha);
-    const r = estado.dias[fecha];
+    const r = migrar(estado.dias[fecha]);
     // completa claves nuevas sin tocar lo ya capturado
-    PRODUCTOS.forEach((p) => {
-      if (!(p.clave in r.inv)) r.inv[p.clave] = null;
-      if (!(p.clave in r.prodHoy)) r.prodHoy[p.clave] = null;
-      if (!(p.clave in r.real)) r.real[p.clave] = null;
-      if (!r.turnos[p.clave]) r.turnos[p.clave] = {};
+    claves().forEach((c) => {
+      if (!(c in r.invPM)) r.invPM[c] = null;
+      if (!(c in r.stockAyer)) r.stockAyer[c] = null;
+      if (!(c in r.prodAyer)) r.prodAyer[c] = null;
+      if (!r.turnos[c]) r.turnos[c] = {};
     });
     return r;
+  }
+
+  /** El día anterior con datos: ayer si lo hay, si no el más reciente antes de la fecha. */
+  function diaPrevio(fecha, campo) {
+    const tiene = (r) => {
+      if (!r) return false;
+      if (campo === 'prod') {
+        return Object.values(r.turnos || {}).some((t) => Object.values(t || {}).some((v) => Number(v) > 0))
+          || Object.values(r.prodImport || {}).some((v) => Number(v) > 0);
+      }
+      return Object.values(r.invPM || {}).some((v) => v != null && v !== '');
+    };
+    const ayer = sumarDias(fecha, -1);
+    if (tiene(estado.dias[ayer] && migrar(estado.dias[ayer]))) return ayer;
+    const antes = Object.keys(estado.dias).filter((f) => f < fecha).sort().reverse();
+    for (const f of antes) if (tiene(migrar(estado.dias[f]))) return f;
+    return null;
+  }
+
+  /**
+   * Quintales producidos por clave en una fecha. Sale de lo repartido por turno;
+   * si ese día vino de un historial importado, de lo que traía el archivo.
+   */
+  function produccionDe(fecha) {
+    const r = estado.dias[fecha];
+    if (!r) return {};
+    migrar(r);
+    const out = {};
+    Object.keys(r.turnos || {}).forEach((c) => {
+      const v = Object.values(r.turnos[c] || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+      if (v) out[c] = Math.round(v * 100) / 100;
+    });
+    Object.entries(r.prodImport || {}).forEach(([c, v]) => {
+      const n = Number(v) || 0;
+      if (n && !out[c]) out[c] = Math.round(n * 100) / 100;
+    });
+    return out;
+  }
+
+  /** Quintales por turno de una fecha, incluyendo lo que vino importado. */
+  function porTurnoDe(fecha) {
+    const r = estado.dias[fecha];
+    if (!r) return {};
+    migrar(r);
+    const out = {};
+    TURNOS.forEach((t) => {
+      const v = Object.keys(r.turnos || {}).reduce((a, c) => a + (Number((r.turnos[c] || {})[t.id]) || 0), 0);
+      const imp = Number((r.turnoImport || {})[t.id]) || 0;
+      const n = v || imp;
+      if (n) out[t.id] = Math.round(n * 100) / 100;
+    });
+    return out;
+  }
+
+  /** Quintales por planta de una fecha. Lo importado sin turno queda aparte. */
+  function porPlantaDe(fecha) {
+    const porT = porTurnoDe(fecha);
+    const out = Object.fromEntries(PLANTAS.map((p) => [p.id, 0]));
+    Object.entries(porT).forEach(([t, v]) => {
+      const pl = plantaDeTurno(t);
+      if (out[pl] != null) out[pl] = Math.round((out[pl] + v) * 100) / 100;
+    });
+    return out;
+  }
+
+  /** Quintales por clave y turno de una fecha. */
+  const turnosDe = (fecha) => {
+    const r = estado.dias[fecha];
+    return r ? (migrar(r).turnos || {}) : {};
+  };
+
+  // ---------- productos diferenciados ----------
+  const piso = (n) => (n == null || !isFinite(n) ? null : Math.floor(n + 1e-9));
+
+  /**
+   * Convierte la hoja de inventario (claves tal como vienen impresas) al
+   * inventario por clave del tablero, aplicando los productos diferenciados.
+   * Devuelve también el desglose para mostrarlo en pantalla.
+   */
+  function aplicarDiferenciados(params, crudo) {
+    const src = {};
+    Object.entries(crudo || {}).forEach(([k, v]) => {
+      const n = num(v);
+      if (n != null && !Number.isNaN(n)) src[String(k).trim().toUpperCase()] = n;
+    });
+    const dif = (params.diferenciados || []).filter((d) => d.activo !== false);
+    const porDestino = Object.fromEntries(dif.map((d) => [d.destino.toUpperCase(), d]));
+
+    const inv = {}, detalle = [];
+    params.catalogo.forEach((clave) => {
+      const d = porDestino[clave.toUpperCase()];
+      if (d) {
+        const partes = d.partes.map((p) => {
+          const crudoV = src[p.clave.toUpperCase()];
+          const div = Number(p.div) || 1;
+          const aporte = crudoV == null ? null : (crudoV * (Number(p.mult) || 0)) / div;
+          return { ...p, crudo: crudoV ?? null, aporte };
+        });
+        const hay = partes.some((p) => p.aporte != null);
+        const total = hay ? piso(partes.reduce((a, p) => a + (p.aporte || 0), 0)) : null;
+        if (total != null) inv[clave] = total;
+        detalle.push({ destino: clave, partes, total });
+      } else {
+        const ficha = params.prod[clave] || {};
+        const v = src[clave.toUpperCase()] ?? (ficha.alias ? src[ficha.alias.toUpperCase()] : undefined);
+        if (v != null) inv[clave] = piso(v);
+      }
+    });
+    return { inv, detalle };
   }
 
   const num = (v) => {
@@ -225,12 +499,16 @@
   const turnoPorId = Object.fromEntries(TURNOS.map((t) => [t.id, t]));
 
   const api = {
-    DIAS, TURNOS, FAMILIAS, PRODUCTOS, PROM_INICIAL,
-    prodPorClave, turnoPorId,
+    DIAS, TURNOS, FAMILIAS, PRODUCTOS, PLANTAS, PROM_INICIAL, DIFERENCIADOS,
+    prodPorClave, turnoPorId, fichaDe,
+    productos, activos, claves, fichaPorClave, plantaDeTurno, turnosDePlanta,
     paramsPorDefecto, fusionarParams,
     estado, guardarParams, guardarProm, guardarDias, leer, grabar,
+    misDefecto, fijarDefecto, borrarDefecto, hayDefecto, ESQUEMA,
     hoyISO, desdeISO, aISO, sumarDias, indiceDia, nombreDia, fechaCorta,
-    registro, registroVacio, num, vacio, matrizValida, matrizVacia,
+    registro, registroVacio, migrar, diaPrevio, produccionDe, turnosDe, porTurnoDe, porPlantaDe,
+    aplicarDiferenciados, piso,
+    num, vacio, matrizValida, matrizVacia,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else raiz.Datos = api;

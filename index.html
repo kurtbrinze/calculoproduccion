@@ -68,6 +68,7 @@
     </div>
 
     <div class="kpis" id="kpis"></div>
+    <div class="plantas" id="plantas"></div>
     <div id="avisosProd"></div>
     <div class="turnos" id="turnos"></div>
 
@@ -81,44 +82,44 @@
   <!-- ============ INVENTARIO ============ -->
   <section class="panel" id="pInv" role="tabpanel" aria-labelledby="tabInv" hidden>
     <div class="card" style="margin-bottom:14px">
-      <h3>Inventario y producción del día</h3>
+      <h3 id="invTit">Inventario</h3>
       <p class="sub">
-        El inventario es el conteo de cierre en bolsas. La producción del día son los quintales que ya se hicieron
-        en esa fecha. De esos dos sale el teórico PM con el que se decide.
+        El cálculo parte del cierre del día anterior más lo que se produjo ese día, menos la venta promedio de hoy.
+        El INV PM es el conteo de cierre de hoy y sirve para medir la venta real contra el promedio.
       </p>
       <div class="fila">
-        <button class="btn ghost" id="btnFoto" type="button">Leer foto del inventario</button>
-        <button class="btn sec" id="btnImportInv" type="button">Importar Excel de inventario</button>
-        <button class="btn sec" id="btnCopiarAyer" type="button">Traer inventario de ayer</button>
+        <button class="btn" id="btnFoto" type="button">Leer INV PM</button>
+        <button class="btn sec" id="btnImportInv" type="button">Importar Excel INV PM</button>
+        <button class="btn sec" id="btnCopiarAyer" type="button">Cargar STOCK AYER</button>
         <input type="file" id="fileInv" accept=".xlsx" hidden>
       </div>
     </div>
     <div id="avisosInv"></div>
     <div class="tablabox">
-      <table>
-        <thead><tr>
-          <th class="l">Clave</th><th>Inventario (bolsas)</th><th>Producción hoy (qq)</th>
-          <th>= bolsas</th><th>Disponible</th><th>Conteo real</th><th>Diferencia</th>
-        </tr></thead>
-        <tbody id="tbodyInv"></tbody>
-      </table>
+      <table><thead id="theadInv"></thead><tbody id="tbodyInv"></tbody></table>
     </div>
+    <p class="dim" style="font-size:.85rem;margin:10px 2px" id="pistaInv"></p>
+    <div id="difCont"></div>
   </section>
 
   <!-- ============ HISTORIAL ============ -->
   <section class="panel" id="pHist" role="tabpanel" aria-labelledby="tabHist" hidden>
     <div class="card" style="margin-bottom:14px">
-      <h3>Historial de producción</h3>
+      <h3>Historial</h3>
       <p class="sub">Cada día guardado queda aquí para comparar temporadas y calibrar el sugerido.</p>
       <div class="fila">
-        <button class="btn" id="btnExportHist" type="button">Exportar a Excel</button>
+        <button class="btn" id="btnExportHist" type="button">Exportar todo a Excel</button>
+        <button class="btn ghost" id="btnImportHist" type="button">Subir historial de Excel</button>
         <button class="btn sec" id="btnRespaldo" type="button">Descargar respaldo</button>
         <button class="btn sec" id="btnRestaurar" type="button">Restaurar respaldo</button>
         <input type="file" id="fileResp" accept=".json" hidden>
+        <input type="file" id="fileHist" accept=".xlsx" hidden>
       </div>
+      <div class="fila" style="margin-top:10px" id="histTablas"></div>
     </div>
     <div class="kpis" id="kpisHist"></div>
     <div id="avisosHist"></div>
+    <div class="fila" style="margin-bottom:10px" id="histVista"></div>
     <div class="tablabox">
       <table><thead id="theadHist"></thead><tbody id="tbodyHist"></tbody></table>
     </div>
@@ -176,7 +177,7 @@
 <script src="js/datos.js"></script>
 <script src="js/calculo.js"></script>
 <script src="js/excel.js"></script>
-<script src="js/foto.js"></script>
+<script src="js/lector.js"></script>
 <script src="js/ui.js"></script>
 <script>
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
