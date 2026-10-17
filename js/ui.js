@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.7';
+  const VERSION = 'V.2026.8';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1022,6 +1022,7 @@
       D.guardarDias(); pintarProduccion();
       aviso(r.sinCupo.length ? `Repartido. ${r.sinCupo.length} claves no cupieron completas.` : 'Repartido entre los turnos.');
     };
+    $('#btnResumen').onclick = () => window.Resumen.abrir(ui.fecha, aviso);
     $('#btnLimpiar').onclick = () => {
       C.limpiarReparto(reg()); ui.sinCupo = null; ui.sinTurnoHoy = null; D.guardarDias(); pintarProduccion(); aviso('Reparto borrado.');
     };

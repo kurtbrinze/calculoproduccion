@@ -47,8 +47,6 @@
     { clave: 'S19',   codigo: 26,  familia: 'SANDWICH',  rend: 120,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
     { clave: 'S16',   codigo: 549, familia: 'SANDWICH',  rend: 150,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
     { clave: 'S11',   codigo: 28,  familia: 'SANDWICH',  rend: 210,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
-    { clave: 'IN16',  codigo: 473, familia: 'SANDWICH',  rend: 110,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
-    { clave: 'S32',   codigo: 31,  familia: 'SANDWICH',  rend: 84,   mult: 0.5,  turnos: ['SAND_AM'], z18: true,  z2: true },
     { clave: '10PM3', codigo: 32,  familia: 'REDONDO',   rend: 120,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], z18: true, z2: false },
     { clave: '10HD7', codigo: 5,   familia: 'REDONDO',   rend: 110,  mult: 1,    turnos: ['PAN_PM', 'MAQ_Z2', 'RED_AM', 'RED_PM'], z18: true, z2: true },
     { clave: '10HR3', codigo: 1,   familia: 'REDONDO',   rend: 150,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], z18: true, z2: false, alias: 'HR3' },
@@ -64,6 +62,8 @@
     { clave: '6CG2V', codigo: 390, familia: 'DULCE',     rend: 280,  mult: 0.25, turnos: ['BYRON'], z18: false, z2: true },
     { clave: '6CHO',  codigo: 355, familia: 'DULCE',     rend: 300,  mult: 0.25, turnos: ['BYRON'], z18: false, z2: true },
     { clave: '6QU1',  codigo: 490, familia: 'DULCE',     rend: 378,  mult: 0.25, turnos: ['JULIO'], z18: false, z2: true },
+    { clave: 'IN16',  codigo: 473, familia: 'SANDWICH',  rend: 110,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
+    { clave: 'S32',   codigo: 31,  familia: 'SANDWICH',  rend: 84,   mult: 0.5,  turnos: ['SAND_AM'], z18: true,  z2: true },
   ];
 
   /* Productos diferenciados: presentaciones distintas del mismo producto.
@@ -129,8 +129,9 @@
   /* Sube cuando hay un cambio de fábrica que debe alcanzar a quien ya tenía
      parámetros guardados.
        2 = llegó el turno Máquina Z2.
-       3 = el calendario de producción pasó a ser por planta. */
-  const ESQUEMA = 3;
+       3 = el calendario de producción pasó a ser por planta.
+       4 = el catálogo se ordenó como la hoja de papel. */
+  const ESQUEMA = 4;
 
   /** Ficha de producto completa, con todos los campos en su lugar. */
   function fichaDe(p) {
@@ -257,6 +258,17 @@
           .filter((p) => p && typeof p.clave === 'string')
           .map((p) => ({ clave: p.clave, mult: Number(p.mult) || 0, div: Number(p.div) || 1 })),
       }));
+
+    /* El catálogo pasa al orden de la hoja de papel. Lo que el usuario haya
+       agregado después se queda al final, sin tocar. */
+    if ((Number(guardado.esquema) || 0) < 4) {
+      const orden = base.catalogo;
+      out.catalogo = [
+        ...orden.filter((c) => out.catalogo.includes(c)),
+        ...out.catalogo.filter((c) => !orden.includes(c)),
+      ];
+      cat = out.catalogo;
+    }
 
     /* Máquina Z2: 5HM4 pasa a hacerse ahí y 10HD7 puede hacerse ahí o en
        Panaderos PM. Se aplica una sola vez sobre los parámetros guardados. */

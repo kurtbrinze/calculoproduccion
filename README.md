@@ -25,6 +25,22 @@ una tabla por familia con sólo los turnos que esa familia usa. De cada clave se
 Al tocar una clave se abre la explicación de dónde salió su sugerido, paso a paso.
 El sugerido total también aparece partido entre **Zona 18** y **Zona 2**.
 
+### Resumen del día
+
+El botón **Resumen del día** arma lo que hay que repartir, para la planta que se elija:
+
+- **Imagen clave y qq** — sólo las dos columnas, para mandar por WhatsApp.
+- **Imagen completa** — además el desglose por turno, con las celdas en gris donde
+  esa clave no se puede hacer en ese turno.
+- **Descargar PDF** / **Imprimir** — la hoja de trabajo de siempre, ya llena, en media carta
+  horizontal: rendimiento, stock de ayer, producción de ayer, consumo de hoy, teórico PM,
+  INV PM, consumo de mañana y los quintales por turno de las dos plantas. El archivo sale como
+  `Produccion Z18 2026_10_17.pdf`.
+
+En celular y tablet las imágenes salen por el menú de compartir del sistema, así que van directo
+a WhatsApp; en la laptop se descargan. Nada de esto se guarda ni se sincroniza: se arma en el
+momento con el día que está en pantalla.
+
 **Inventario** es la captura del día. Para producir el miércoles, parte del martes:
 
 | Columna | Qué es |
@@ -150,8 +166,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.7';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.7';`
+1. `js/ui.js` → `const VERSION = 'V.2026.8';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.8';`
 
 ## Plantas, claves y productos nuevos
 
@@ -232,6 +248,7 @@ equipo. La sincronización mantiene a los dos iguales, así que un borrado por e
 | `js/excel.js` | Leer el libro de cálculo y escribir el historial |
 | `js/lector.js` | Lectura de la foto del inventario |
 | `js/sync.js` | Mezcla y sincronización entre equipos |
+| `js/resumen.js` | Imágenes y PDF del resumen del día |
 | `js/ui.js` | Pantallas |
 | `api/extract.js` | El lector, para desplegar en Vercel |
 | `api/estado.js` | La sincronización, guardada en Vercel Blob |
