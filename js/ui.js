@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.6';
+  const VERSION = 'V.2026.7';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -821,28 +821,37 @@
     if (manual) espera(true, 'Sincronizando…');
     try {
       const r = await S.sincronizar({ manual, eleccion: eleccion || null });
-      if (!r.ok && r.motivo === 'eleccion' && !manual) {
-        /* Al abrir no se interrumpe con un cuadro: se avisa y él decide cuándo. */
-        aviso(r.total === 1
-          ? 'Hay algo distinto entre los dos equipos. Toca Sincronizar para resolverlo.'
-          : `Hay ${r.total} cosas distintas entre los dos equipos. Toca Sincronizar para resolverlo.`);
-        pintarSync();
-        return;
-      }
-      if (!r.ok && r.motivo === 'eleccion') {
+      if (!r.ok) { if (manual) aviso('No se sincronizó: ' + r.motivo, 'err'); return; }
+
+      refrescarTodo();
+
+      /* Quedaron cosas sin decidir: lo claro ya se aplicó, pero no se sube
+         nada hasta que él diga con cuál se queda. */
+      if (r.pendiente === 'eleccion') {
+        const traido = r.traidos.length ? ` Se trajeron ${r.traidos.length} cosas que no tenían duda.` : '';
+        if (!manual) {
+          aviso((r.total === 1
+            ? 'Hay algo distinto entre los dos equipos.'
+            : `Hay ${r.total} cosas distintas entre los dos equipos.`)
+            + traido + ' Toca Sincronizar para resolverlo.');
+          pintarSync();
+          return;
+        }
         espera(false);
-        const si = await preguntar('Primera sincronización de este equipo',
+        const si = await preguntar('Estos dos equipos nunca se habían comparado',
           `<p>Hay <b>${r.total}</b> ${r.total === 1 ? 'cosa que está distinta' : 'cosas que están distintas'} aquí y allá,
-             y como este equipo nunca se había sincronizado no hay manera de saber cuál es la buena.</p>
-           <p class="dim">${esc(r.indecisos.slice(0, 12).join(' · '))}${r.indecisos.length > 12 ? ' …' : ''}</p>
-           <p>¿Con cuál me quedo?</p>`, 'Lo de este equipo');
+             y no hay manera de saber cuál es la buena.</p>
+           <p class="dim">${esc(r.indecisos.slice(0, 14).join(' · '))}${r.indecisos.length > 14 ? ' …' : ''}</p>
+           <p>Lo demás ya quedó igual en los dos. ¿Con cuál me quedo para esto?</p>`,
+          'Lo de este equipo');
         $('#modalNo').textContent = 'Cancelar';
         return sincronizar(manual, si ? 'local' : 'remoto');
       }
-      if (!r.ok) { if (manual) aviso('No se sincronizó: ' + r.motivo, 'err'); return; }
 
-      pintarProduccion(); pintarInventario(); pintarHistorial(); pintarPromedios();
-      if (ui.tab === 'param') pintarParametros(); else pintarSync();
+      if (r.baseOk === false) {
+        aviso('Se sincronizó, pero no cupo la memoria de la comparación en este equipo. '
+          + 'Exporta el historial y borra días viejos, o la próxima vez volverá a preguntar.', 'err');
+      }
 
       const t = [];
       if (r.traidos.length) t.push(`${r.traidos.length} de la otra`);
@@ -860,6 +869,12 @@
       if (manual) aviso('No se sincronizó: ' + err.message, 'err');
       else console.warn('sync', err);
     } finally { if (manual) espera(false); }
+  }
+
+  /** Vuelve a pintar todo lo que pudo cambiar al traer datos de la otra. */
+  function refrescarTodo() {
+    pintarProduccion(); pintarInventario(); pintarHistorial(); pintarPromedios();
+    if (ui.tab === 'param') pintarParametros(); else pintarSync();
   }
 
   function pintarLector() {

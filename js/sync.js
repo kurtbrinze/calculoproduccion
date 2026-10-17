@@ -48,15 +48,32 @@
   }
 
   const base = () => { try { return JSON.parse(cfg('syncBase', 'null')) || {}; } catch (_) { return {}; } };
-  const guardarBase = (b) => setCfg('syncBase', JSON.stringify(b));
+  /** Devuelve false si el navegador no la dejó guardar: sin base todo parece distinto. */
+  function guardarBase(b) {
+    try { localStorage.setItem('panprod_syncBase', JSON.stringify(b)); return true; }
+    catch (_) { return false; }
+  }
 
-  const estadoLocal = () => ({ v: 1, params: D.estado.params, prom: D.estado.prom, dias: D.estado.dias });
+  /* Al abrir, la app crea el registro del día en blanco. Ese fantasma no es un
+     cambio: si entrara a la comparación, chocaría contra el día de verdad que
+     tiene el otro equipo y pararía toda la sincronización. */
+  function diasReales() {
+    const out = {};
+    Object.keys(D.estado.dias || {}).forEach((f) => {
+      if (!D.vacio(D.estado.dias[f])) out[f] = D.estado.dias[f];
+    });
+    return out;
+  }
+  const estadoLocal = () => ({ v: 1, params: D.estado.params, prom: D.estado.prom, dias: diasReales() });
 
   /* Hasta dónde se baja a comparar en cada rama. Los parámetros se tratan
      enteros, porque media configuración de cada equipo no es una configuración.
      Los días bajan hasta la clave: así conviven el INV PM que capturó la
      tablet y el reparto que hizo la laptop el mismo día. */
-  const PROF = { params: 0, prom: 1, dias: 3 };
+  /* Baja hasta la sección del día (invPM, turnos, crudo…), que es donde de
+     verdad chocan los dos equipos. Bajar hasta la clave multiplicaba por tres
+     el tamaño de la base y con años de historial ya no cabía en el navegador. */
+  const PROF = { params: 0, prom: 1, dias: 2 };
 
   const esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -64,7 +81,11 @@
   function arbol(v, prof) {
     if (prof <= 0 || !esObjeto(v)) return huella(v);
     const out = {};
-    Object.keys(v).forEach((k) => { out[k] = arbol(v[k], prof - 1); });
+    Object.keys(v).forEach((k) => {
+      if (k === 'migrado') return;                      // marca interna
+      if (esObjeto(v[k]) && !Object.keys(v[k]).length) return;   // sección vacía
+      out[k] = arbol(v[k], prof - 1);
+    });
     return out;
   }
   function arbolRaiz(est) {
@@ -160,11 +181,19 @@
   }
 
   // ---------- red ----------
+  /* Vercel corta los envíos en 4.5 MB. Se avisa antes para que el error se
+     entienda, en vez de que la petición muera en el camino. */
+  const TOPE_ENVIO = 4 * 1024 * 1024;
+
   async function pedir(metodo, cuerpo) {
     const opciones = { method: metodo, headers: { 'x-clave': clave() } };
     if (cuerpo) {
       opciones.headers['Content-Type'] = 'application/json';
       opciones.body = JSON.stringify(cuerpo);
+      if (opciones.body.length > TOPE_ENVIO) {
+        throw new Error('El historial ya pesa más de lo que se puede subir de una. '
+          + 'Expórtalo a Excel desde el Historial y borra los días más viejos.');
+      }
     }
     const r = await fetch(URL_API(), opciones);
     let d = null;
@@ -215,15 +244,24 @@
       let etag = bajada.datos.etag || null;
 
       let m = mezclar(estadoLocal(), remoto, base(), eleccion);
+
+      /* Lo que no tiene dudas se aplica siempre, aunque alguna cosa suelta haya
+         quedado sin decidir. Antes una sola duda paraba la sincronización
+         entera y el otro equipo se quedaba sin los cientos de días que sí
+         estaban claros. */
+      if (m.traidos.length || m.borrados.length) aplicar(m.estado);
+
+      /* Con dudas pendientes no se sube nada: subir sería decidir en silencio
+         y pisarle al otro equipo lo suyo. Se aplica lo claro y se avisa. */
       if (m.indecisos.length) {
-        return { ok: false, motivo: 'eleccion', indecisos: m.indecisos, total: m.indecisos.length };
+        return {
+          ok: true, pendiente: 'eleccion', subido: false,
+          traidos: m.traidos, mandados: [], conflictos: m.conflictos,
+          borrados: m.borrados, indecisos: m.indecisos, total: m.indecisos.length,
+          escrituras: escrituras(false),
+        };
       }
 
-      // 1. lo que vino de allá se aplica aquí
-      const hayQueTraer = m.traidos.length || m.borrados.length;
-      if (hayQueTraer) aplicar(m.estado);
-
-      // 2. lo que falta allá se manda
       const igual = remoto && huella(m.estado) === huella({ v: 1, params: remoto.params, prom: remoto.prom, dias: remoto.dias });
       let subido = false;
       if (!igual) {
@@ -247,12 +285,12 @@
         }
       }
 
-      guardarBase(arbolRaiz(m.estado));
+      const baseOk = guardarBase(arbolRaiz(m.estado));
       if (etag) setCfg('syncEtag', etag);
       setCfg('syncUltima', new Date().toISOString());
       return {
-        ok: true, subido, traidos: m.traidos, mandados: m.mandados,
-        conflictos: m.conflictos, borrados: m.borrados,
+        ok: true, subido, baseOk, traidos: m.traidos, mandados: m.mandados,
+        conflictos: m.conflictos, borrados: m.borrados, indecisos: [],
         escrituras: escrituras(false),
       };
     } finally { corriendo = false; }
@@ -276,7 +314,7 @@
 
   window.Sync = {
     sincronizar, disponible, reiniciar, activo, clave, cfg, setCfg,
-    escrituras: () => escrituras(false), TOPE_AVISO,
+    escrituras: () => escrituras(false), TOPE_AVISO, TOPE_ENVIO,
     ultima: () => cfg('syncUltima', ''),
     // expuestos para las pruebas
     _mezclar: mezclar, _huella: huella, _canon: canon,

@@ -42,8 +42,12 @@ En la laptop y en la tablet, por separado:
 2. Escribe **la misma clave** que pusiste en `SYNC_CLAVE`.
 3. Marca **Sincronización encendida**.
 
-La primera vez, si los dos equipos ya traen datos distintos, la app pregunta
-una sola vez con cuál quedarse. De ahí en adelante ya sabe comparar.
+La primera vez, el equipo que entra se trae todo lo que el otro ya tenía. Si
+además hay algo que está distinto en los dos y nunca se había comparado —por
+ejemplo los parámetros, porque cada equipo arrancó con los de fábrica y vos
+calibraste uno solo— la app pregunta **una vez** con cuál quedarse, y hasta
+que contestes no sube nada, para no pisarle lo suyo al otro equipo. De ahí en
+adelante ya sabe comparar sola.
 
 ## Cómo decide qué conservar
 
@@ -95,6 +99,10 @@ de Vercel.
 **Quedó revuelto** — en Parámetros, **Empezar de cero** borra lo que este
 equipo recuerda de la comparación, sin tocar los datos. La próxima vez vuelve a
 preguntar con cuál quedarse.
+
+**«No cupo la memoria de la comparación»** — el historial creció tanto que ya
+no cabe en el navegador de ese equipo. Exporta el historial a Excel y borra los
+días más viejos desde el Historial.
 
 El respaldo `.json` del Historial sigue ahí y conviene bajarlo de vez en
 cuando: la sincronización mantiene a los dos equipos iguales, pero si borras
