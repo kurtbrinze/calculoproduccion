@@ -405,12 +405,14 @@
   // ================= pantalla =================
   const esc2 = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  function descargar(blob, nombre) {
-    const u = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = u; a.download = nombre;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(u), 15000);
+  const A = () => window.Archivo;
+
+  /** Guarda en la carpeta elegida si hay, y si no por la vía normal. */
+  async function guardarArchivo(blob, nombre, tipo, opciones) {
+    return A().guardar(blob, nombre, { tipo, ...(opciones || {}) });
   }
+  const dondeDice = (r) => (r.modo === 'carpeta' ? ` en ${r.donde}`
+    : (r.modo === 'elegido' ? ' donde lo pediste' : ''));
 
   /** Comparte el archivo si el equipo sabe; si no, lo descarga. */
   async function compartir(blob, nombre, titulo2) {
@@ -419,8 +421,8 @@
       try { await navigator.share({ files: [file], title: titulo2 }); return 'compartido'; }
       catch (err) { if (err && err.name === 'AbortError') return 'cancelado'; }
     }
-    descargar(blob, nombre);
-    return 'descargado';
+    const r = await guardarArchivo(blob, nombre, A().TIPO_PNG);
+    return r.modo === 'cancelado' ? 'cancelado' : 'descargado' + dondeDice(r);
   }
 
   function abrir(fecha, decir) {
@@ -453,6 +455,7 @@
               <button class="btn sec" type="button" id="rImprimir">Imprimir</button></div>
           </div>
           <p class="sub" style="margin:11px 0 0" id="rNota"></p>
+          <p class="dim" style="font-size:.84rem;margin:9px 0 0" id="rCarpeta"></p>
         </div>
         <div id="rVista"></div>
       </div>
@@ -495,15 +498,45 @@
       const r = await compartir(await aBlob(imagenCompleta(d)), nombreImg(' detalle'), 'Producción por turno');
       avisar(r === 'descargado' ? 'Imagen descargada.' : (r === 'compartido' ? 'Imagen compartida.' : 'Cancelado.'));
     };
-    q('#rPdf').onclick = () => { descargar(pdf(d), nombrePdf()); avisar('PDF descargado.'); };
+    async function pintarCarpeta() {
+      const c = await A().carpeta();
+      const puede = A().haySoporte();
+      q('#rCarpeta').innerHTML = c
+        ? `Se guarda en la carpeta <b>${esc2(c.nombre)}</b>. `
+          + '<button class="btn sec mini" type="button" id="rCambiarCarp">Cambiar</button> '
+          + '<button class="btn sec mini" type="button" id="rQuitarCarp">Quitar</button>'
+        : (puede
+          ? 'Se guarda en Descargas. <button class="btn sec mini" type="button" id="rCambiarCarp">Elegir una carpeta fija</button>'
+          : 'Se guarda en la carpeta de Descargas del navegador. Para elegir otra hace falta Chrome o Edge en la computadora.');
+      const cam = q('#rCambiarCarp');
+      if (cam) cam.onclick = async () => {
+        try {
+          const n = await A().elegirCarpeta();
+          if (n) avisar(`Los archivos van a quedar en ${n}.`);
+          pintarCarpeta();
+        } catch (err) { avisar('No se pudo elegir la carpeta: ' + err.message, 'err'); }
+      };
+      const qui = q('#rQuitarCarp');
+      if (qui) qui.onclick = async () => {
+        await A().olvidarCarpeta(); pintarCarpeta(); avisar('Vuelve a guardarse en Descargas.');
+      };
+    }
+
+    q('#rPdf').onclick = async () => {
+      const r = await guardarArchivo(pdf(d), nombrePdf(), A().TIPO_PDF);
+      if (r.modo === 'cancelado') return;
+      avisar('PDF guardado' + dondeDice(r) + '.');
+      pintarCarpeta();
+    };
     q('#rImprimir').onclick = () => {
       const u = URL.createObjectURL(pdf(d));
       const w = window.open(u, '_blank');
-      if (!w) { descargar(pdf(d), nombrePdf()); avisar('El navegador bloqueó la ventana; el PDF se descargó.', 'err'); }
+      if (!w) { A().descargaNormal(pdf(d), nombrePdf()); avisar('El navegador bloqueó la ventana; el PDF se descargó.', 'err'); }
       setTimeout(() => URL.revokeObjectURL(u), 60000);
     };
 
     pintar();
+    pintarCarpeta();
   }
 
   window.Resumen = { abrir, datos, imagenSimple, imagenCompleta, pdf, pdfBytes };

@@ -2,13 +2,15 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.9';
+  const VERSION = 'V.2026.11';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const n0 = (v) => (v == null || !isFinite(v) ? '' : Math.round(v).toLocaleString('es-GT'));
   const n1 = (v) => (v == null || !isFinite(v) ? '' : Number(v).toLocaleString('es-GT', { maximumFractionDigits: 1 }));
   const n2 = (v) => (v == null || !isFinite(v) ? '' : Number(v).toLocaleString('es-GT', { maximumFractionDigits: 2 }));
+  const TIPO_XLSX = { description: 'Libro de Excel', accept: { 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'] } };
+  const TIPO_JSON = { description: 'Respaldo', accept: { 'application/json': ['.json'] } };
 
   /* Recordar el día en curso: la tablet se bloquea y al volver no hay que buscarlo. */
   const ultimaFecha = (() => {
@@ -48,12 +50,10 @@
     });
   }
 
-  function descargar(blob, nombre) {
-    const u = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = u; a.download = nombre;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(u), 15000);
-  }
+  /* Todo lo que el app entrega pasa por aquí: si hay una carpeta elegida va
+     directo ahí, y si no, a la carpeta de Descargas del navegador. */
+  const descargar = (blob, nombre, tipo) => window.Archivo.guardar(blob, nombre, { tipo });
+  const donde = (r) => (r && r.modo === 'carpeta' ? ` en ${r.donde}` : '');
 
   // ---------- estado del día ----------
   const reg = () => D.registro(ui.fecha);
@@ -624,8 +624,9 @@
       const hojas = t ? [t] : todas;
       const { blob } = await X.escribirLibro(hojas, 'historial.xlsx');
       const hoy = D.hoyISO().replace(/-/g, '_');
-      descargar(blob, t ? `${t.nombre.replace(/[^\w]+/g, '_')}_${hoy}.xlsx` : `Historial_Produccion_${hoy}.xlsx`);
-      aviso(t ? `Exportado ${t.titulo}.` : `Exportados ${fechas.length} días en ${hojas.length} tablas.`);
+      const r = await descargar(blob, t ? `${t.nombre.replace(/[^\w]+/g, '_')}_${hoy}.xlsx` : `Historial_Produccion_${hoy}.xlsx`, TIPO_XLSX);
+      if (r.modo === 'cancelado') return;
+      aviso((t ? `Exportado ${t.titulo}` : `Exportados ${fechas.length} días en ${hojas.length} tablas`) + donde(r) + '.');
     } catch (err) { aviso('No se pudo exportar: ' + err.message, 'err'); }
     finally { espera(false); }
   }
@@ -831,6 +832,16 @@
       </div>
 
       <div class="card" style="margin-bottom:14px">
+        <h3>Dónde se guardan los archivos</h3>
+        <p class="sub">
+          El PDF y las imágenes del resumen, el Excel del historial y el respaldo. Por defecto van
+          a la carpeta de Descargas del navegador.
+        </p>
+        <div class="fila" id="carpFila"></div>
+        <p class="dim" style="font-size:.84rem;margin:11px 2px 0" id="carpNota"></p>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
         <h3>Sincronizar entre equipos</h3>
         <p class="sub">
           Para que la laptop y la tablet trabajen sobre los mismos datos. Se mezcla por partes:
@@ -876,6 +887,7 @@
     $('#chkSync').checked = window.Sync.cfg('syncOn') === '1';
     $('#inSyncClave').value = window.Sync.clave();
     pintarSync();
+    pintarCarpeta();
     const g = D.misDefecto();
     $('#estadoDef').innerHTML = g
       ? `Guardados el <b>${esc(g.guardadoEn ? D.fechaCorta(g.guardadoEn.slice(0, 10)) : 'alguna vez')}</b>. `
@@ -1003,6 +1015,26 @@
   function refrescarTodo() {
     pintarProduccion(); pintarInventario(); pintarPedidos(); pintarHistorial(); pintarPromedios();
     if (ui.tab === 'param') pintarParametros(); else pintarSync();
+  }
+
+  /** La carpeta fija, en Parámetros. */
+  async function pintarCarpeta() {
+    if (!$('#carpFila')) return;
+    const A = window.Archivo;
+    const c = await A.carpeta();
+    $('#carpFila').innerHTML = c
+      ? `<span class="dim">Carpeta elegida: <b>${esc(c.nombre)}</b></span>
+         <button class="btn sec mini" type="button" id="btnCarpCambiar">Cambiar</button>
+         <button class="btn sec mini" type="button" id="btnCarpQuitar">Quitar</button>`
+      : (A.haySoporte()
+        ? '<span class="dim">Ahora van a Descargas.</span>'
+          + '<button class="btn ghost mini" type="button" id="btnCarpCambiar">Elegir una carpeta fija</button>'
+        : '<span class="dim">Van a Descargas.</span>');
+    $('#carpNota').innerHTML = A.haySoporte()
+      ? 'Al elegir una carpeta, los archivos caen directo ahí sin pasar por Descargas. '
+        + 'Chrome pide confirmar el permiso una vez cada vez que lo reabres.'
+      : 'Elegir carpeta sólo se puede en Chrome o Edge de computadora. En la tablet siempre van a '
+        + 'Descargas o al menú de compartir.';
   }
 
   function pintarLector() {
@@ -1324,7 +1356,7 @@
     $('#btnFoto').onclick = () => window.Lector.abrir(async (res) => {
       const destino = await entraEn(res.fecha);
       const n = aplicarCrudo(res.crudo, destino);
-      if (res.blob) descargar(res.blob, res.nombre);
+      if (res.blob) await descargar(res.blob, res.nombre, TIPO_XLSX);
       pintarInventario(); pintarProduccion();
       aviso(`INV PM de ${n} claves en ${D.fechaCorta(destino)}.`
         + (res.blob ? ' El Excel se descargó.' : '')
@@ -1380,10 +1412,13 @@
       D.guardarDias(); pintarHistorial();
       return `Historial subido: ${resumen.dias} días.`;
     });
-    $('#btnRespaldo').onclick = () => {
-      const data = { version: VERSION, fecha: new Date().toISOString(), params: D.estado.params, prom: D.estado.prom, dias: D.estado.dias };
-      descargar(new Blob([JSON.stringify(data)], { type: 'application/json' }), `Respaldo_Produccion_${D.hoyISO().replace(/-/g, '_')}.json`);
-      aviso('Respaldo descargado. Guárdalo fuera de la tablet.');
+    $('#btnRespaldo').onclick = async () => {
+      const data = { version: VERSION, fecha: new Date().toISOString(),
+        params: D.estado.params, prom: D.estado.prom, pedidos: D.estado.pedidos, dias: D.estado.dias };
+      const r = await descargar(new Blob([JSON.stringify(data)], { type: 'application/json' }),
+        `Respaldo_Produccion_${D.hoyISO().replace(/-/g, '_')}.json`, TIPO_JSON);
+      if (r.modo === 'cancelado') return;
+      aviso('Respaldo guardado' + donde(r) + '. Guárdalo fuera de la tablet.');
     };
     $('#btnRestaurar').onclick = () => $('#fileResp').click();
     $('#fileResp').onchange = async (e) => {
@@ -1396,8 +1431,9 @@
           `<p>Reemplaza ajustes, promedios e historial por los del archivo (${Object.keys(d.dias).length} días).</p>`, 'Restaurar')) return;
         D.estado.params = D.fusionarParams(d.params);
         if (d.prom) D.estado.prom = d.prom;
+        if (d.pedidos) D.estado.pedidos = d.pedidos;
         D.estado.dias = d.dias;
-        D.guardarParams(); D.guardarProm(); D.guardarDias();
+        D.guardarParams(); D.guardarProm(); D.guardarPedidos(); D.guardarDias();
         pintarHistorial(); aviso('Respaldo restaurado.');
       } catch (err) { aviso('No se pudo restaurar: ' + err.message, 'err'); }
     };
@@ -1449,6 +1485,16 @@
             D.guardarParams(); pintarParametros(); pintarProduccion();
             aviso('Parámetros de fábrica restaurados.');
           });
+        return;
+      }
+      if (e.target.closest('#btnCarpCambiar')) {
+        window.Archivo.elegirCarpeta()
+          .then((n) => { if (n) aviso(`Los archivos van a quedar en ${n}.`); pintarCarpeta(); })
+          .catch((err) => aviso('No se pudo elegir la carpeta: ' + err.message, 'err'));
+        return;
+      }
+      if (e.target.closest('#btnCarpQuitar')) {
+        window.Archivo.olvidarCarpeta().then(() => { pintarCarpeta(); aviso('Vuelven a ir a Descargas.'); });
         return;
       }
       if (e.target.closest('#btnSyncYa') || e.target.closest('#btnSync')) { sincronizar(true); return; }

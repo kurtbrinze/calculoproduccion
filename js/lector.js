@@ -364,12 +364,11 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
       if (!st.fecha) { decir('Falta la fecha de la hoja.', true); q('#lFecha').focus(); return; }
       const nombre = nombreArchivo(st);
       try {
-        const blob = await blobDe();
-        const u = URL.createObjectURL(blob);
-        const a = document.createElement('a'); a.href = u; a.download = nombre;
-        document.body.appendChild(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(u), 15000);
-        decir(`Descargado ${nombre}.`);
+        const r = await window.Archivo.guardar(await blobDe(), nombre, {
+          tipo: { description: 'Libro de Excel', accept: { [MIME]: ['.xlsx'] } },
+        });
+        if (r.modo === 'cancelado') return;
+        decir(`Guardado ${nombre}${r.modo === 'carpeta' ? ' en ' + r.donde : ''}.`);
       } catch (err) { decir('No se pudo guardar: ' + err.message, true); }
     }
 

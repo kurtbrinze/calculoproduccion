@@ -38,7 +38,15 @@ El botón **Resumen del día** arma lo que hay que repartir, para la planta que 
   `Produccion Z18 2026_10_17.pdf`.
 
 En celular y tablet las imágenes salen por el menú de compartir del sistema, así que van directo
-a WhatsApp; en la laptop se descargan. Nada de esto se guarda ni se sincroniza: se arma en el
+a WhatsApp; en la laptop se guardan.
+
+**Dónde se guardan.** Por defecto van a la carpeta de Descargas. En Chrome o Edge de computadora
+se puede elegir una carpeta fija, desde el mismo cuadro del resumen o desde **Parámetros → Dónde
+se guardan los archivos**: la carpeta queda recordada y de ahí en adelante todo lo que el app
+entrega cae directo ahí, sin pasar por Descargas. Eso cubre el PDF, las imágenes, el Excel del
+historial, el Excel del inventario leído de la foto y el respaldo. Al reabrir el navegador, Chrome
+pide confirmar el permiso una vez. En Android no se puede elegir carpeta: ahí siempre es Descargas
+o el menú de compartir. Nada de esto se guarda ni se sincroniza: se arma en el
 momento con el día que está en pantalla.
 
 **Inventario** es la captura del día. Para producir el miércoles, parte del martes:
@@ -189,8 +197,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.9';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.9';`
+1. `js/ui.js` → `const VERSION = 'V.2026.11';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.11';`
 
 ## Plantas, claves y productos nuevos
 
