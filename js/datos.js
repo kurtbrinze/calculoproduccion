@@ -36,6 +36,9 @@
     { id: 'MAGDALENA', nombre: 'Magdalenas',        vidaUtil: 21, minDespacho: 14, colchon: 1 },
     { id: 'DULCE',     nombre: 'Dulces y especial', vidaUtil: 21, minDespacho: 14, colchon: 1 },
   ];
+  /* Un pedido especial se produce con días de anticipación sobre la entrega.
+     Vale para todas las familias salvo que alguna traiga el suyo. */
+  const ANTICIPACION = 1;
 
   /* Un producto por fila. `turnos` va en orden de preferencia: el reparto
      automático llena el primero que tenga cupo antes de pasar al siguiente.
@@ -159,7 +162,9 @@
     const turnos = {};
     TURNOS.forEach((t) => { turnos[t.id] = { tope: t.tope, minimo: t.minimo || 0, planta: t.planta, activo: true }; });
     const familias = {};
-    FAMILIAS.forEach((f) => { familias[f.id] = { vidaUtil: f.vidaUtil, minDespacho: f.minDespacho, colchon: f.colchon }; });
+    FAMILIAS.forEach((f) => {
+      familias[f.id] = { vidaUtil: f.vidaUtil, minDespacho: f.minDespacho, colchon: f.colchon, anticipacion: null };
+    });
     return {
       factorTemporada: 1,
       horizonteModo: 'calendario',   // 'calendario' | 'fijo' | 'tabla'
@@ -174,6 +179,7 @@
       esquema: ESQUEMA,
       prod, turnos, familias,
       diferenciados: JSON.parse(JSON.stringify(DIFERENCIADOS)),
+      pedidos: { anticipacion: ANTICIPACION },
       calendario: CALENDARIO_INICIAL.map((c) => ({ ...c })),
       feriados: [],                  // ['AAAA-MM-DD', ...]
     };
@@ -249,6 +255,9 @@
     });
     if (!Array.isArray(out.feriados)) out.feriados = [];
 
+    out.pedidos = { ...base.pedidos, ...(guardado.pedidos || {}) };
+    out.pedidos.anticipacion = Math.max(0, Number(out.pedidos.anticipacion) || 0);
+
     const dif = Array.isArray(guardado.diferenciados) ? guardado.diferenciados : null;
     out.diferenciados = (dif || base.diferenciados)
       .filter((d) => d && typeof d.destino === 'string' && Array.isArray(d.partes))
@@ -300,6 +309,7 @@
     params: fusionarParams(leer('params', null)),
     prom: leer('prom', null) || JSON.parse(JSON.stringify(PROM_INICIAL)),
     dias: leer('dias', {}),      // { 'AAAA-MM-DD': registro }
+    pedidos: leer('pedidos', {}),// { id: pedido }
   };
   /* Versión vieja de los promedios: S13 pasó a S11. */
   if (estado.prom.S13 && !estado.prom.S11) { estado.prom.S11 = estado.prom.S13; delete estado.prom.S13; }
@@ -324,6 +334,7 @@
   const turnosDePlanta = (planta) => TURNOS.filter((t) => plantaDeTurno(t.id) === planta);
 
   const guardarParams = () => grabar('params', estado.params);
+  const guardarPedidos = () => grabar('pedidos', estado.pedidos);
 
   /* Los parámetros que el usuario declaró como suyos. Mientras no guarde
      ninguno, "volver a los míos" devuelve los de fábrica. */
@@ -479,6 +490,47 @@
     return r ? (migrar(r).turnos || {}) : {};
   };
 
+  // ---------- pedidos especiales ----------
+  /* Un pedido es producto comprometido fuera del promedio de venta: una fecha
+     de entrega, un cliente, una clave y las bolsas. */
+  const nuevoId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+
+  function nuevoPedido({ fecha, cliente, clave, bolsas, nota }) {
+    const id = nuevoId();
+    estado.pedidos[id] = {
+      id, fecha, cliente: String(cliente || '').trim(), clave,
+      bolsas: Math.max(0, Math.round(Number(bolsas) || 0)),
+      estado: 'pendiente', nota: String(nota || '').trim(),
+      creado: new Date().toISOString(),
+    };
+    return estado.pedidos[id];
+  }
+
+  const pedidosLista = () => Object.values(estado.pedidos || {})
+    .filter((p) => p && p.fecha && p.clave)
+    .sort((a, b) => (a.fecha === b.fecha
+      ? String(a.cliente).localeCompare(String(b.cliente))
+      : a.fecha.localeCompare(b.fecha)));
+
+  /**
+   * En qué anda cada pedido:
+   *   entregado / cancelado — ya no cuentan
+   *   vencido  — se pasó la fecha y nadie lo cerró: avisa pero deja de contar
+   *   pendiente — todavía cuenta para el cálculo
+   */
+  function estadoPedido(p, hoy) {
+    const h = hoy || hoyISO();
+    if (p.estado === 'entregado') return 'entregado';
+    if (p.estado === 'cancelado') return 'cancelado';
+    return p.fecha < h ? 'vencido' : 'pendiente';
+  }
+
+  /** Los que mueven el cálculo: pendientes y con fecha de hoy en adelante. */
+  const pedidosVivos = (hoy) => pedidosLista().filter((p) => estadoPedido(p, hoy) === 'pendiente');
+
+  /** Clientes ya usados, para no escribir el mismo nombre de tres maneras. */
+  const clientes = () => [...new Set(pedidosLista().map((p) => p.cliente).filter(Boolean))].sort();
+
   // ---------- productos diferenciados ----------
   const piso = (n) => (n == null || !isFinite(n) ? null : Math.floor(n + 1e-9));
 
@@ -532,7 +584,8 @@
     prodPorClave, turnoPorId, fichaDe,
     productos, activos, claves, fichaPorClave, plantaDeTurno, turnosDePlanta,
     paramsPorDefecto, fusionarParams,
-    estado, guardarParams, guardarProm, guardarDias, leer, grabar,
+    estado, guardarParams, guardarProm, guardarDias, guardarPedidos, leer, grabar,
+    nuevoPedido, pedidosLista, pedidosVivos, estadoPedido, clientes, ANTICIPACION,
     misDefecto, fijarDefecto, borrarDefecto, hayDefecto, ESQUEMA,
     hoyISO, desdeISO, aISO, sumarDias, indiceDia, nombreDia, fechaCorta,
     registro, registroVacio, migrar, diaPrevio, produccionDe, turnosDe, porTurnoDe, porPlantaDe,

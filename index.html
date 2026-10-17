@@ -35,6 +35,7 @@
   <div class="tabs" role="tablist">
     <button type="button" role="tab" id="tabProd"  aria-selected="true"  aria-controls="pProd">Producción</button>
     <button type="button" role="tab" id="tabInv"   aria-selected="false" aria-controls="pInv">Inventario</button>
+    <button type="button" role="tab" id="tabPed"   aria-selected="false" aria-controls="pPed">Pedidos</button>
     <button type="button" role="tab" id="tabHist"  aria-selected="false" aria-controls="pHist">Historial</button>
     <button type="button" role="tab" id="tabProm"  aria-selected="false" aria-controls="pProm">Promedios</button>
     <button type="button" role="tab" id="tabParam" aria-selected="false" aria-controls="pParam">Parámetros</button>
@@ -104,6 +105,38 @@
     </div>
     <p class="dim" style="font-size:.85rem;margin:10px 2px" id="pistaInv"></p>
     <div id="difCont"></div>
+  </section>
+
+  <!-- ============ PEDIDOS ESPECIALES ============ -->
+  <section class="panel" id="pPed" role="tabpanel" aria-labelledby="tabPed" hidden>
+    <div class="card" style="margin-bottom:14px">
+      <h3>Pedidos especiales</h3>
+      <p class="sub">
+        Producto comprometido fuera del promedio de venta. Se suma al consumo del día de entrega
+        y entra al sugerido cuando la próxima corrida ya no alcanzaría a producirlo a tiempo.
+      </p>
+      <div class="fila" style="align-items:flex-end">
+        <div class="campo"><label for="pdFecha">Día de entrega</label>
+          <input type="date" id="pdFecha" style="min-width:160px"></div>
+        <div class="campo"><label for="pdCliente">Cliente</label>
+          <input type="text" id="pdCliente" list="pdClientes" autocomplete="off" style="min-width:190px" placeholder="a quién se le entrega">
+          <datalist id="pdClientes"></datalist></div>
+        <div class="campo"><label for="pdClave">Clave</label>
+          <select id="pdClave" style="min-width:140px"></select></div>
+        <div class="campo"><label for="pdBolsas">Bolsas</label>
+          <input type="number" id="pdBolsas" inputmode="numeric" min="1" step="1" style="width:120px"></div>
+        <div class="campo"><label>&nbsp;</label>
+          <button class="btn" id="btnAgregarPed" type="button">Agregar</button></div>
+        <span class="dim" id="pdPista" style="margin-left:auto;font-size:.85rem"></span>
+      </div>
+    </div>
+
+    <div class="kpis" id="kpisPed"></div>
+    <div id="avisosPed"></div>
+    <div class="fila" style="margin-bottom:10px" id="pedFiltros"></div>
+    <div class="tablabox">
+      <table><thead id="theadPed"></thead><tbody id="tbodyPed"></tbody></table>
+    </div>
   </section>
 
   <!-- ============ HISTORIAL ============ -->

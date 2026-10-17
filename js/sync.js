@@ -64,7 +64,10 @@
     });
     return out;
   }
-  const estadoLocal = () => ({ v: 1, params: D.estado.params, prom: D.estado.prom, dias: diasReales() });
+  const estadoLocal = () => ({
+    v: 1, params: D.estado.params, prom: D.estado.prom,
+    dias: diasReales(), pedidos: D.estado.pedidos || {},
+  });
 
   /* Hasta dónde se baja a comparar en cada rama. Los parámetros se tratan
      enteros, porque media configuración de cada equipo no es una configuración.
@@ -73,7 +76,7 @@
   /* Baja hasta la sección del día (invPM, turnos, crudo…), que es donde de
      verdad chocan los dos equipos. Bajar hasta la clave multiplicaba por tres
      el tamaño de la base y con años de historial ya no cabía en el navegador. */
-  const PROF = { params: 0, prom: 1, dias: 2 };
+  const PROF = { params: 0, prom: 1, dias: 2, pedidos: 1 };
 
   const esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -93,6 +96,7 @@
       params: arbol(est.params, PROF.params),
       prom: arbol(est.prom, PROF.prom),
       dias: arbol(est.dias, PROF.dias),
+      pedidos: arbol(est.pedidos || {}, PROF.pedidos),
     };
   }
 
@@ -156,11 +160,14 @@
     });
     if (!remoto) {
       reg.mandados.add('todo');
-      return salida({ v: 1, params: local.params, prom: local.prom, dias: { ...local.dias } });
+      return salida({ v: 1, params: local.params, prom: local.prom,
+        dias: { ...local.dias }, pedidos: { ...local.pedidos } });
     }
     const bb = b || {};
     const params = mezclarNodo(local.params, remoto.params, bb.params, PROF.params, 'los parámetros', reg, eleccion);
     const prom = mezclarNodo(local.prom, remoto.prom, bb.prom, PROF.prom, 'los promedios', reg, eleccion);
+    const pedidos = mezclarNodo(local.pedidos || {}, remoto.pedidos || {}, bb.pedidos,
+      PROF.pedidos, 'los pedidos especiales', reg, eleccion);
 
     /* Los días se recorren uno por uno para poder nombrarlos en los avisos. */
     const dias = {};
@@ -176,6 +183,7 @@
       v: 1,
       params: params === AUSENTE ? local.params : params,
       prom: prom === AUSENTE ? local.prom : prom,
+      pedidos: pedidos === AUSENTE ? (local.pedidos || {}) : pedidos,
       dias,
     });
   }
@@ -300,8 +308,9 @@
   function aplicar(est) {
     if (est.params) D.estado.params = D.fusionarParams(est.params);
     if (est.prom) D.estado.prom = est.prom;
+    D.estado.pedidos = est.pedidos || {};
     D.estado.dias = est.dias || {};
-    D.guardarParams(); D.guardarProm();
+    D.guardarParams(); D.guardarProm(); D.guardarPedidos();
     /* Se graba directo: guardarDias() limpia los días vacíos y eso borraría
        días que el otro equipo acaba de crear pero todavía no llena. */
     D.grabar('dias', D.estado.dias);

@@ -7,7 +7,7 @@ como historial para comparar temporadas.
 Todo se procesa en el dispositivo. Lo único que sale es la foto del inventario, y sólo hacia
 el lector que tú conectes (ver [LECTOR.md](LECTOR.md)).
 
-## Las cinco pestañas
+## Las seis pestañas
 
 **Producción** es el tablero. Arriba, los totales y cómo va cada turno contra su tope. Abajo,
 una tabla por familia con sólo los turnos que esa familia usa. De cada clave se ve:
@@ -83,6 +83,29 @@ El 10CZ4 se produce de mañana, así que el conteo de cierre de ese mismo día y
 Por eso viene marcado **Prod. ya en el conteo** en Parámetros: sus BOLSAS se muestran tachadas
 y no se vuelven a sumar en el TEÓRICO PM. Cualquier otra clave que se comporte igual se marca
 en esa misma casilla.
+
+**Pedidos** son los compromisos fuera del promedio de venta: día de entrega, cliente, clave y
+bolsas. Se agregan con una fila de campos donde la fecha y el cliente se quedan puestos, porque
+un pedido casi siempre trae varias claves.
+
+Cada pedido suma sus bolsas al **consumo del día de entrega**, así que baja el teórico PM de ese
+día igual que una venta. Para la producción no entra apenas se ingresa: entra en el sugerido
+**el último día en que todavía da tiempo**, según los días de anticipación. Con anticipación de
+1 día, un pedido del viernes entra al cálculo del jueves, no antes, para no gastarle vida útil.
+
+Los días de anticipación se ponen en Parámetros: uno general y, si alguna familia necesita otro,
+el suyo en la tabla de vida útil.
+
+Un pedido pasa por cuatro estados: **Pendiente**, **Se produce hoy** cuando llegó su último día,
+**Vencido** si pasó la fecha y nadie lo cerró —avisa pero ya no mueve el cálculo— y **Entregado**.
+
+Las alertas salen en tres lados: en Producción, un aviso con las bolsas que entran hoy y un
+distintivo **PEDIDO** en cada clave afectada; **PEDIDO EN RIESGO** cuando lo decidido no alcanza
+a cubrirlo; y en Inventario, el consumo del día de entrega sale marcado con `*`.
+
+Dos cosas que conviene saber: el app **no aparta producto**, sólo se asegura de que el total
+esté, así que la venta normal puede comerse lo que se hizo para un pedido; y la anticipación
+mínima real es de un día, porque lo que se produce hoy está disponible desde mañana.
 
 **Historial** guarda cada día cerrado, con cuatro vistas —por turno, por planta, por clave e
 inventario INV PM— y las exporta a Excel, cada tabla por separado o todas en un libro:
@@ -166,8 +189,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.8';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.8';`
+1. `js/ui.js` → `const VERSION = 'V.2026.9';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.9';`
 
 ## Plantas, claves y productos nuevos
 

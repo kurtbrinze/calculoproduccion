@@ -142,6 +142,53 @@
     return base * (Number(params.factorTemporada) || 1) * (Number(cal.factor) || 1);
   };
 
+  // ---------- pedidos especiales ----------
+  /** Días que ese producto necesita entre producción y entrega. */
+  function anticipacionDe(params, clave) {
+    const p = params.prod[clave] || {};
+    const f = params.familias[p.familia] || {};
+    const propia = f.anticipacion;
+    const base = (params.pedidos || {}).anticipacion;
+    return Math.max(0, Number(propia != null ? propia : base) || 0);
+  }
+
+  /** Los pedidos vivos de una clave con entrega en esa fecha. */
+  function pedidosDe(estado, clave, iso, hoy) {
+    return D.pedidosVivos(hoy).filter((p) => p.clave === clave && p.fecha === iso);
+  }
+  const bolsasDe = (lista) => lista.reduce((a, p) => a + (Number(p.bolsas) || 0), 0);
+
+  /**
+   * Lo que de verdad sale de bodega ese día: la venta promedio más lo que haya
+   * comprometido en pedidos. Las bolsas del pedido son una cantidad firme, así
+   * que no se multiplican por el factor de temporada.
+   */
+  const demandaDe = (estado, params, clave, iso, hoy) =>
+    ventaDe(estado, params, clave, iso) + bolsasDe(pedidosDe(estado, clave, iso, hoy));
+
+  /** El próximo día que esa planta produce después de la fecha. */
+  function proximaCorrida(params, fecha, plantas) {
+    for (let d = 1; d <= 14; d++) {
+      const f = D.sumarDias(fecha, d);
+      if (produceEse(params, f, plantas)) return f;
+    }
+    return D.sumarDias(fecha, 14);
+  }
+
+  /**
+   * Pedidos que todavía no caen en el horizonte pero que hay que adelantar:
+   * la próxima corrida ya no alcanzaría a producirlos a tiempo.
+   */
+  function pedidosUrgentes(estado, params, clave, fecha, plantas, offs, hoy) {
+    const cubiertos = new Set([fecha, ...offs.map((o) => D.sumarDias(fecha, o))]);
+    const corrida = proximaCorrida(params, fecha, plantas);
+    const ant = anticipacionDe(params, clave);
+    return D.pedidosVivos(hoy).filter((p) => {
+      if (p.clave !== clave || cubiertos.has(p.fecha)) return false;
+      return D.sumarDias(p.fecha, -ant) < corrida;   // la próxima ya sería tarde
+    });
+  }
+
   /** Una fila de la pantalla de decisión. */
   function calcularFila(estado, reg, clave, fecha, ctx) {
     const params = estado.params;
@@ -169,21 +216,35 @@
 
     const inv = stockAyer, prodHoyQQ = prodAyerQQ, prodHoyB = prodAyerB;
     const disponible = stockAyer + prodAyerB;
-    const ventaHoy = ventaDe(estado, params, clave, fecha);
+    const hoyReal = D.hoyISO();
+    const pedHoy = pedidosDe(estado, clave, fecha, hoyReal);
+    const ventaHoy = ventaDe(estado, params, clave, fecha) + bolsasDe(pedHoy);
     const teoricoHoy = Math.max(0, disponible - ventaHoy);
 
     const plantas = plantasDe(params, clave);
     const offs = offsetsACubrir(params, fecha, cfg.familia, plantas);
     const nDias = offs.length;
-    const ventas = offs.map((d) => ventaDe(estado, params, clave, D.sumarDias(fecha, d)));
-    const demanda = ventas.reduce((a, b) => a + b, 0);
+    const ventas = offs.map((d) => demandaDe(estado, params, clave, D.sumarDias(fecha, d), hoyReal));
+    const demandaVenta = offs.reduce((a, d) => a + ventaDe(estado, params, clave, D.sumarDias(fecha, d)), 0);
+
+    /* Los pedidos del horizonte ya van dentro de `ventas`; los de más allá se
+       suman aparte cuando la próxima corrida llegaría tarde. */
+    const pedHorizonte = offs.flatMap((d) => pedidosDe(estado, clave, D.sumarDias(fecha, d), hoyReal));
+    const pedUrgentes = pedidosUrgentes(estado, params, clave, fecha, plantas, offs, hoyReal);
+    const pedidos = [...pedHorizonte, ...pedUrgentes];
+    const pedidoBolsas = bolsasDe(pedidos);
+    const demanda = ventas.reduce((a, b) => a + b, 0) + bolsasDe(pedUrgentes);
     const conVenta = ventas.filter((v) => v > 0).length;
-    const promDia = conVenta ? demanda / conVenta : 0;
+    /* El promedio diario rige el colchón y la vida útil, así que sale sólo de
+       la venta corriente: un pedido grande no debe inflar el stock de seguridad. */
+    const promDia = conVenta ? demandaVenta / conVenta : 0;
 
     const { vidaUtil: vu, minDespacho, cobMax, colchon } = politica(params, clave);
     const seguridad = Math.ceil(promDia * colchon);
     const necesidad = demanda + seguridad - teoricoHoy;
-    const topeVida = promDia * cobMax - teoricoHoy;
+    /* El tope de vida útil cuida de no producir de más contra la venta
+       promedio; un pedido es demanda firme y no se deja recortar por él. */
+    const topeVida = promDia * cobMax + pedidoBolsas - teoricoHoy;
     const sugeridoB = Math.max(0, Math.min(necesidad, topeVida));
     const sugeridoQQcrudo = rend > 0 ? sugeridoB / rend : 0;
     const mult = Number(cfg.mult) || 0;
@@ -194,7 +255,7 @@
     const asign = reg.turnos[clave] || {};
     const decididoQQ = redondea(Object.values(asign).reduce((a, b) => a + (Number(b) || 0), 0), 2);
     const decididoB = decididoQQ * rend;
-    const ventaManana = ventaDe(estado, params, clave, D.sumarDias(fecha, 1));
+    const ventaManana = demandaDe(estado, params, clave, D.sumarDias(fecha, 1), hoyReal);
     const teoricoManana = teoricoHoy + decididoB - ventaManana;
     const cobertura = promDia > 0 ? (teoricoHoy + decididoB) / promDia : null;
 
@@ -202,8 +263,14 @@
        faltante que la app deba resolver: se avisa aparte para decidirlo a mano. */
     const bajoLote = sugeridoQQ === 0 && necesidad > 0 && mult > 0 && sugeridoQQcrudo < mult / 2;
 
+    /* Lo que de verdad va a quedar para el pedido, con lo decidido o, si
+       todavía no se reparte, con lo sugerido. */
+    const cubreB = teoricoHoy + (decididoQQ > 0 ? decididoB : sugeridoQQ * rend);
+    const faltaPedido = pedidoBolsas > 0 ? Math.max(0, pedidoBolsas - cubreB) : 0;
+
     let alerta = 'OK';
-    if (demanda <= 0 && teoricoHoy <= 0) alerta = 'SIN VENTA';
+    if (faltaPedido > 0) alerta = 'PEDIDO EN RIESGO';
+    else if (demanda <= 0 && teoricoHoy <= 0) alerta = 'SIN VENTA';
     else if (bajoLote) alerta = 'MENOS DE UN LOTE';
     else if (teoricoManana < 0) alerta = 'FALTANTE';
     else if (cobertura != null && cobertura > cobMax) alerta = 'EXCESO';
@@ -223,7 +290,9 @@
       invPM: invPMv, difVenta,
       inv, prodHoyQQ, prodHoyB, disponible,
       ventaHoy, teoricoHoy,
-      nDias, offs, ventas, demanda, promDia, seguridad,
+      nDias, offs, ventas, demanda, demandaVenta, promDia, seguridad,
+      pedidos, pedidoBolsas, pedidoHoy: bolsasDe(pedHoy), pedHoy,
+      pedUrgentes, faltaPedido, anticipacion: anticipacionDe(params, clave),
       necesidad, topeVida, cobMax, vidaUtil: vu, minDespacho, colchon,
       objetivoDias: nDias + colchon,
       sugeridoB, sugeridoQQcrudo, sugeridoQQ,
@@ -469,7 +538,8 @@
   const api = {
     redondea, alMultiploArriba, alMultiploAbajo, politica, vidaUtil, produceEse,
     diasACubrir, offsetsACubrir, tramoCalendario, matrizDesdeCalendario, matrizDe,
-    ventaDe, contexto, calcularFila, calcularTodo, resumenTurnos, resumenPlantas,
+    ventaDe, demandaDe, pedidosDe, pedidosUrgentes, anticipacionDe, proximaCorrida, bolsasDe,
+    contexto, calcularFila, calcularTodo, resumenTurnos, resumenPlantas,
     plantasDe, turnosUtiles, turnoTrabaja, repartir, limpiarReparto, cupos,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

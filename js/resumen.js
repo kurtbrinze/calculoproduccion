@@ -49,7 +49,7 @@
         total: Math.round(total * 100) / 100,
         stockAyer: f.stockAyer, prodAyerQQ: f.prodAyerQQ, ventaHoy: f.ventaHoy,
         teoricoHoy: f.teoricoHoy, invPM: f.invPM, ventaManana: f.ventaManana,
-        ventaPasado: C.ventaDe(D.estado, D.estado.params, f.clave, D.sumarDias(fecha, 2)),
+        ventaPasado: C.demandaDe(D.estado, D.estado.params, f.clave, D.sumarDias(fecha, 2)),
         todosTurnos: f.asign,
       };
     });

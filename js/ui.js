@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.8';
+  const VERSION = 'V.2026.9';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -15,7 +15,7 @@
     try { const f = localStorage.getItem('panprod_fecha'); return /^\d{4}-\d{2}-\d{2}$/.test(f || '') ? f : null; }
     catch (_) { return null; }
   })();
-  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno' };
+  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos' };
   const recordarFecha = () => { try { localStorage.setItem('panprod_fecha', ui.fecha); } catch (_) {} };
 
   // ---------- avisos ----------
@@ -130,6 +130,21 @@
       'Sin él el teórico PM sale de cero. Cárgalo en la pestaña Inventario con «Cargar STOCK AYER».']);
     else if (sinInv) av.push(['warn', `${sinInv} claves sin stock de ayer`,
       'Las que están vacías se calculan como si no hubiera existencia.']);
+    const conPed = t.filas.filter((f) => f.pedidoBolsas > 0);
+    if (conPed.length) {
+      const b = conPed.reduce((a, f) => a + f.pedidoBolsas, 0);
+      av.push(['', conPed.length === 1
+        ? `Hoy entra una clave con pedido especial: ${n0(b)} bolsas`
+        : `Hoy entran ${conPed.length} claves con pedido especial: ${n0(b)} bolsas`,
+        conPed.map((f) => `${f.clave} ${n0(f.pedidoBolsas)} b`).join(' · ')
+        + '. Ya están sumadas al sugerido; el detalle de cada clave dice para quién y para cuándo.']);
+    }
+    const enRiesgo = t.filas.filter((f) => f.faltaPedido > 0);
+    if (enRiesgo.length) {
+      av.push(['err', enRiesgo.length === 1 ? 'Un pedido no queda cubierto' : `${enRiesgo.length} pedidos no quedan cubiertos`,
+        enRiesgo.map((f) => `${f.clave} faltan ${n0(f.faltaPedido)} b`).join(' · ')
+        + '. Sube un tope de turno, muévelo a otro turno, o escribe los quintales a mano.']);
+    }
     const paran = D.PLANTAS.filter((x) => t.plantas[x.id] && !t.plantas[x.id].trabaja);
     if (paran.length) av.push(['', `${paran.map((x) => x.nombre).join(' y ')} no trabaja${paran.length > 1 ? 'n' : ''} este día`,
       'Sus turnos quedan fuera del reparto. El calendario de cada planta se cambia en Parámetros.']);
@@ -229,7 +244,9 @@
     const cob = f.cobertura;
     const cobCls = cob == null ? '' : (cob < 1 ? 'baja' : (cob > f.cobMax ? 'alta' : ''));
     const chip = { OK: 'ok', FALTANTE: 'falta', EXCESO: 'exceso', 'TOPE VIDA UTIL': 'vida',
-      'MENOS DE UN LOTE': 'vida', 'SIN VENTA': 'nada' }[f.alerta] || 'nada';
+      'MENOS DE UN LOTE': 'vida', 'SIN VENTA': 'nada', 'PEDIDO EN RIESGO': 'falta' }[f.alerta] || 'nada';
+    const chipPed = f.pedidoBolsas > 0 && f.alerta !== 'PEDIDO EN RIESGO'
+      ? '<span class="chip ped" style="margin-left:5px">PEDIDO</span>' : '';
     const inputs = turnos.map((x) => {
       const puede = (cfg.turnos || []).includes(x.id);
       const v = f.asign[x.id];
@@ -251,7 +268,7 @@
       <td class="num"><b>${f.decididoQQ ? n2(f.decididoQQ) : '—'}</b></td>
       <td class="num ${f.teoricoManana < 0 ? 'neg' : ''}">${n0(f.teoricoManana)}</td>
       <td class="num cob ${cobCls}">${cob == null ? '—' : n1(cob) + ' d'}</td>
-      <td class="l"><span class="chip ${chip}">${esc(f.alerta)}</span></td>
+      <td class="l"><span class="chip ${chip}">${esc(f.alerta)}</span>${chipPed}</td>
     </tr>${det}`;
   }
 
@@ -277,6 +294,10 @@
                 ? `Faltan ${n0(f.necesidad)} bolsas, pero el lote más chico es ${n2(f.mult)} qq (${n0(f.mult * f.rend)} bolsas) y se pasaría de largo. Si aun así quieres hacerlo, escríbelo a mano.`
                 : (f.necesidad <= 0 ? 'Con lo que ya hay alcanza, por eso no sugiere producir.'
                                     : 'El tope de vida útil no deja producir más por ahora.'))}</p>
+        ${f.pedidos.length ? `<p><b>Pedidos especiales incluidos:</b> ${f.pedidos.map((p) =>
+            `${n0(p.bolsas)} b para ${esc(p.cliente || 'sin cliente')}, entrega ${esc(D.fechaCorta(p.fecha))}`).join(' · ')}.
+            Se producen con ${f.anticipacion} día${f.anticipacion === 1 ? '' : 's'} de anticipación.</p>` : ''}
+        ${f.faltaPedido > 0 ? `<p class="neg"><b>Ojo:</b> faltan ${n0(f.faltaPedido)} bolsas para cubrir el pedido.</p>` : ''}
         ${falta ? `<p class="neg"><b>Ojo:</b> con lo decidido, mañana cierras en ${n0(f.teoricoManana)} bolsas.</p>` : ''}
       </div>
       <div>
@@ -287,6 +308,7 @@
           ${li('Venta de hoy', '− ' + n0(f.ventaHoy) + ' b')}
           ${li('<b>Teórico PM hoy</b>', '<b>' + n0(f.teoricoHoy) + ' b</b>', '')}
           ${li(`Demanda de ${f.nDias} día${f.nDias > 1 ? 's' : ''}`, n0(f.demanda) + ' b')}
+          ${f.pedidoBolsas > 0 ? li('De eso, pedidos especiales', '<b>' + n0(f.pedidoBolsas) + ' b</b>') : ''}
           ${li(`Stock de seguridad (${p.colchon} d)`, n0(f.seguridad) + ' b')}
           ${li('Necesidad', n0(f.necesidad) + ' b')}
           ${li(`Tope por vida útil (${p.cobMax} d)`, n0(f.topeVida) + ' b')}
@@ -335,7 +357,8 @@
             data-prodayer="${esc(f.clave)}" value="${r.prodAyer[f.clave] == null ? '' : r.prodAyer[f.clave]}"
             placeholder="${f.prodAyerQQ ? n2(f.prodAyerQQ) : '0'}" aria-label="Producción de ayer ${esc(f.clave)}"></td>
         <td class="num ${f.yaContado ? 'tach' : 'dim'}" title="${f.yaContado ? 'No se suma: ese conteo ya la trae adentro' : ''}">${n0(f.prodAyerBruto)}</td>
-        <td class="num dim">${n0(f.ventaHoy)}</td>
+        <td class="num ${f.pedidoHoy > 0 ? 'conped' : 'dim'}" title="${f.pedidoHoy > 0
+          ? 'Incluye ' + n0(f.pedidoHoy) + ' bolsas de pedidos especiales' : ''}">${n0(f.ventaHoy)}${f.pedidoHoy > 0 ? ' *' : ''}</td>
         <td class="num"><b>${n0(f.teoricoHoy)}</b></td>
         <td><input class="inqq" style="width:98px" inputmode="numeric" data-invpm="${esc(f.clave)}"
             value="${f.invPM == null ? '' : f.invPM}" aria-label="INV PM ${esc(f.clave)}"></td>
@@ -351,6 +374,13 @@
       'El STOCK AYER sale en blanco. Escríbelo a mano o guarda primero el día anterior.']);
     else if (sinStock) av.push(['warn', `${sinStock} claves sin stock de ayer`,
       `Se toman como cero. El dato viene del INV PM del ${dStock}.`]);
+    const pedHoy = t.filas.filter((f) => f.pedidoHoy > 0);
+    if (pedHoy.length) {
+      const cortos = pedHoy.filter((f) => f.teoricoHoy <= 0);
+      av.push([cortos.length ? 'warn' : '', `El consumo de hoy trae ${n0(pedHoy.reduce((a, f) => a + f.pedidoHoy, 0))} bolsas de pedidos especiales`,
+        pedHoy.map((f) => `${f.clave} ${n0(f.pedidoHoy)} b`).join(' · ')
+        + (cortos.length ? `. En ${cortos.map((f) => f.clave).join(', ')} el teórico PM queda en cero: puede no alcanzar.` : '. Van marcadas con * en CONSUMO HOY.')]);
+    }
     if (sinInv === t.filas.length) av.push(['', 'Falta el INV PM de hoy',
       'Es el conteo del cierre. Léelo de la foto o impórtalo; sirve para medir la venta real contra el promedio.']);
     $('#avisosInv').innerHTML = av.map(([c, h, p2]) => `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p2)}</p></div>`).join('');
@@ -414,6 +444,97 @@
         ${D.DIAS.map((d, i) => `<td><input class="inqq" style="width:82px" inputmode="numeric"
           data-prom="${esc(p.clave)}" data-dia="${i}" value="${fila[i] ?? 0}" aria-label="${esc(p.clave)} ${d}"></td>`).join('')}
         <td class="num dim">${n0(tot)}</td></tr>`;
+    }).join('');
+  }
+
+  // ================= PEDIDOS ESPECIALES =================
+  const ETIQ_PED = {
+    pendiente: { txt: 'Pendiente', chip: 'ok' },
+    hoy: { txt: 'Se produce hoy', chip: 'vida' },
+    vencido: { txt: 'Vencido', chip: 'falta' },
+    entregado: { txt: 'Entregado', chip: 'nada' },
+    cancelado: { txt: 'Cancelado', chip: 'nada' },
+  };
+
+  /** Si hoy es el último día para producir ese pedido. */
+  function tocaHoy(p) {
+    if (D.estadoPedido(p) !== 'pendiente') return false;
+    const ant = C.anticipacionDe(D.estado.params, p.clave);
+    const plantas = C.plantasDe(D.estado.params, p.clave);
+    const limite = D.sumarDias(p.fecha, -ant);
+    return limite <= ui.fecha || limite < C.proximaCorrida(D.estado.params, ui.fecha, plantas);
+  }
+
+  function pintarPedidos() {
+    const lista = D.pedidosLista();
+    $('#pdClave').innerHTML = D.activos().map((p) =>
+      `<option value="${esc(p.clave)}">${esc(p.clave)}</option>`).join('');
+    $('#pdClientes').innerHTML = D.clientes().map((c) => `<option value="${esc(c)}">`).join('');
+    if (!$('#pdFecha').value) $('#pdFecha').value = D.sumarDias(D.hoyISO(), 1);
+    $('#pdPista').textContent = 'La fecha y el cliente se quedan puestos para seguir agregando claves del mismo pedido.';
+
+    const porEstado = { pendiente: 0, vencido: 0, entregado: 0, cancelado: 0 };
+    lista.forEach((p) => { porEstado[D.estadoPedido(p)]++; });
+    const vivos = D.pedidosVivos();
+    const bolsasVivas = vivos.reduce((a, p) => a + (Number(p.bolsas) || 0), 0);
+    const hoyToca = vivos.filter(tocaHoy);
+    $('#kpisPed').innerHTML =
+      kpi('Pedidos pendientes', porEstado.pendiente) +
+      kpi('Bolsas comprometidas', n0(bolsasVivas)) +
+      kpi(`Para producir el ${D.fechaCorta(ui.fecha)}`, hoyToca.length, hoyToca.length ? 'alerta' : '') +
+      kpi('Vencidos sin cerrar', porEstado.vencido, porEstado.vencido ? 'alerta' : 'bien');
+
+    const av = [];
+    if (porEstado.vencido) av.push(['warn',
+      porEstado.vencido === 1 ? 'Hay un pedido vencido sin cerrar' : `${porEstado.vencido} pedidos vencidos sin cerrar`,
+      'Ya pasó su fecha de entrega y dejaron de contar para el cálculo. Márcalos entregados o cancélalos para que no estorben.']);
+    if (hoyToca.length) av.push(['', `${hoyToca.length} pedido${hoyToca.length === 1 ? '' : 's'} hay que producirlo${hoyToca.length === 1 ? '' : 's'} el ${D.fechaCorta(ui.fecha)}`,
+      hoyToca.map((p) => `${p.clave} ${n0(p.bolsas)} b para ${p.cliente || 'sin cliente'} (${D.fechaCorta(p.fecha)})`).join(' · ')]);
+    $('#avisosPed').innerHTML = av.map(([c, h, t]) => `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(t)}</p></div>`).join('');
+
+    $('#pedFiltros').innerHTML = [['vivos', 'Pendientes'], ['todos', 'Todos'], ['cerrados', 'Cerrados']]
+      .map(([id, t]) => `<button class="btn ${ui.filtroPed === id ? '' : 'sec'} mini" type="button" data-fped="${id}">${t}</button>`).join('');
+
+    const visibles = lista.filter((p) => {
+      const e = D.estadoPedido(p);
+      if (ui.filtroPed === 'vivos') return e === 'pendiente' || e === 'vencido';
+      if (ui.filtroPed === 'cerrados') return e === 'entregado' || e === 'cancelado';
+      return true;
+    });
+
+    $('#theadPed').innerHTML = `<tr>
+      <th class="l">Día entrega</th><th class="l">Cliente</th><th class="l">Clave</th>
+      <th>Bolsas</th><th>qq</th><th class="l">Producir antes de</th><th class="l">Estado</th><th class="l"></th></tr>`;
+
+    if (!visibles.length) {
+      $('#tbodyPed').innerHTML = `<tr><td colspan="8" class="l dim" style="padding:18px">`
+        + (lista.length ? 'No hay pedidos con ese filtro.' : 'Todavía no hay pedidos. Agrega el primero arriba.')
+        + '</td></tr>';
+      return;
+    }
+
+    $('#tbodyPed').innerHTML = visibles.map((p) => {
+      const e = D.estadoPedido(p);
+      const ficha = D.fichaPorClave(p.clave) || {};
+      const qq = ficha.rend ? p.bolsas / ficha.rend : null;
+      const ant = C.anticipacionDe(D.estado.params, p.clave);
+      const limite = D.sumarDias(p.fecha, -ant);
+      const et = ETIQ_PED[e === 'pendiente' && tocaHoy(p) ? 'hoy' : e];
+      return `<tr class="${e === 'vencido' ? 'ojo' : ''}">
+        <td class="l clave">${esc(D.fechaCorta(p.fecha))}</td>
+        <td class="l">${esc(p.cliente || '—')}</td>
+        <td class="l clave">${esc(ficha.alias || p.clave)}</td>
+        <td><input class="inqq" style="width:96px" inputmode="numeric" data-pedb="${esc(p.id)}"
+            value="${p.bolsas}" aria-label="Bolsas de ${esc(p.clave)}"></td>
+        <td class="num dim">${qq == null ? '' : n2(qq)}</td>
+        <td class="l dim">${esc(D.fechaCorta(limite))}${ant ? ` <span class="mini2">${ant} d antes</span>` : ''}</td>
+        <td class="l"><span class="chip ${et.chip}">${esc(et.txt)}</span></td>
+        <td class="l acc">
+          ${e === 'pendiente' || e === 'vencido'
+            ? `<button class="btn sec mini" type="button" data-pedent="${esc(p.id)}">Entregado</button>`
+            : `<button class="btn sec mini" type="button" data-pedreab="${esc(p.id)}">Reabrir</button>`}
+          <button class="btn sec mini" type="button" data-pedborrar="${esc(p.id)}" aria-label="Borrar">×</button></td>
+      </tr>`;
     }).join('');
   }
 
@@ -544,6 +665,8 @@
         <td><input class="inqq" inputmode="numeric" data-fvu="${f.id}" value="${c.vidaUtil}" aria-label="Vida útil ${f.nombre}"></td>
         <td><input class="inqq" inputmode="numeric" data-fmd="${f.id}" value="${c.minDespacho}" aria-label="Mínimo al despachar ${f.nombre}"></td>
         <td><input class="inqq" inputmode="decimal" data-fco="${f.id}" value="${c.colchon}" aria-label="Colchón ${f.nombre}"></td>
+        <td><input class="inqq" inputmode="numeric" data-fant="${f.id}" value="${c.anticipacion ?? ''}"
+            placeholder="${P.pedidos.anticipacion}" aria-label="Anticipación de pedidos ${f.nombre}"></td>
         <td class="num dim">${Math.max(1, c.vidaUtil - c.minDespacho)} d</td></tr>`;
     }).join('');
 
@@ -601,6 +724,8 @@
             <input type="number" id="inFijo" min="1" max="14" style="width:110px" value="${P.horizonteFijo}"></div>
           <div class="campo"><label for="inFactor2">Factor temporada</label>
             <input type="number" id="inFactor2" step="0.05" min="0" style="width:110px" value="${P.factorTemporada}"></div>
+          <div class="campo"><label for="inAnt">Anticipación de pedidos (d)</label>
+            <input type="number" id="inAnt" min="0" max="14" style="width:110px" value="${P.pedidos.anticipacion}"></div>
         </div>
       </div>
 
@@ -634,8 +759,11 @@
 
       <div class="card" style="margin-bottom:14px">
         <h3>Vida útil por familia</h3>
-        <p class="sub">La cobertura máxima sale de la vida útil menos los días que el producto debe conservar al despacharse.</p>
-        <div class="tablabox"><table><thead><tr><th class="l">Familia</th><th>Vida útil (d)</th><th>Mínimo al despachar (d)</th><th>Colchón (d)</th><th>Cobertura máx.</th></tr></thead><tbody>${familias}</tbody></table></div>
+        <p class="sub">
+          La cobertura máxima sale de la vida útil menos los días que el producto debe conservar al despacharse.
+          La anticipación vacía hereda la general de arriba: son los días que hay entre producir un pedido especial y entregarlo.
+        </p>
+        <div class="tablabox"><table><thead><tr><th class="l">Familia</th><th>Vida útil (d)</th><th>Mínimo al despachar (d)</th><th>Colchón (d)</th><th>Anticip. pedidos (d)</th><th>Cobertura máx.</th></tr></thead><tbody>${familias}</tbody></table></div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -873,7 +1001,7 @@
 
   /** Vuelve a pintar todo lo que pudo cambiar al traer datos de la otra. */
   function refrescarTodo() {
-    pintarProduccion(); pintarInventario(); pintarHistorial(); pintarPromedios();
+    pintarProduccion(); pintarInventario(); pintarPedidos(); pintarHistorial(); pintarPromedios();
     if (ui.tab === 'param') pintarParametros(); else pintarSync();
   }
 
@@ -964,6 +1092,7 @@
     else if (d.fvu) P.familias[d.fvu].vidaUtil = Math.max(1, num(v, 21));
     else if (d.fmd) P.familias[d.fmd].minDespacho = Math.max(0, num(v, 0));
     else if (d.fco) P.familias[d.fco].colchon = Math.max(0, num(v, 0));
+    else if (d.fant) P.familias[d.fant].anticipacion = v === '' ? null : Math.max(0, Math.round(num(v, 0)));
     else if (d.prend) P.prod[d.prend].rend = Math.max(1, num(v, 1));
     else if (d.pmult) P.prod[d.pmult].mult = Math.max(0, Math.round(num(v, 0) * 100) / 100);
     else if (d.pcol) P.prod[d.pcol].colchon = v === '' ? null : Math.max(0, num(v, 0));
@@ -983,14 +1112,14 @@
         (a, b) => D.TURNOS.findIndex((x) => x.id === a) - D.TURNOS.findIndex((x) => x.id === b))
         : lista.filter((x) => x !== d.tid);
     } else toco = false;
-    if (toco) { D.guardarParams(); if (['fvu', 'fmd', 'fco', 'pcol', 'pvu'].some((k) => d[k])) pintarParametros(); }
+    if (toco) { D.guardarParams(); if (['fvu', 'fmd', 'fco', 'fant', 'pcol', 'pvu'].some((k) => d[k])) pintarParametros(); }
     return toco;
   }
 
   function enlazar() {
     // pestañas
-    const paneles = { prod: '#pProd', inv: '#pInv', hist: '#pHist', prom: '#pProm', param: '#pParam' };
-    const tabs = { prod: '#tabProd', inv: '#tabInv', hist: '#tabHist', prom: '#tabProm', param: '#tabParam' };
+    const paneles = { prod: '#pProd', inv: '#pInv', ped: '#pPed', hist: '#pHist', prom: '#pProm', param: '#pParam' };
+    const tabs = { prod: '#tabProd', inv: '#tabInv', ped: '#tabPed', hist: '#tabHist', prom: '#tabProm', param: '#tabParam' };
     window.irA = (k) => {
       ui.tab = k;
       Object.keys(paneles).forEach((x) => {
@@ -1000,6 +1129,7 @@
       try { localStorage.setItem('panprod_tab', k); } catch (_) {}
       if (k === 'prod') pintarProduccion();
       if (k === 'inv') pintarInventario();
+      if (k === 'ped') pintarPedidos();
       if (k === 'hist') pintarHistorial();
       if (k === 'prom') pintarPromedios();
       if (k === 'param') pintarParametros();
@@ -1022,6 +1152,25 @@
       D.guardarDias(); pintarProduccion();
       aviso(r.sinCupo.length ? `Repartido. ${r.sinCupo.length} claves no cupieron completas.` : 'Repartido entre los turnos.');
     };
+    $('#btnAgregarPed').onclick = () => {
+      const fecha = $('#pdFecha').value;
+      const clave = $('#pdClave').value;
+      const bolsas = D.num($('#pdBolsas').value);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) { aviso('Falta el día de entrega.', 'err'); $('#pdFecha').focus(); return; }
+      if (!clave) { aviso('Falta la clave.', 'err'); return; }
+      if (!bolsas || Number.isNaN(bolsas) || bolsas <= 0) { aviso('Las bolsas tienen que ser un número mayor que cero.', 'err'); $('#pdBolsas').focus(); return; }
+      D.nuevoPedido({ fecha, cliente: $('#pdCliente').value, clave, bolsas });
+      D.guardarPedidos();
+      /* La fecha y el cliente se quedan: un pedido suele traer varias claves. */
+      $('#pdBolsas').value = '';
+      pintarPedidos(); pintarProduccion();
+      aviso(`${clave}: ${n0(bolsas)} bolsas para ${D.fechaCorta(fecha)}.`);
+      $('#pdClave').focus();
+    };
+    $('#pdBolsas').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); $('#btnAgregarPed').click(); }
+    });
+
     $('#btnResumen').onclick = () => window.Resumen.abrir(ui.fecha, aviso);
     $('#btnLimpiar').onclick = () => {
       C.limpiarReparto(reg()); ui.sinCupo = null; ui.sinTurnoHoy = null; D.guardarDias(); pintarProduccion(); aviso('Reparto borrado.');
@@ -1041,6 +1190,11 @@
         const v = D.num(e.target.value);
         reg()[campo][clave] = (v == null || Number.isNaN(v)) ? null : v;
         D.guardarDias(); pintarInventario();
+      } else if (d.pedb) {
+        const v = D.num(e.target.value);
+        const p = D.estado.pedidos[d.pedb];
+        if (p && v != null && !Number.isNaN(v) && v > 0) p.bolsas = Math.round(v);
+        D.guardarPedidos(); pintarPedidos(); pintarProduccion();
       } else if (d.prom) {
         const v = D.num(e.target.value);
         const fila = D.estado.prom[d.prom] || (D.estado.prom[d.prom] = [0, 0, 0, 0, 0, 0, 0]);
@@ -1053,6 +1207,7 @@
         else if (id === 'inCorte') P.cortePorProduccion = Math.max(1, Number(e.target.value) || 1);
         else if (id === 'inFijo') P.horizonteFijo = Math.max(1, Number(e.target.value) || 1);
         else if (id === 'inFactor2') P.factorTemporada = Math.max(0, Number(e.target.value) || 1);
+        else if (id === 'inAnt') P.pedidos.anticipacion = Math.max(0, Math.round(Number(e.target.value) || 0));
         else if (id === 'inFeriados') P.feriados = e.target.value.split('\n').map((s) => s.trim()).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
         else return;
         D.guardarParams();
@@ -1060,6 +1215,34 @@
     });
 
     document.addEventListener('click', (e) => {
+      const fp = e.target.closest('[data-fped]');
+      if (fp) { ui.filtroPed = fp.dataset.fped; pintarPedidos(); return; }
+      const pe = e.target.closest('[data-pedent]');
+      if (pe) {
+        D.estado.pedidos[pe.dataset.pedent].estado = 'entregado';
+        D.guardarPedidos(); pintarPedidos(); pintarProduccion(); aviso('Pedido marcado entregado.');
+        return;
+      }
+      const pr = e.target.closest('[data-pedreab]');
+      if (pr) {
+        D.estado.pedidos[pr.dataset.pedreab].estado = 'pendiente';
+        D.guardarPedidos(); pintarPedidos(); pintarProduccion(); aviso('Pedido reabierto.');
+        return;
+      }
+      const pb = e.target.closest('[data-pedborrar]');
+      if (pb) {
+        const p = D.estado.pedidos[pb.dataset.pedborrar];
+        preguntar('Borrar el pedido',
+          `<p>Se quita <b>${esc(p.clave)}</b>, ${esc(n0(p.bolsas))} bolsas para ${esc(p.cliente || 'sin cliente')}
+             del ${esc(D.fechaCorta(p.fecha))}.</p>
+           <p>Si ya se entregó, mejor márcalo entregado: así queda el registro.</p>`, 'Borrar')
+          .then((si) => {
+            if (!si) return;
+            delete D.estado.pedidos[pb.dataset.pedborrar];
+            D.guardarPedidos(); pintarPedidos(); pintarProduccion(); aviso('Pedido borrado.');
+          });
+        return;
+      }
       const tb = e.target.closest('[data-tabla]');
       if (tb) { exportarTabla(tb.dataset.tabla); return; }
       const vi = e.target.closest('[data-vista]');
@@ -1474,7 +1657,7 @@
     enlazar(); instalacion(); autodetectarLector(); arrancarSync();
     let t = 'prod';
     try { t = localStorage.getItem('panprod_tab') || 'prod'; } catch (_) {}
-    window.irA(['prod', 'inv', 'hist', 'prom', 'param'].includes(t) ? t : 'prod');
+    window.irA(['prod', 'inv', 'ped', 'hist', 'prom', 'param'].includes(t) ? t : 'prod');
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar);
   else iniciar();

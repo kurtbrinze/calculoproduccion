@@ -299,3 +299,5 @@ td.acc{white-space:nowrap}
 td.acc .btn{margin-right:5px}
 .inqq.mini3.cl{width:86px;text-align:left}
 .planta.apagado{opacity:.5;border-style:dashed}
+.chip.ped{background:rgba(86,201,240,.14);color:var(--accent-2);border:1px solid rgba(86,201,240,.3)}
+td.conped{color:var(--accent-2)}
