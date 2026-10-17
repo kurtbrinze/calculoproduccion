@@ -1,7 +1,10 @@
 {
-  "name": "inventario-pana",
+  "name": "produccion-pana",
   "private": true,
-  "version": "1.0.0",
-  "description": "App de inventario de panaderia: foto -> Excel -> columna IA de Toma_Inv",
-  "type": "module"
+  "version": "2026.8",
+  "description": "App de produccion de panaderia: inventario, sugerido por turno y planta, e historial",
+  "type": "module",
+  "dependencies": {
+    "@vercel/blob": "^2.8.2"
+  }
 }

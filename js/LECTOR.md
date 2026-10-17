@@ -15,7 +15,7 @@ Es el más simple. La app llama a la API directamente desde el navegador.
    muestra una vez.
 2. En la misma pantalla, ponle un **límite de gasto** a la llave. Así, si alguna vez se filtra,
    el daño queda acotado.
-3. Abre la app → pestaña **Foto → Excel** → **Ajustes del lector** → marca **Llave en este
+3. Abre la app → pestaña **Foto → Excel** → **Parámetros del lector** → marca **Llave en este
    dispositivo** y pega la llave.
 
 Listo. Se guarda en ese navegador; hay que hacerlo una vez por tablet o computadora.
@@ -61,7 +61,7 @@ Vercel, para que el lector acepte llamadas desde Pages:
 |---|---|
 | `ALLOWED_ORIGINS` | `https://kurtbrinze.github.io` |
 
-Y en la app, en Ajustes, marca **Servidor propio** y pega
+Y en la app, en Parámetros, marca **Servidor propio** y pega
 `https://TU-PROYECTO.vercel.app/api/extract`.
 
 ---
@@ -75,7 +75,7 @@ te sirven, ignóralo.
 
 ## Cambiar el modelo
 
-En Ajustes hay un campo **Modelo**. Viene en `claude-opus-5`, que es el más preciso con letra
+En Parámetros hay un campo **Modelo**. Viene en `claude-opus-5`, que es el más preciso con letra
 manuscrita. `claude-sonnet-5-5` cuesta menos. Si lo cambias, compara unos días contra la hoja de
 papel antes de dejarlo fijo.
 

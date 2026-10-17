@@ -235,3 +235,67 @@ tr.detalle td{background:#0E1621;padding:0;border-bottom:2px solid var(--line-2)
   .bar .info{flex:1 1 100%;order:-1}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ---------- producción por planta ---------- */
+.plantas{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px;margin:14px 0 0}
+.planta{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 14px}
+.planta b{display:block;font-size:.9rem}
+.planta .qq{display:flex;align-items:baseline;gap:5px;margin-top:7px}
+.planta .qq strong{font-size:1.45rem;font-variant-numeric:tabular-nums;line-height:1}
+.planta .qq span{color:var(--muted);font-size:.85rem}
+.planta.ambas{border-style:dashed}
+
+/* ---------- inventario ---------- */
+th .sub2{display:block;font-weight:400;font-size:.68rem;color:var(--muted);letter-spacing:.02em;margin-top:3px;text-transform:none}
+.inqq.auto{color:var(--muted)}
+.inqq.auto::placeholder{color:var(--ink-2);opacity:.75}
+.inqq.mal{border-color:rgba(240,128,152,.6);color:var(--danger)}
+td.tach{color:var(--muted);text-decoration:line-through;text-decoration-color:rgba(240,128,152,.6)}
+td.clave .mini.neg{color:var(--danger)}
+tr.ojo td{background:rgba(235,183,95,.05)}
+
+/* partes de un producto diferenciado */
+.parte{display:inline-flex;align-items:center;gap:6px;margin:0 8px 6px 0;padding:4px 9px;
+  background:var(--surface-2);border:1px solid var(--line-2);border-radius:99px;font-size:.82rem}
+.parte b{font-weight:600;color:var(--ink-2)}
+.parte i{font-style:normal;font-variant-numeric:tabular-nums;color:var(--muted)}
+.parte em{font-style:normal;font-variant-numeric:tabular-nums;color:var(--btn-texto);font-weight:600}
+.parte.edit{border-radius:var(--r-sm);padding:4px 6px}
+.parte.edit span{color:var(--muted)}
+.inqq.mini3{width:64px;min-height:32px;padding:0 7px;font-size:.84rem}
+.parte .x{background:none;border:0;color:var(--muted);cursor:pointer;font-size:1.05rem;line-height:1;padding:0 2px}
+.parte .x:hover{color:var(--danger)}
+.chip.mini2{margin-left:7px;font-size:.66rem;padding:1px 6px}
+
+/* ---------- lector de fotos ---------- */
+.lector{position:fixed;inset:0;z-index:70;background:rgba(10,15,22,.85);backdrop-filter:blur(3px);
+  display:flex;align-items:stretch;justify-content:center;padding:0}
+.lcaja{background:var(--bg);width:100%;max-width:1200px;display:flex;flex-direction:column;
+  border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.lbar{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.lbar h3{margin:0;font-size:1rem}
+.lbar .dim.neg{color:var(--danger)}
+.lcuerpo{flex:1;overflow:auto;padding:14px 16px}
+.lpie{display:flex;align-items:center;gap:10px;padding:12px 16px;border-top:1px solid var(--line);
+  background:var(--surface);flex-wrap:wrap}
+.lpie .dim{margin-right:auto;font-size:.85rem}
+.lcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px;margin-top:12px}
+#lPrev img{max-width:100%;max-height:30vh;border-radius:var(--r-sm);margin-top:12px;cursor:zoom-in;display:block}
+.lvisor{position:fixed;inset:0;z-index:80;background:rgba(6,10,15,.96);overflow:auto;padding:16px;display:none;cursor:zoom-out}
+.lvisor.show{display:block}
+.lvisor img{width:100%;max-width:1400px;margin:0 auto;display:block}
+tr.dud td.clave{color:var(--warn)}
+
+@media (max-width:640px){
+  .lcuerpo{padding:12px}
+  .lcols{grid-template-columns:1fr}
+}
+
+/* tabla de productos: cabe sin crecer de más */
+td.chips{min-width:300px;max-width:340px}
+.sw.turnochip{min-height:30px;font-size:.8rem;margin-right:8px;white-space:nowrap}
+td.pz .sw{min-height:30px;font-size:.82rem;margin-right:7px}
+td.acc{white-space:nowrap}
+td.acc .btn{margin-right:5px}
+.inqq.mini3.cl{width:86px;text-align:left}
+.planta.apagado{opacity:.5;border-style:dashed}
