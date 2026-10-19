@@ -224,8 +224,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.17';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.17';`
+1. `js/ui.js` → `const VERSION = 'V.2026.18';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.18';`
 
 ## Plantas, claves y productos nuevos
 
@@ -362,8 +362,8 @@ parrillas del cliente —el 10HM5 le lleva 9 bolsas—, y lo que falta se convie
 bodega —8 bolsas—, que son las que hay que bajar al día siguiente para terminar el pedido. En
 el 10PM3 las dos coinciden en 6.
 
-**En CZ3 / CZ5**, las perchas de CZ3 y de CZ5 se escriben en bolsas y la parrilla sale de
-`bolsas × 12`. La fila de **Producción PM** va en quintales y se llena sola con lo que ese día
+**En CZ3 / CZ5**, las perchas de CZ3 y las de CZ5 se escriben en perchas y la parrilla sale
+de `perchas × 12`. La fila de **Producción PM** va en quintales y se llena sola con lo que ese día
 produjo de CZ3 el turno que esté en la tarde —Byron o Julio, según la semana—; se puede
 escribir encima.
 

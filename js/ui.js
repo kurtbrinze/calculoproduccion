@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.17';
+  const VERSION = 'V.2026.18';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -703,7 +703,7 @@
       [`Producción PM${cz.turnoPM ? ` · ${cz.turnoPM}` : ''}`, inCz('prodQQ', 'Quintales producidos PM'), 'qq',
         `${n2(cz.prodBolsas)} perchas`,
         cz.manual ? 'escrito a mano' : (cz.prodQQauto ? `del reparto: ${n2(cz.prodQQauto)} qq` : 'sin reparto ese día')],
-      ['CZ5', inCz('cz5Bolsas', 'Bolsas de CZ5'), 'bolsas', `${n2(cz.cz5Parr)} parrillas`, ''],
+      ['CZ5', inCz('cz5Bolsas', 'Perchas de CZ5'), 'perchas', `${n2(cz.cz5Parr)} parrillas`, ''],
       ['Empacar', inCz('empacar', 'A empacar'), 'perchas', '', ''],
     ];
     partes.push(tarjetaSec('CZ3 / CZ5 (0134)',

@@ -166,6 +166,8 @@
     const prodBolsas = r2((prodQQ * rend) / CZ3_POR_PERCHA);
 
     const total = r2(ohBolsas + prodBolsas);
+    /* `cz5Bolsas` conserva el nombre de la llave para no perder lo ya escrito;
+       en pantalla la unidad es percha, que es como se cuenta el CZ5. */
     const cz5Bolsas = num(v.cz5Bolsas);
     const cz5Parr = r2(cz5Bolsas * PERCHA);
     const quedan = r2(total - cz5Bolsas);
