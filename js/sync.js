@@ -4,9 +4,10 @@
    mientras la laptop decide la producción del mismo día. Copiar el archivo
    entero haría que el último en guardar borrara al otro.
 
-   Por eso se mezcla por secciones: los parámetros, los promedios y cada día
-   por separado. De cada sección se guarda una huella de cómo estaba la última
-   vez que se sincronizó, y con eso se sabe quién la tocó:
+   Por eso se mezcla por partes: los parámetros, los promedios, cada pedido y
+   cada día por separado, y los días recientes hasta la clave del producto. De
+   cada parte se guarda una huella de cómo estaba la última vez que se
+   sincronizó, y con eso se sabe quién la tocó:
 
      sólo cambió aquí      → se manda
      sólo cambió allá      → se trae
@@ -73,10 +74,14 @@
      enteros, porque media configuración de cada equipo no es una configuración.
      Los días bajan hasta la clave: así conviven el INV PM que capturó la
      tablet y el reparto que hizo la laptop el mismo día. */
-  /* Baja hasta la sección del día (invPM, turnos, crudo…), que es donde de
-     verdad chocan los dos equipos. Bajar hasta la clave multiplicaba por tres
-     el tamaño de la base y con años de historial ya no cabía en el navegador. */
-  const PROF = { params: 0, prom: 1, dias: 2, pedidos: 1 };
+  const PROF = { params: 0, prom: 1, pedidos: 1 };
+
+  /* Los días recientes se comparan clave por clave: ahí es donde los dos
+     equipos escriben el mismo día y hay que conservar lo de ambos. Los días
+     viejos ya nadie los toca, así que con una sola huella por día alcanza y la
+     memoria de comparación pesa la mitad que comparando todo por sección. */
+  const DIAS_FINOS = 60;
+  const profDia = (fecha) => (fecha >= D.sumarDias(D.hoyISO(), -DIAS_FINOS) ? 2 : 0);
 
   const esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -91,11 +96,17 @@
     });
     return out;
   }
+  /** Los días no van todos a la misma profundidad. */
+  function arbolDias(dias) {
+    const out = {};
+    Object.keys(dias || {}).forEach((f) => { out[f] = arbol(dias[f], profDia(f)); });
+    return out;
+  }
   function arbolRaiz(est) {
     return {
       params: arbol(est.params, PROF.params),
       prom: arbol(est.prom, PROF.prom),
-      dias: arbol(est.dias, PROF.dias),
+      dias: arbolDias(est.dias),
       pedidos: arbol(est.pedidos || {}, PROF.pedidos),
     };
   }
@@ -104,11 +115,54 @@
   const AUSENTE = Symbol('ausente');
 
   /**
+   * Lo que el otro equipo no mandó no siempre es algo borrado: si corre una
+   * versión anterior, puede ser algo que su versión todavía no conoce. Las
+   * secciones —el estado completo y cada día— nunca se borran enteras, así que
+   * lo que falte del otro lado se completa con lo de aquí antes de comparar.
+   * Sin esto, una tablet con la versión vieja borraba los pedidos especiales
+   * de la laptop con sólo sincronizar.
+   */
+  function completar(local, remoto) {
+    if (!esObjeto(local) || !esObjeto(remoto)) return remoto;
+    const out = { ...remoto };
+    Object.keys(local).forEach((k) => { if (out[k] === undefined) out[k] = local[k]; });
+    return out;
+  }
+
+  /**
+   * Si el estado mezclado y el remoto dicen lo mismo. Compara sección por
+   * sección y trata la que falte como vacía: así una sección nueva no los hace
+   * ver distintos para siempre y subir en cada sincronización.
+   */
+  function mismoEstado(a, b) {
+    if (!a || !b) return false;
+    const llaves = new Set([...Object.keys(a), ...Object.keys(b)].filter((k) => k !== 'v'));
+    for (const k of llaves) {
+      if (canon(a[k] === undefined ? {} : a[k]) !== canon(b[k] === undefined ? {} : b[k])) return false;
+    }
+    return true;
+  }
+
+  /**
    * Compara una rama local contra la remota apoyándose en cómo estaba la
    * última vez que se sincronizó. Devuelve el valor que queda, o AUSENTE si
    * toca borrarla.
    */
-  function mezclarNodo(l, r, b, prof, etiqueta, reg, eleccion) {
+  const SECCION = {
+    invPM: 'INV PM', turnos: 'reparto', stockAyer: 'STOCK AYER',
+    prodAyer: 'PROD AYER', crudo: 'lectura', nota: 'nota', cerrado: 'cierre',
+  };
+
+  /* Cuando el choque es en una sola casilla conviene nombrarla: «MIE 14/10»
+     obliga a revisar el día entero, «MIE 14/10 (INV PM S19)» dice qué número
+     mirar. Los avisos de lo que se trajo o se mandó siguen nombrando sólo el
+     día, porque ahí una línea por clave sería una lista enorme. */
+  function detallar(etiqueta, ruta) {
+    if (!ruta || !ruta.length) return etiqueta;
+    return etiqueta + ' (' + ruta.map((k, i) => (i ? k : (SECCION[k] || k))).join(' ') + ')';
+  }
+
+  function mezclarNodo(l, r, b, prof, etiqueta, reg, eleccion, ruta) {
     const hayL = l !== undefined, hayR = r !== undefined;
     if (!hayL && !hayR) return AUSENTE;
 
@@ -116,7 +170,8 @@
       const out = {};
       const bb = esObjeto(b) ? b : {};
       new Set([...Object.keys(l), ...Object.keys(r), ...Object.keys(bb)]).forEach((k) => {
-        const v = mezclarNodo(l[k], r[k], bb[k], prof - 1, etiqueta, reg, eleccion);
+        const v = mezclarNodo(l[k], r[k], bb[k], prof - 1, etiqueta, reg, eleccion,
+          ruta ? ruta.concat(k) : null);
         if (v !== AUSENTE) out[k] = v;
       });
       return out;
@@ -142,11 +197,11 @@
     if (comoBase(r)) { reg.mandados.add(etiqueta); return l; }
     if (comoBase(l)) { reg.traidos.add(etiqueta); return r; }
     if (!hayB) {
-      if (!eleccion) { reg.indecisos.add(etiqueta); return l; }
+      if (!eleccion) { reg.indecisos.add(detallar(etiqueta, ruta)); return l; }
       if (eleccion === 'remoto') { reg.traidos.add(etiqueta); return r; }
       reg.mandados.add(etiqueta); return l;
     }
-    reg.conflictos.add(etiqueta);      // se tocó en los dos lados
+    reg.conflictos.add(detallar(etiqueta, ruta));   // se tocó en los dos lados
     return l;
   }
 
@@ -164,6 +219,7 @@
         dias: { ...local.dias }, pedidos: { ...local.pedidos } });
     }
     const bb = b || {};
+    remoto = completar(local, remoto);
     const params = mezclarNodo(local.params, remoto.params, bb.params, PROF.params, 'los parámetros', reg, eleccion);
     const prom = mezclarNodo(local.prom, remoto.prom, bb.prom, PROF.prom, 'los promedios', reg, eleccion);
     const pedidos = mezclarNodo(local.pedidos || {}, remoto.pedidos || {}, bb.pedidos,
@@ -174,8 +230,12 @@
     const bd = esObjeto(bb.dias) ? bb.dias : {};
     const fechas = new Set([...Object.keys(local.dias || {}), ...Object.keys(remoto.dias || {}), ...Object.keys(bd)]);
     [...fechas].sort().forEach((f) => {
-      const v = mezclarNodo((local.dias || {})[f], (remoto.dias || {})[f], bd[f],
-        PROF.dias - 1, D.fechaCorta(f), reg, eleccion);
+      const dl = (local.dias || {})[f];
+      let dr = (remoto.dias || {})[f];
+      /* Un día que no viene es un día borrado; un día que viene sin una de sus
+         secciones es un equipo con versión vieja. Sólo lo segundo se completa. */
+      if (dr !== undefined) dr = completar(dl, dr);
+      const v = mezclarNodo(dl, dr, bd[f], profDia(f), D.fechaCorta(f), reg, eleccion, []);
       if (v !== AUSENTE) dias[f] = v;
     });
 
@@ -270,7 +330,7 @@
         };
       }
 
-      const igual = remoto && huella(m.estado) === huella({ v: 1, params: remoto.params, prom: remoto.prom, dias: remoto.dias });
+      const igual = mismoEstado(m.estado, remoto);
       let subido = false;
       if (!igual) {
         const pronto = !manual && Date.now() - ultimaSubida < 60000;
@@ -326,6 +386,7 @@
     escrituras: () => escrituras(false), TOPE_AVISO, TOPE_ENVIO,
     ultima: () => cfg('syncUltima', ''),
     // expuestos para las pruebas
-    _mezclar: mezclar, _huella: huella, _canon: canon,
+    _mezclar: mezclar, _huella: huella, _canon: canon, _mismoEstado: mismoEstado,
+    _arbolRaiz: arbolRaiz,
   };
 })();

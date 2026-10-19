@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.11';
+  const VERSION = 'V.2026.13';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1680,6 +1680,19 @@
     refrescar();
   }
 
+  /* Volver al app después de un rato es justo cuando conviene traer lo que el
+     otro equipo dejó. Como ya no sube nada si nada cambió, mirar seguido no
+     cuesta escrituras. */
+  let ultimoFoco = Date.now();
+  function vigilarFoco() {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - ultimoFoco < 120000) return;
+      ultimoFoco = Date.now();
+      if (window.Sync.activo()) sincronizar(false);
+    });
+  }
+
   /* Al abrir: se mira si este despliegue sabe sincronizar y, si está encendida,
      se hace una pasada para arrancar con lo último. */
   async function arrancarSync() {
@@ -1700,7 +1713,7 @@
   // ---------- arranque ----------
   function iniciar() {
     $('#badgeVer').textContent = VERSION;
-    enlazar(); instalacion(); autodetectarLector(); arrancarSync();
+    enlazar(); instalacion(); autodetectarLector(); arrancarSync(); vigilarFoco();
     let t = 'prod';
     try { t = localStorage.getItem('panprod_tab') || 'prod'; } catch (_) {}
     window.irA(['prod', 'inv', 'ped', 'hist', 'prom', 'param'].includes(t) ? t : 'prod');

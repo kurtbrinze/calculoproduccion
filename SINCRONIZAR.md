@@ -68,17 +68,23 @@ tablet mientras repartías la producción de ese mismo miércoles en la laptop,
 al sincronizar quedan las dos cosas.
 
 Cuando sí hay un choque de verdad — la misma clave del mismo día cambiada en
-los dos equipos — gana el equipo donde tocaste **Sincronizar** y sale un aviso
-diciendo en qué. Si lo bueno era lo del otro, se corrige ahí y se sincroniza
-de nuevo.
+los dos equipos — gana el equipo donde tocaste **Sincronizar** y el aviso dice
+cuál casilla, no sólo el día: `MIE 14/10 (INV PM S19)`. Si lo bueno era lo del
+otro, se corrige ahí y se sincroniza de nuevo.
+
+Los días de los últimos dos meses se comparan clave por clave; los más viejos,
+que ya nadie toca, de un solo golpe. Así la memoria de comparación se queda en
+unos 100 KB en vez de crecer sin freno.
 
 ## Cuándo sincroniza
 
 - Al abrir la app.
+- Al volver a la app después de un rato (más de dos minutos en otra cosa).
 - Al tocar **Guardar el día**.
 - Cuando tocas **Sincronizar**, abajo o en Parámetros.
 
-No sincroniza con cada tecla, y entre subidas automáticas deja pasar un minuto.
+Sólo sube cuando de verdad cambió algo: si abrís el app y no tocás nada, no gasta
+una escritura. Entre subidas automáticas además deja pasar un minuto.
 Eso es a propósito: el plan gratis de Vercel da **2,000 guardados al mes** y, si
 se pasa, bloquea el almacén 30 días. La tarjeta de Parámetros lleva la cuenta y
 avisa al llegar a 1,500. Con el uso normal de dos equipos no se acerca.
@@ -103,6 +109,11 @@ preguntar con cuál quedarse.
 **«No cupo la memoria de la comparación»** — el historial creció tanto que ya
 no cabe en el navegador de ese equipo. Exporta el historial a Excel y borra los
 días más viejos desde el Historial.
+
+**Si un equipo se queda con una versión vieja** —por ejemplo la tablet sin señal
+durante días— no pasa nada: una sección que su versión todavía no conoce se
+conserva en vez de tomarse por borrada. Aun así conviene abrir el app con señal
+en los dos equipos después de publicar una versión nueva.
 
 El respaldo `.json` del Historial sigue ahí y conviene bajarlo de vez en
 cuando: la sincronización mantiene a los dos equipos iguales, pero si borras
