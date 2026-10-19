@@ -66,6 +66,28 @@ Y en la app, en Parámetros, marca **Servidor propio** y pega
 
 ---
 
+## El lector de la hoja de Zona 2
+
+La app lee dos hojas distintas: la de inventario (**Leer INV PM**) y la de producción de la
+planta Zona 2 (**Leer producción Z2**). La segunda necesita que el lector acepte instrucciones,
+porque la app es la que sabe qué claves y qué personas hay hoy.
+
+- **Camino A (llave en el dispositivo)**: funciona con las dos hojas, sin hacer nada.
+- **Camino B (servidor propio)**: el `api/extract.js` de la app de inventario responde siempre
+  la hoja de stock, sin mirar las instrucciones. Este proyecto trae **`api/leer.js`**, que sí
+  las acepta. Para usarlo, agrega en tu proyecto de Vercel la variable
+
+  | Name | Value |
+  |---|---|
+  | `ANTHROPIC_API_KEY` | tu llave `sk-ant-…` |
+
+  y en Parámetros pega `https://TU-PROYECTO.vercel.app/api/leer`. Sirve para las dos hojas.
+
+Si intentas leer la hoja de Zona 2 contra un servidor que no acepta instrucciones, la app lo
+dice en vez de dejar la tabla vacía sin explicación.
+
+---
+
 ## Camino C — Cloudflare Workers
 
 Sigue disponible en [WORKER.md](WORKER.md), pero requiere usar la terminal. Si el camino A o B

@@ -271,8 +271,16 @@
     const MX = 14, MY = 12;
     const h = hoja(ALTO);
 
-    const z18 = D.turnosDePlanta('Z18'), z2 = D.turnosDePlanta('Z2');
+    /* Con tres plantas no caben todos los turnos en media carta, así que la
+       hoja lleva los de la planta que se eligió arriba. Con «todas» van todas
+       y la tabla se encoge sola. */
+    const grupos = (d.planta && d.planta !== 'TODAS'
+      ? D.PLANTAS.filter((p) => p.id === d.planta)
+      : D.PLANTAS)
+      .map((p) => ({ id: p.id, nombre: p.nombre, turnos: D.turnosDePlanta(p.id) }))
+      .filter((g) => g.turnos.length);
     const corto = (t) => (t.papel && t.papel.length > 2 ? t.papel : t.nombre).toUpperCase();
+    const anchoTurno = grupos.reduce((a, g) => a + g.turnos.length, 0) > 8 ? 26 : 31;
     const cols = [
       { k: 'rend', t: 'REND', w: 22 },
       { k: 'clave', t: 'HOY', w: 42, alinear: 'left' },
@@ -285,8 +293,8 @@
          que no haya que contarlos de memoria. */
       { k: 'man', w: 34, lineas: ['CONSUMO', 'MAÑANA', d.diaManana] },
       { k: 'pas', w: 34, lineas: ['CONSUMO', 'PASADO', d.diaPasado] },
-      ...z18.map((x) => ({ k: 't:' + x.id, t: corto(x), w: 31, turno: x, grupo: 'Z18' })),
-      ...z2.map((x) => ({ k: 't:' + x.id, t: corto(x), w: 29, turno: x, grupo: 'Z2' })),
+      ...grupos.flatMap((g) => g.turnos.map((x) =>
+        ({ k: 't:' + x.id, t: corto(x), w: anchoTurno, turno: x, grupo: g.id }))),
       { k: 'total', t: 'TOTAL', w: 30 },
     ];
     /* Con turnos de más la tabla se pasaría del papel: se encoge a lo ancho
@@ -301,8 +309,6 @@
     const x0 = MX + Math.max(0, (ANCHO - 2 * MX - anchoTabla) / 2);
 
     // --- título ---
-    /* La hoja lleva los dos grupos de turnos, igual que el papel; la planta
-       que se eligió arriba sólo decide el nombre del archivo. */
     h.texto(x0, MY, 'PRODUCCION', { tam: 10, negrita: true });
     h.texto(x0, MY, `${d.dia}  ${d.fechaLarga}`, { tam: 10, negrita: true, alinear: 'right', ancho: anchoTabla });
 
@@ -314,16 +320,21 @@
     const hFila = Math.min(14, (ALTO - MY - yFilas - hTot - 6) / nFilas);
 
     // --- bandas de grupo ---
-    const xZ18 = x0 + cols.filter((c) => !c.grupo && c.k !== 'total').reduce((a, c) => a + c.w, 0);
-    const anZ18 = cols.filter((c) => c.grupo === 'Z18').reduce((a, c) => a + c.w, 0);
-    const anZ2 = cols.filter((c) => c.grupo === 'Z2').reduce((a, c) => a + c.w, 0);
-    h.rect(x0, yGrupo, xZ18 - x0, hGrupo);
-    h.texto(x0, yGrupo + 2.5, 'INVENTARIO Y CONSUMO', { tam: 6.5, negrita: true, alinear: 'center', ancho: xZ18 - x0 });
-    h.rect(xZ18, yGrupo, anZ18, hGrupo);
-    h.texto(xZ18, yGrupo + 2.5, 'PRODUCCION INCECA', { tam: 6.5, negrita: true, alinear: 'center', ancho: anZ18 });
-    h.rect(xZ18 + anZ18, yGrupo, anZ2, hGrupo);
-    h.texto(xZ18 + anZ18, yGrupo + 2.5, 'PRODUCCION Z2', { tam: 6.5, negrita: true, alinear: 'center', ancho: anZ2 });
-    h.rect(xZ18 + anZ18 + anZ2, yGrupo, anchoTabla - (xZ18 - x0) - anZ18 - anZ2, hGrupo);
+    const xIzq = x0 + cols.filter((c) => !c.grupo && c.k !== 'total').reduce((a, c) => a + c.w, 0);
+    h.rect(x0, yGrupo, xIzq - x0, hGrupo);
+    h.texto(x0, yGrupo + 2.5, 'INVENTARIO Y CONSUMO', { tam: 6.5, negrita: true, alinear: 'center', ancho: xIzq - x0 });
+    const rotuloGrupo = { Z18: 'PRODUCCION INCECA', Z2CZ: 'PRODUCCION Z2 CZ', Z2: 'PRODUCCION Z2' };
+    let xg = xIzq;
+    grupos.forEach((g) => {
+      const an = cols.filter((c) => c.grupo === g.id).reduce((a, c) => a + c.w, 0);
+      if (!an) return;
+      h.rect(xg, yGrupo, an, hGrupo);
+      h.texto(xg, yGrupo + 2.5, rotuloGrupo[g.id] || g.nombre.toUpperCase(),
+        { tam: 6.5, negrita: true, alinear: 'center', ancho: an });
+      xg += an;
+    });
+    h.rect(xg, yGrupo, Math.max(0, x0 + anchoTabla - xg), hGrupo);
+    const xZ18 = xIzq;   // la línea gruesa que separa inventario de producción
 
     // --- encabezados de columna, partidos para que quepan ---
     const TAM_CAB = 5.4;
@@ -360,7 +371,12 @@
       if (c.k === 'real') return f.invPM == null ? '' : n0(f.invPM);
       if (c.k === 'man') return n0(f.ventaManana);
       if (c.k === 'pas') return n0(f.ventaPasado);
-      if (c.k === 'total') return f.todosTurnosTotal ? n2(f.todosTurnosTotal) : '';
+      /* El TOTAL suma las columnas que la hoja trae, no las de todas las
+         plantas: si no, la fila no cuadra con lo que se ve. */
+      if (c.k === 'total') {
+        const q = cols.reduce((a, x) => a + (x.turno ? (Number(f.todosTurnos[x.turno.id]) || 0) : 0), 0);
+        return q ? n2(Math.round(q * 100) / 100) : '';
+      }
       if (c.turno) { const q = Number(f.todosTurnos[c.turno.id]) || 0; return q ? n2(q) : ''; }
       return '';
     };
@@ -390,7 +406,11 @@
       else if (c.turno) {
         const q = d.filas.reduce((a, f) => a + (Number(f.todosTurnos[c.turno.id]) || 0), 0);
         v = q ? n2(Math.round(q * 100) / 100) : '';
-      } else if (c.k === 'total') v = n2(d.totalTodos);
+      } else if (c.k === 'total') {
+        const q = d.filas.reduce((a, f) => a + cols.reduce((b, x) =>
+          b + (x.turno ? (Number(f.todosTurnos[x.turno.id]) || 0) : 0), 0), 0);
+        v = n2(Math.round(q * 100) / 100);
+      }
       h.texto(xt, yTot + (hTot - 6.5) / 2, v, { tam: 6.5, negrita: true, alinear: c.alinear || 'center', ancho: c.w });
       xt += c.w;
     });
@@ -443,7 +463,7 @@
             <div class="campo"><label for="rPlanta">Planta</label>
               <select id="rPlanta" style="min-width:190px">
                 ${D.PLANTAS.map((p) => `<option value="${p.id}">${esc2(p.nombre)}</option>`).join('')}
-                <option value="TODAS">Las dos juntas</option>
+                <option value="TODAS">Todas juntas</option>
               </select></div>
             <div class="campo"><label>&nbsp;</label>
               <button class="btn" type="button" id="rImgSimple">Imagen clave y qq</button></div>
@@ -484,8 +504,9 @@
       q('#rVista').appendChild(cv);
     }
 
-    const nombrePdf = () => `Produccion ${planta === 'TODAS' ? 'Z18 y Z2' : planta} ${fechaArchivo(fecha)}.pdf`;
-    const nombreImg = (suf) => `Produccion ${planta === 'TODAS' ? 'Z18 y Z2' : planta} ${fechaArchivo(fecha)}${suf}.png`;
+    const sufPlanta = () => (planta === 'TODAS' ? 'Todas' : planta);
+    const nombrePdf = () => `Produccion ${sufPlanta()} ${fechaArchivo(fecha)}.pdf`;
+    const nombreImg = (suf) => `Produccion ${sufPlanta()} ${fechaArchivo(fecha)}${suf}.png`;
 
     q('#rCerrar').onclick = cerrar;
     m.onclick = (e) => { if (e.target === m) cerrar(); };
@@ -539,5 +560,9 @@
     pintarCarpeta();
   }
 
-  window.Resumen = { abrir, datos, imagenSimple, imagenCompleta, pdf, pdfBytes };
+  window.Resumen = {
+    abrir, datos, imagenSimple, imagenCompleta, pdf, pdfBytes,
+    // el dibujo, que reusa la tabla de feriados
+    lienzo, celda, aBlob, compartir, COL,
+  };
 })();

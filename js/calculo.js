@@ -55,12 +55,8 @@
    * concreto: basta que una trabaje. Sin ellas, vale cualquiera.
    */
   const produceEse = (params, iso, plantas) => {
-    if ((params.feriados || []).includes(iso)) return false;
-    const c = params.calendario[D.indiceDia(iso)];
-    if (!c) return false;
-    const pl = c.plantas || {};
     const lista = plantas && plantas.length ? plantas : D.PLANTAS.map((x) => x.id);
-    return lista.some((x) => (typeof pl[x] === 'boolean' ? pl[x] : !!c.produce));
+    return lista.some((x) => D.plantaTrabaja(params, x, iso));
   };
 
   /** Cuántos días seguidos hay que cubrir según el calendario de producción. */
@@ -124,10 +120,19 @@
   /**
    * De dónde salen el stock y la producción de ayer para una fecha:
    * lo escrito a mano manda, y si está vacío se toma del día anterior guardado.
+   *
+   * Los dos salen del MISMO día, y eso es a propósito. El conteo de cierre se
+   * hace en la tarde y la producción de ese día entra después, así que
+   * «STOCK AYER del sábado» y «PROD AYER del sábado» son las dos mitades de lo
+   * que hay el domingo en la mañana. Buscarlos por separado los desalineaba:
+   * si el sábado quedaba sin reparto guardado, la producción se iba a buscar
+   * al viernes y se la sumaba al conteo del sábado, inflando el teórico.
    */
   function contexto(estado, fecha) {
     const fStock = D.diaPrevio(fecha, 'inv');
-    const fProd = D.diaPrevio(fecha, 'prod');
+    /* Sin ningún conteo anterior —los primeros días de uso— todavía sirve lo
+       último que se haya producido; con conteo, manda la fecha del conteo. */
+    const fProd = fStock || D.diaPrevio(fecha, 'prod');
     return {
       fStock, fProd,
       prevInv: fStock ? (D.migrar(estado.dias[fStock]).invPM || {}) : {},
@@ -311,9 +316,8 @@
   /** Las plantas donde esa clave se puede producir. */
   function plantasDe(params, clave) {
     const c = params.prod[clave] || {};
-    const out = [];
-    if (c.z18 !== false) out.push('Z18');
-    if (c.z2) out.push('Z2');
+    const m = c.plantas || {};
+    const out = D.PLANTAS.map((p) => p.id).filter((id) => m[id]);
     return out.length ? out : ['Z18'];
   }
 
@@ -342,7 +346,7 @@
         if (c.activo !== false && trabaja) out[p.id].tope = redondea(out[p.id].tope + (Number(c.tope) || 0), 2);
       });
     });
-    out.AMBAS = { id: 'AMBAS', nombre: 'Cualquiera de las dos', sugerido: 0, decidido: 0, tope: 0, claves: [] };
+    out.AMBAS = { id: 'AMBAS', nombre: 'Más de una planta', sugerido: 0, decidido: 0, tope: 0, claves: [] };
     filas.forEach((f) => {
       const destino = f.plantas.length > 1 ? 'AMBAS' : f.plantas[0];
       if (out[destino] && f.sugeridoQQ) {
@@ -359,10 +363,16 @@
     return out;
   }
 
-  /** Si ese turno trabaja esa fecha, según el calendario de su planta. */
+  /**
+   * Si ese turno trabaja esa fecha. Normalmente basta con el calendario de su
+   * planta; en un feriado se mira además el momento, porque es ahí donde la
+   * mañana y la tarde se separan —se descansa la tarde anterior y se produce
+   * la mañana del feriado.
+   */
   function turnoTrabaja(params, turnoId, fecha) {
     if (!fecha) return true;
-    return produceEse(params, fecha, [D.plantaDeTurno(turnoId)]);
+    const t = D.turnoPorId[turnoId] || (params.turnos[turnoId] || {});
+    return D.plantaTrabaja(params, D.plantaDeTurno(turnoId), fecha, t.momento || null);
   }
 
   /** Cuánto lleva cada turno contra su tope. */

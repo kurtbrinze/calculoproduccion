@@ -245,6 +245,24 @@ tr.detalle td{background:#0E1621;padding:0;border-bottom:2px solid var(--line-2)
 .planta .qq span{color:var(--muted);font-size:.85rem}
 .planta.ambas{border-style:dashed}
 
+/* ---------- feriados ---------- */
+table.tfer td.mom{color:var(--muted);font-size:.78rem;width:34px}
+table.tfer th.hoyfer{color:var(--ok)}
+table.tfer tr.emp td{background:rgba(255,255,255,.02)}
+.celfer{width:100%;min-height:34px;border:1px solid var(--line);border-radius:7px;
+  background:transparent;color:inherit;font:inherit;font-size:.84rem;cursor:pointer;padding:0 6px}
+.celfer:hover{border-color:var(--btn-texto)}
+.celfer.no{color:var(--danger);border-color:rgba(240,128,152,.45);font-weight:600}
+.celfer.x{color:var(--muted)}
+.celfer.normal{color:var(--ok)}
+
+/* la tarjeta de un área cuya planta hoy descansa */
+.card.apagado{opacity:.55}
+/* qq decididos convertidos a bolsas: el número que de verdad se empaca */
+td.bolsas{color:var(--muted);font-variant-numeric:tabular-nums}
+/* el total de una clave que se reparte entre dos plantas */
+td.num .mini{display:block;font-weight:400;font-size:.72rem;color:var(--muted);margin-top:2px}
+
 /* ---------- inventario ---------- */
 th .sub2{display:block;font-weight:400;font-size:.68rem;color:var(--muted);letter-spacing:.02em;margin-top:3px;text-transform:none}
 .inqq.auto{color:var(--muted)}

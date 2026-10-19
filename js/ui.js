@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.13';
+  const VERSION = 'V.2026.14';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -60,16 +60,11 @@
   const calc = () => C.calcularTodo(D.estado, reg(), ui.fecha);
 
   // ================= PRODUCCIÓN =================
-  const familiasUsadas = () => D.FAMILIAS.filter((f) => D.activos().some((p) => p.familia === f.id));
-
-  const turnosDeFamilia = (famId) => {
-    const ids = new Set();
-    D.activos().forEach((p) => {
-      if (p.familia !== famId) return;
-      (p.turnos || []).forEach((t) => { if ((D.estado.params.turnos[t] || {}).activo !== false) ids.add(t); });
-    });
-    return D.TURNOS.filter((t) => ids.has(t.id));
-  };
+  /* Dos renglones de encabezado: el nombre arriba y de qué día habla abajo,
+     igual que en Inventario. Sin eso no se sabe si lo que se ve es de hoy o
+     del día anterior. */
+  const th2 = (titulo, sub, cls) =>
+    `<th${cls ? ` class="${cls}"` : ''}>${esc(titulo)}${sub ? `<span class="sub2">${esc(sub)}</span>` : ''}</th>`;
 
   function pintarProduccion() {
     const t = calc();
@@ -104,7 +99,7 @@
     }).join('');
     const amb = pl.AMBAS;
     const extra = amb.sugerido > 0 ? `<div class="planta ambas">
-        <b>Cualquiera de las dos</b>
+        <b>Más de una planta</b>
         <div class="qq"><strong>${n1(amb.sugerido)}</strong><span>qq sugeridos</span></div>
         <span class="dim" style="font-size:.82rem">${esc(amb.claves.join(', '))} — la planta la define el turno donde se reparta</span>
       </div>` : '';
@@ -169,24 +164,35 @@
     }
     $('#avisosProd').innerHTML = av.map(([c, h, p]) => `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p)}</p></div>`).join('');
 
-    // --- una tabla por familia ---
-    const cuerpo = familiasUsadas().map((fam) => {
-      const turnos = turnosDeFamilia(fam.id);
-      const filas = t.filas.filter((f) => f.familia === fam.id);
+    // --- una tabla por área de producción ---
+    const dHoy = D.fechaCorta(ui.fecha);
+    const dAyer = t.ctx.fStock ? D.fechaCorta(t.ctx.fStock) : 'sin conteo';
+    const dMan = D.fechaCorta(D.sumarDias(ui.fecha, 1));
+    const porClave = Object.fromEntries(t.filas.map((f) => [f.clave, f]));
+
+    const cuerpo = D.areasUsadas().map((area) => {
+      const turnos = D.turnosDeArea(area.id);
+      const filas = D.clavesDeArea(area.id).map((c) => porClave[c]).filter(Boolean);
       if (!filas.length) return '';
+      const ids = turnos.map((x) => x.id);
       const th = `<tr>
-        <th class="l">Clave</th>
-        <th>Stock + prod</th><th>Teórico PM hoy</th><th>Sugerido qq</th>
-        ${turnos.map((x) => `<th>${esc(x.nombre)}</th>`).join('')}
-        <th>Decidido qq</th><th>Teórico PM mañana</th><th>Cobertura</th><th class="l">Alerta</th></tr>`;
-      const tb = filas.map((f) => filaProd(f, turnos)).join('');
-      const sumFam = filas.reduce((a, f) => a + f.decididoQQ, 0);
+        ${th2('Clave', '', 'l')}
+        ${th2('Stock + prod', dAyer)}${th2('Teórico PM hoy', dHoy)}${th2('Sugerido qq', dHoy)}
+        ${turnos.map((x) => th2(x.nombre, dHoy)).join('')}
+        ${th2('Decidido qq', dHoy)}${th2('= Bolsas', dHoy)}
+        ${th2('Teórico PM mañana', dMan)}${th2('Cobertura', '')}${th2('Alerta', '', 'l')}</tr>`;
+      const tb = filas.map((f) => filaProd(f, turnos, ids)).join('');
+      const sumArea = filas.reduce((a, f) => a + decididoEn(f, ids), 0);
+      const bolsasArea = filas.reduce((a, f) => a + decididoEn(f, ids) * f.rend, 0);
       const cubre = rotuloCubre(filas);
-      return `<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
+      const planta = (D.PLANTAS.find((x) => x.id === area.planta) || {}).nombre || area.planta;
+      const trabaja = t.plantas[area.planta] ? t.plantas[area.planta].trabaja : true;
+      return `<div class="card ${trabaja ? '' : 'apagado'}" style="margin-bottom:14px;padding:0;overflow:hidden">
         <div style="display:flex;align-items:baseline;gap:12px;padding:12px 16px;flex-wrap:wrap">
-          <h3 style="margin:0">${esc(fam.nombre)}</h3>
-          <span class="dim" style="font-size:.86rem">${filas.length} claves · ${n2(sumFam)} qq decididos</span>
-          <span class="dim" style="font-size:.86rem;margin-left:auto">Cubre: ${cubre}</span>
+          <h3 style="margin:0">${esc(area.nombre)}</h3>
+          <span class="chip nada">${esc(planta)}</span>
+          <span class="dim" style="font-size:.86rem">${filas.length} claves · ${n2(sumArea)} qq · ${n0(bolsasArea)} bolsas</span>
+          <span class="dim" style="font-size:.86rem;margin-left:auto">${trabaja ? 'Cubre: ' + cubre : 'Esta planta no trabaja hoy'}</span>
         </div>
         <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0">
           <table><thead>${th}</thead><tbody>${tb}</tbody></table>
@@ -239,7 +245,15 @@
     }).join(' · ');
   }
 
-  function filaProd(f, turnos) {
+  /* Lo decidido dentro de un área: sólo los turnos de esa tarjeta. Una clave
+     que se hace en las dos plantas sale en las dos, y cada una muestra lo
+     suyo en vez de repetir el total. */
+  function decididoEn(f, ids) {
+    if (!ids) return f.decididoQQ;
+    return C.redondea(ids.reduce((a, t) => a + (Number(f.asign[t]) || 0), 0), 2);
+  }
+
+  function filaProd(f, turnos, ids) {
     const cfg = D.estado.params.prod[f.clave];
     const cob = f.cobertura;
     const cobCls = cob == null ? '' : (cob < 1 ? 'baja' : (cob > f.cobMax ? 'alta' : ''));
@@ -248,14 +262,19 @@
     const chipPed = f.pedidoBolsas > 0 && f.alerta !== 'PEDIDO EN RIESGO'
       ? '<span class="chip ped" style="margin-left:5px">PEDIDO</span>' : '';
     const inputs = turnos.map((x) => {
-      const puede = (cfg.turnos || []).includes(x.id);
+      const puede = D.puedeEnTurno(f.clave, x.id);
       const v = f.asign[x.id];
       return `<td><input class="inqq ${puede ? '' : 'na'} ${v ? 'puesto' : ''}" inputmode="decimal"
         ${puede ? '' : 'disabled tabindex="-1"'} data-clave="${esc(f.clave)}" data-turno="${x.id}"
         value="${v ? n2(v) : ''}" aria-label="${esc(f.clave)} en ${esc(x.nombre)}"></td>`;
     }).join('');
     const abierta = ui.abierta === f.clave;
-    const det = abierta ? `<tr class="detalle"><td colspan="${7 + turnos.length}">${explicacion(f)}</td></tr>` : '';
+    const det = abierta ? `<tr class="detalle"><td colspan="${8 + turnos.length}">${explicacion(f)}</td></tr>` : '';
+    const dec = decididoEn(f, ids);
+    /* Si la clave se hace en más de una planta, la tarjeta muestra su parte;
+       el total de la clave queda a la vista para no perderlo. */
+    const otras = ids && f.decididoQQ - dec > 1e-9
+      ? `<span class="mini">${n2(f.decididoQQ)} en total</span>` : '';
     return `<tr data-fila="${esc(f.clave)}">
       <td class="l clave"><button type="button" class="verDet" data-clave="${esc(f.clave)}"
           style="background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:0;text-align:left">
@@ -265,7 +284,8 @@
       <td class="num">${n0(f.teoricoHoy)}</td>
       <td class="num sug ${f.sugeridoQQ ? '' : 'cero'}">${f.sugeridoQQ ? n2(f.sugeridoQQ) : '—'}</td>
       ${inputs}
-      <td class="num"><b>${f.decididoQQ ? n2(f.decididoQQ) : '—'}</b></td>
+      <td class="num"><b>${dec ? n2(dec) : '—'}</b>${otras}</td>
+      <td class="num bolsas">${dec ? n0(dec * f.rend) : '—'}</td>
       <td class="num ${f.teoricoManana < 0 ? 'neg' : ''}">${n0(f.teoricoManana)}</td>
       <td class="num cob ${cobCls}">${cob == null ? '—' : n1(cob) + ' d'}</td>
       <td class="l"><span class="chip ${chip}">${esc(f.alerta)}</span>${chipPed}</td>
@@ -678,9 +698,9 @@
       const des = C.turnosUtiles(P, p.clave).desajuste;
       return `<tr${des ? ' class="ojo"' : ''}>
         <td class="l clave">${esc(p.clave)}${des ? '<span class="mini neg">sin turno en su planta</span>' : ''}</td>
-        <td class="l pz">
-          <label class="sw"><input type="checkbox" data-pz2="${p.clave}" ${c.z2 ? 'checked' : ''}> Z2</label>
-          <label class="sw"><input type="checkbox" data-pz18="${p.clave}" ${c.z18 !== false ? 'checked' : ''}> Z18</label></td>
+        <td class="l pz">${D.PLANTAS.map((x) => `<label class="sw" title="${esc(x.nombre)}">
+          <input type="checkbox" data-ppl="${p.clave}" data-plid="${x.id}"
+            ${(c.plantas || {})[x.id] ? 'checked' : ''}> ${esc(x.id)}</label>`).join('')}</td>
         <td><input class="inqq" inputmode="decimal" data-prend="${p.clave}" value="${c.rend}" aria-label="Rendimiento ${p.clave}"></td>
         <td><input class="inqq" inputmode="decimal" step="0.01" data-pmult="${p.clave}" value="${c.mult}" aria-label="Múltiplo ${p.clave}"></td>
         <td><input class="inqq" inputmode="decimal" data-pcol="${p.clave}" value="${c.colchon ?? ''}" placeholder="${pol.colchon}" aria-label="Colchón ${p.clave}"></td>
@@ -777,10 +797,24 @@
         <div class="tablabox"><table><thead><tr><th class="l">Día</th>
           ${D.PLANTAS.map((x) => `<th class="l">${esc(x.nombre)}</th>`).join('')}
           <th>Factor de venta</th></tr></thead><tbody>${cal}</tbody></table></div>
-        <div class="fila" style="margin-top:12px">
-          <div class="campo"><label for="inFeriados">Fechas sin producción (una por línea, AAAA-MM-DD)</label>
-            <textarea id="inFeriados" style="min-width:260px">${esc((P.feriados || []).join('\n'))}</textarea></div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <h3>Feriados</h3>
+        <p class="sub">
+          En panadería el feriado no es un día sin trabajo: se descansa el día anterior y se
+          produce el día del feriado. Al agregar uno queda así, y de ahí se cambia celda por
+          celda tocándola. Las filas de empaque son para el equipo: no entran al cálculo.
+        </p>
+        <div class="fila" style="margin-bottom:10px">
+          <div class="campo"><label for="inFerFecha">Fecha del feriado</label>
+            <input type="date" id="inFerFecha" style="min-width:160px"></div>
+          <div class="campo"><label for="inFerNom">Nombre</label>
+            <input type="text" id="inFerNom" placeholder="Feriado" style="min-width:150px"></div>
+          <div class="campo"><label>&nbsp;</label>
+            <button class="btn ghost mini" type="button" id="btnAddFeriado">Agregar feriado</button></div>
         </div>
+        <div id="feriados"></div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -896,6 +930,137 @@
     $('#btnVolverDef').disabled = !g;
     pintarMatriz();
     pintarLector();
+    pintarFeriados();
+  }
+
+  // ---------- feriados ----------
+  /* Una tabla por feriado: filas = planta (y las de empaque) partidas en AM y
+     PM, columnas = los días de la ventana. Es la misma hoja que se manda por
+     WhatsApp, por eso se dibuja así y no como una lista de fechas. */
+  function pintarFeriados() {
+    const P = D.estado.params;
+    const cont = $('#feriados');
+    if (!cont) return;
+    const lista = (P.feriados || []).slice().sort((a, b) => a.fecha.localeCompare(b.fecha));
+    if (!lista.length) {
+      cont.innerHTML = '<p class="dim" style="font-size:.88rem;margin:0 2px">'
+        + 'No hay feriados puestos. El calendario de la semana manda solo.</p>';
+      return;
+    }
+    cont.innerHTML = lista.map((f) => tablaFeriado(f, P)).join('');
+  }
+
+  function tablaFeriado(f, P) {
+    const dias = D.diasFeriado(f);
+    const i = (P.feriados || []).indexOf(f);
+    const filas = [];
+    D.PLANTAS.forEach((p) => {
+      D.MOMENTOS.forEach((mo, k) => {
+        filas.push({ rotulo: k === 0 ? p.nombre : '', mo, fila: D.filaPlanta(p.id, mo), grupo: p.id, prod: true });
+      });
+    });
+    (P.empaque || []).forEach((e) => {
+      D.MOMENTOS.forEach((mo, k) => {
+        filas.push({ rotulo: k === 0 ? e.nombre : '', mo, fila: D.filaEmpaque(e.id, mo), grupo: 'EMP', prod: false });
+      });
+    });
+    const cuerpo = filas.map((r) => `<tr${r.prod ? '' : ' class="emp"'}>
+      <td class="l">${esc(r.rotulo)}</td><td class="l mom">${r.mo}</td>
+      ${dias.map((iso) => {
+        const v = (f.dias[iso] || {})[r.fila] || 'SI';
+        const e = D.ESTADOS.find((x) => x.id === v) || D.ESTADOS[0];
+        return `<td><button type="button" class="celfer ${v.toLowerCase()}"
+          data-fer="${i}" data-dia="${iso}" data-cel="${esc(r.fila)}"
+          title="Tócala para cambiarla">${esc(e.nombre)}</button></td>`;
+      }).join('')}</tr>`).join('');
+    return `<div class="card fercard" style="margin-bottom:12px;padding:0;overflow:hidden">
+      <div style="display:flex;gap:10px;align-items:baseline;padding:11px 14px;flex-wrap:wrap">
+        <h3 style="margin:0;font-size:.95rem">${esc(f.nombre)}</h3>
+        <span class="chip vida">${esc(D.fechaCorta(f.fecha))}</span>
+        <span class="dim" style="font-size:.84rem;margin-left:auto">
+          <button class="btn ghost mini" type="button" data-ferimg="${i}">Compartir imagen</button>
+          <button class="btn sec mini" type="button" data-ferdel="${i}">Quitar</button></span>
+      </div>
+      <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0">
+        <table class="tfer"><thead><tr><th class="l">Planta</th><th></th>
+          ${dias.map((iso) => `<th${iso === f.fecha ? ' class="hoyfer"' : ''}>${esc(D.nombreDia(iso))}
+            <span class="sub2">${esc(D.fechaCorta(iso))}</span></th>`).join('')}
+        </tr></thead><tbody>${cuerpo}</tbody></table>
+      </div></div>`;
+  }
+
+  /**
+   * La tabla del feriado como imagen, para mandarla por WhatsApp. Es el mismo
+   * dibujo que el resumen del día: así los dos mensajes que recibe el equipo
+   * se ven como del mismo lugar.
+   */
+  async function compartirFeriado(f) {
+    if (!f) return;
+    const R = window.Resumen, P = D.estado.params, COL = R.COL;
+    const dias = D.diasFeriado(f);
+    const AN_ROT = 108, AN_MO = 34, AN_DIA = 96;
+    const H_TIT = 30, H_CAB = 34, H_FILA = 24;
+    const filas = [];
+    D.PLANTAS.forEach((p) => D.MOMENTOS.forEach((mo, k) => filas.push({
+      rotulo: k === 0 ? p.nombre.toUpperCase() : '', mo, fila: D.filaPlanta(p.id, mo), prod: true,
+      primera: k === 0,
+    })));
+    (P.empaque || []).forEach((e) => D.MOMENTOS.forEach((mo, k) => filas.push({
+      rotulo: k === 0 ? e.nombre.toUpperCase() : '', mo, fila: D.filaEmpaque(e.id, mo), prod: false,
+      primera: k === 0,
+    })));
+
+    const an = AN_ROT + AN_MO + dias.length * AN_DIA;
+    const al = H_TIT + H_CAB + filas.length * H_FILA;
+    const { cv, g } = R.lienzo(an, al);
+
+    R.celda(g, 0, 0, an, H_TIT, {
+      fondo: COL.naranja, texto: `${f.nombre.toUpperCase()}  ${D.fechaCorta(f.fecha)}`,
+      color: COL.blanco, fuente: 'bold 14px system-ui, sans-serif', borde: COL.naranja,
+    });
+    let y = H_TIT;
+    R.celda(g, 0, y, AN_ROT + AN_MO, H_CAB, { fondo: COL.verde, borde: COL.verde });
+    dias.forEach((iso, i) => {
+      const x = AN_ROT + AN_MO + i * AN_DIA;
+      const esFer = iso === f.fecha;
+      R.celda(g, x, y, AN_DIA, H_CAB, {
+        fondo: esFer ? COL.naranja : COL.verde, borde: esFer ? COL.naranja : COL.verde,
+      });
+      g.fillStyle = COL.blanco;
+      g.textAlign = 'center';
+      g.font = 'bold 11px system-ui, sans-serif';
+      g.fillText(D.nombreDia(iso), x + AN_DIA / 2, y + 12);
+      g.font = '10px system-ui, sans-serif';
+      g.fillText(D.fechaCorta(iso), x + AN_DIA / 2, y + 24);
+    });
+    y += H_CAB;
+
+    filas.forEach((r) => {
+      const fondoRot = r.prod ? COL.verdeSuave : COL.gris;
+      R.celda(g, 0, y, AN_ROT, H_FILA, {
+        fondo: fondoRot, texto: r.rotulo, alinear: 'left',
+        fuente: r.primera ? 'bold 11px system-ui, sans-serif' : '11px system-ui, sans-serif',
+      });
+      R.celda(g, AN_ROT, y, AN_MO, H_FILA, {
+        fondo: fondoRot, texto: r.mo, fuente: '10px system-ui, sans-serif', color: COL.grisTexto,
+      });
+      dias.forEach((iso, i) => {
+        const v = (f.dias[iso] || {})[r.fila] || 'SI';
+        const e = D.ESTADOS.find((x) => x.id === v) || D.ESTADOS[0];
+        R.celda(g, AN_ROT + AN_MO + i * AN_DIA, y, AN_DIA, H_FILA, {
+          texto: e.nombre, fondo: COL.blanco,
+          color: v === 'NO' ? COL.naranja : (v === 'X' ? COL.grisTexto : COL.tinta),
+          fuente: v === 'NO' ? 'bold 11px system-ui, sans-serif' : '11px system-ui, sans-serif',
+        });
+      });
+      y += H_FILA;
+    });
+
+    const base = /feriado/i.test(f.nombre) ? f.nombre : `Feriado ${f.nombre}`;
+    const nombre = `${base} ${String(f.fecha).replace(/-/g, '_')}.png`;
+    const res = await R.compartir(await R.aBlob(cv), nombre, 'Feriado');
+    aviso(res === 'compartido' ? 'Imagen compartida.'
+      : (res === 'cancelado' ? 'Cancelado.' : 'Imagen descargada.'));
   }
 
   /** Tabla 7x7: fila = día de cálculo, columna = día de venta. */
@@ -1130,8 +1295,14 @@
     else if (d.pcol) P.prod[d.pcol].colchon = v === '' ? null : Math.max(0, num(v, 0));
     else if (d.pvu) P.prod[d.pvu].vidaUtil = v === '' ? null : Math.max(1, num(v, 21));
     else if (d.pact) P.prod[d.pact].activo = v;
-    else if (d.pz2) { P.prod[d.pz2].z2 = v; D.guardarParams(); pintarParametros(); return true; }
-    else if (d.pz18) { P.prod[d.pz18].z18 = v; D.guardarParams(); pintarParametros(); return true; }
+    else if (d.ppl) {
+      const f = P.prod[d.ppl];
+      f.plantas = { ...f.plantas, [d.plid]: v };
+      /* Sin ninguna planta el producto no se puede hacer en ningún lado: se
+         deja al menos la que acaba de desmarcar para no dejarlo huérfano. */
+      if (!Object.values(f.plantas).some(Boolean)) f.plantas[d.plid] = true;
+      D.guardarParams(); pintarParametros(); return true;
+    }
     else if (d.pcon) P.prod[d.pcon].prodEnConteo = v;
     else if (d.tpl) { P.turnos[d.tpl].planta = t.value; D.guardarParams(); pintarParametros(); return true; }
     else if (d.dact != null) { P.diferenciados[+d.dact].activo = v; D.guardarParams(); return true; }
@@ -1240,7 +1411,6 @@
         else if (id === 'inFijo') P.horizonteFijo = Math.max(1, Number(e.target.value) || 1);
         else if (id === 'inFactor2') P.factorTemporada = Math.max(0, Number(e.target.value) || 1);
         else if (id === 'inAnt') P.pedidos.anticipacion = Math.max(0, Math.round(Number(e.target.value) || 0));
-        else if (id === 'inFeriados') P.feriados = e.target.value.split('\n').map((s) => s.trim()).filter((s) => /^\d{4}-\d{2}-\d{2}$/.test(s));
         else return;
         D.guardarParams();
       }
@@ -1343,11 +1513,11 @@
 
     /* El INV PM es el cierre del día de la hoja: primero se decide a qué día
        entra y recién después se escribe. */
-    async function entraEn(fecha) {
+    async function entraEn(fecha, que) {
       if (!fecha || fecha === ui.fecha) return ui.fecha;
       const si = await preguntar('La hoja trae otra fecha',
         `<p>La hoja dice <b>${esc(D.fechaCorta(fecha))}</b> y estás trabajando el <b>${esc(D.fechaCorta(ui.fecha))}</b>.</p>
-         <p>¿Guardo el INV PM en el día de la hoja?</p>`, 'Usar el de la hoja');
+         <p>¿Guardo ${esc(que || 'el INV PM')} en el día de la hoja?</p>`, 'Usar el de la hoja');
       if (!si) return ui.fecha;
       ui.fecha = fecha; ui.abierta = null; recordarFecha();
       return fecha;
@@ -1361,6 +1531,30 @@
       aviso(`INV PM de ${n} claves en ${D.fechaCorta(destino)}.`
         + (res.blob ? ' El Excel se descargó.' : '')
         + (res.dudosas && res.dudosas.length ? ` Revisa: ${res.dudosas.join(', ')}.` : ''));
+    });
+
+    /* La foto de Zona 2 trae lo que YA se produjo, así que pisa el reparto de
+       esos turnos en vez de sumarse: lo que diga la hoja es lo que hubo. Los
+       demás turnos no se tocan. */
+    $('#btnFotoZ2').onclick = () => window.LectorZ2.abrir(async (res) => {
+      const destino = await entraEn(res.fecha, 'la producción de Zona 2');
+      const r = D.registro(destino);
+      const ids = D.turnosDeArea('Z2').map((t) => t.id);
+      let n = 0;
+      D.clavesDeArea('Z2').forEach((c) => {
+        if (!r.turnos[c]) r.turnos[c] = {};
+        ids.forEach((t) => { delete r.turnos[c][t]; });
+        const fila = res.matriz[c];
+        if (!fila) return;
+        Object.entries(fila).forEach(([t, v]) => { r.turnos[c][t] = v; });
+        n++;
+      });
+      D.guardarDias();
+      pintarInventario(); pintarProduccion();
+      const qq = Object.values(res.matriz).reduce((a, f) =>
+        a + Object.values(f).reduce((x, v) => x + v, 0), 0);
+      aviso(`Producción de Zona 2 en ${D.fechaCorta(destino)}: ${n} claves, ${n2(C.redondea(qq, 2))} qq.`
+        + (res.dudosas && res.dudosas.length ? ` Revisa ${res.dudosas.length} celda${res.dudosas.length > 1 ? 's' : ''}.` : ''));
     });
 
     $('#btnImportInv').onclick = () => $('#fileInv').click();
@@ -1445,6 +1639,45 @@
       const ed = e.target.closest('[data-editar]');
       if (ed) { fichaProducto(ed.dataset.editar); return; }
       if (e.target.closest('#btnNuevoProd')) { fichaProducto(null); return; }
+
+      // --- feriados ---
+      if (e.target.closest('#btnAddFeriado')) {
+        const fe = $('#inFerFecha').value;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(fe)) { aviso('Pon la fecha del feriado.', 'err'); return; }
+        if ((P.feriados || []).some((x) => x.fecha === fe)) { aviso('Ese feriado ya está puesto.', 'err'); return; }
+        P.feriados.push(D.feriadoNuevo(fe, ($('#inFerNom').value || '').trim() || 'Feriado'));
+        D.guardarParams(); pintarParametros(); pintarProduccion();
+        aviso(`Feriado del ${D.fechaCorta(fe)} agregado: se descansa el día anterior y se produce el feriado.`);
+        return;
+      }
+      /* Cada toque pasa la celda al siguiente estado. En la tablet es un solo
+         toque, que es como se corrige una hoja así. */
+      const cel = e.target.closest('.celfer');
+      if (cel) {
+        const f = P.feriados[+cel.dataset.fer];
+        if (!f) return;
+        const dia = f.dias[cel.dataset.dia] || (f.dias[cel.dataset.dia] = {});
+        const act = dia[cel.dataset.cel] || 'SI';
+        const i = D.ESTADOS.findIndex((x) => x.id === act);
+        dia[cel.dataset.cel] = D.ESTADOS[(i + 1) % D.ESTADOS.length].id;
+        D.guardarParams(); pintarFeriados(); pintarProduccion();
+        return;
+      }
+      const fdel = e.target.closest('[data-ferdel]');
+      if (fdel) {
+        const f = P.feriados[+fdel.dataset.ferdel];
+        if (!f) return;
+        preguntar('Quitar el feriado',
+          `<p>Los días del <b>${esc(f.nombre)}</b> vuelven al calendario de la semana.</p>`, 'Quitar')
+          .then((si) => {
+            if (!si) return;
+            P.feriados.splice(+fdel.dataset.ferdel, 1);
+            D.guardarParams(); pintarParametros(); pintarProduccion(); aviso('Feriado quitado.');
+          });
+        return;
+      }
+      const fimg = e.target.closest('[data-ferimg]');
+      if (fimg) { compartirFeriado(P.feriados[+fimg.dataset.ferimg]); return; }
       const qu = e.target.closest('[data-quitar]');
       if (qu) {
         const c = qu.dataset.quitar;
@@ -1596,8 +1829,8 @@
         ${campo('fpCod', 'Código', c.codigo ?? '')}
       </div>
       <div class="fila" style="margin-top:10px">
-        <label class="sw"><input type="checkbox" id="fpZ2" ${c.z2 ? 'checked' : ''}> Se produce en Zona 2</label>
-        <label class="sw"><input type="checkbox" id="fpZ18" ${c.z18 !== false ? 'checked' : ''}> Se produce en Zona 18</label>
+        ${D.PLANTAS.map((x) => `<label class="sw"><input type="checkbox" data-fppl="${x.id}"
+          ${(c.plantas || {})[x.id] ? 'checked' : ''}> Se produce en ${esc(x.nombre)}</label>`).join('')}
       </div>
       <p class="dim" style="font-size:.84rem;margin:12px 2px 0">
         Los topes de producción salen de los turnos: marca abajo, en la tabla de productos, cuáles turnos pueden hacerla.
@@ -1616,9 +1849,10 @@
           rend: Math.max(1, Number($('#fpRend').value) || 1),
           mult: Math.max(0, Math.round((Number($('#fpMult').value) || 0) * 100) / 100),
           codigo: ($('#fpCod').value || '').trim() || null,
-          z2: $('#fpZ2').checked,
-          z18: $('#fpZ18').checked,
+          plantas: Object.fromEntries(D.PLANTAS.map((x) =>
+            [x.id, $(`[data-fppl="${x.id}"]`).checked])),
         };
+        if (!Object.values(ficha.plantas).some(Boolean)) ficha.plantas.Z18 = true;
         if (clave && nueva !== clave) renombrar(clave, nueva);
         P.prod[nueva] = ficha;
         if (!P.catalogo.includes(nueva)) P.catalogo.push(nueva);

@@ -104,19 +104,25 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
   }
 
   // ---------- envío ----------
-  async function viaServidor(st) {
+  /* `tarea` lleva las instrucciones de qué leer. El servidor de inventario
+     viejo las ignora y responde siempre con la hoja de stock; por eso quien
+     pide otra cosa revisa que la respuesta traiga lo suyo. */
+  async function viaServidor(st, tarea) {
     const url = cfg('url').trim();
     if (!url) throw new Error('Falta la dirección del lector. Configúrala en Parámetros.');
     const res = await fetch(url.replace(/\/+$/, ''), {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ image_base64: st.b64, media_type: st.mime }),
+      body: JSON.stringify({
+        image_base64: st.b64, media_type: st.mime,
+        ...(tarea ? { instruccion: tarea.instruccion, sistema: tarea.sistema } : {}),
+      }),
     });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error((data && data.error) || `El lector respondió ${res.status}.`);
     return data;
   }
 
-  async function viaLlave(st) {
+  async function viaLlave(st, tarea) {
     const key = cfg('key').trim();
     if (!key) throw new Error('Falta la llave. Pégala en Parámetros.');
     let res;
@@ -128,10 +134,11 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
           'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
         },
         body: JSON.stringify({
-          model: cfg('modelo', MODELO), max_tokens: 4096, system: SISTEMA,
+          model: cfg('modelo', MODELO), max_tokens: 4096,
+          system: (tarea && tarea.sistema) || SISTEMA,
           messages: [{ role: 'user', content: [
             { type: 'image', source: { type: 'base64', media_type: st.mime, data: st.b64 } },
-            { type: 'text', text: instruccion() }] }],
+            { type: 'text', text: (tarea && tarea.instruccion) || instruccion() }] }],
         }),
       });
     } catch (err) {
@@ -150,6 +157,21 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
     const data = parseJson(texto);
     if (!data) throw new Error('El lector no devolvió datos legibles. Repite la foto con la hoja completa y plana.');
     return data;
+  }
+
+  /**
+   * Manda la foto por el camino configurado y reintenta una vez cuando la
+   * respuesta viene mal formada: casi siempre sale a la segunda y ahorra
+   * tener que repetir la foto.
+   */
+  async function enviar(st, modo, tarea, avisar) {
+    const una = () => (modo === 'llave' ? viaLlave(st, tarea) : viaServidor(st, tarea));
+    try { return await una(); }
+    catch (err) {
+      if (!/legibles|JSON|Unexpected|parse/i.test(err.message)) throw err;
+      if (avisar) avisar('La primera lectura vino incompleta. Reintentando…');
+      return una();
+    }
   }
 
   // ---------- Excel con el formato de siempre ----------
@@ -331,15 +353,7 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
       try {
         /* Cuando la respuesta viene mal formada se reintenta una vez: casi
            siempre sale a la segunda y evita tener que repetir la foto. */
-        let data;
-        try {
-          data = modo === 'llave' ? await viaLlave(st) : await viaServidor(st);
-        } catch (err1) {
-          if (/legibles|JSON|Unexpected|parse/i.test(err1.message)) {
-            decir('La primera lectura vino incompleta. Reintentando…');
-            data = modo === 'llave' ? await viaLlave(st) : await viaServidor(st);
-          } else throw err1;
-        }
+        const data = await enviar(st, modo, null, decir);
         st.fecha = (data.fecha && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) ? data.fecha : null;
         st.dudosas = new Set((data.dudosas || []).map(String));
         HOJAS.forEach((h) => {
@@ -431,5 +445,9 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
     estado(); pintar();
   }
 
-  window.Lector = { abrir, cfg, setCfg, MODELO, PAN_BLANCO, PASTEL, HOJAS };
+  window.Lector = {
+    abrir, cfg, setCfg, MODELO, PAN_BLANCO, PASTEL, HOJAS,
+    // el motor, que reusa el lector de producción de Zona 2
+    reducir, enviar, parseJson, num, fmt, esc, ddmmaaaa,
+  };
 })();

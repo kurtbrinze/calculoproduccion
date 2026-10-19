@@ -10,7 +10,9 @@ el lector que tú conectes (ver [LECTOR.md](LECTOR.md)).
 ## Las seis pestañas
 
 **Producción** es el tablero. Arriba, los totales y cómo va cada turno contra su tope. Abajo,
-una tabla por familia con sólo los turnos que esa familia usa. De cada clave se ve:
+una tabla por **área de producción** —Sándwich, Redondo y Magdalenas de Zona 18, Dulce y
+Especiales de Zona 2 CZ, y Producción Planta Z2— con sólo los turnos de esa área. Cada columna
+dice de qué día habla. De cada clave se ve:
 
 | Columna | Qué es |
 |---|---|
@@ -18,12 +20,26 @@ una tabla por familia con sólo los turnos que esa familia usa. De cada clave se
 | Teórico PM hoy | Lo anterior menos la venta de hoy |
 | Sugerido qq | Lo que el cálculo propone producir |
 | Turnos | Los quintales por turno, editables a mano |
+| Decidido qq | Lo que se decidió **en esa área** |
+| = Bolsas | Esos quintales por el rendimiento: lo que de verdad se empaca |
 | Teórico PM mañana | Cómo queda mañana después de producir y vender |
 | Cobertura | Días de venta que quedan cubiertos |
 | Alerta | OK, FALTANTE, EXCESO, TOPE VIDA ÚTIL o MENOS DE UN LOTE |
 
 Al tocar una clave se abre la explicación de dónde salió su sugerido, paso a paso.
-El sugerido total también aparece partido entre **Zona 18** y **Zona 2**.
+El sugerido total también aparece partido por planta.
+
+Una clave que se hace en dos plantas —10HR3, S26, S32, 10HD7— sale en las dos tarjetas, y cada
+una muestra lo suyo; debajo del número va el total de la clave para no perderlo de vista.
+
+### Leer producción Z2
+
+El botón **Leer producción Z2** toma la foto de la hoja que mandan a diario y copia el bloque de
+columnas de las personas —los quintales que hizo cada una de cada clave—. Ignora el inventario
+de la izquierda: ese sigue entrando por **Leer INV PM**. La tabla se revisa contra la foto antes
+de pasarla, con las celdas dudosas marcadas, y Enter baja por la columna de la misma persona,
+que es como se teclea una hoja así. Al pasarla **pisa** lo que hubiera en esos turnos: la hoja
+dice lo que de verdad se produjo.
 
 ### Resumen del día
 
@@ -197,24 +213,36 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.13';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.13';`
+1. `js/ui.js` → `const VERSION = 'V.2026.14';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.14';`
 
 ## Plantas, claves y productos nuevos
 
-Cada turno pertenece a una planta: Magdalenas, Redondo AM, Sándwich AM, Panaderos PM y Redondo
-PM son de **Zona 18**; Byron, Julio y **Máquina Z2**, de **Zona 2**. En Parámetros cada producto
-dice en qué plantas se puede hacer, y el reparto sólo usa turnos de esas plantas.
+Hay **tres plantas**:
 
-**Máquina Z2** hace el 5HM4 y el 10HD7. El 10HD7 se puede hacer ahí o en Panaderos PM, así que
-cuenta como clave de las dos plantas y la planta se define según dónde caiga el reparto. Su tope
-viene en 40 qq, que es el que se le vio a la máquina en la hoja del 14/oct — conviene revisarlo.
+| Planta | Turnos |
+|---|---|
+| Zona 18 | Magdalenas, Redondo AM, Sándwich AM, Panaderos PM, Redondo PM |
+| Zona 2 CZ | Byron, Julio |
+| Zona 2 | Lucas, Gilo, Armando, Rodrigo, Victor, Máquina |
+
+En Parámetros cada producto dice en qué plantas se puede hacer, y el reparto sólo usa turnos de
+esas plantas.
+
+La lista de turnos de un producto es el **orden que sigue el reparto automático**. Para anotar a
+mano —o para que entre lo que viene de la foto— basta con que el producto se haga en la planta
+de ese turno. Por eso 10HR3 se anota en Zona 2 sin que el reparto automático se le vaya para
+allá al llenarse Redondo.
+
+Los topes de los seis turnos de Zona 2 vienen en 20 qq y el de la Máquina en 40: son un punto de
+partida tomado de la hoja, conviene ajustarlos. Las claves nuevas de Zona 2 entran sin promedios
+de venta, así que su sugerido es cero hasta que se carguen — la foto diaria sí las llena.
 
 ### Cada planta tiene su calendario
 
 En Parámetros, el calendario de producción trae una columna por planta. De fábrica, Zona 18
-descansa sábado y domingo, y **Zona 2 trabaja el domingo**: así Byron, Julio y Máquina Z2 pueden
-producir ese día. Cualquiera de las dos se cambia marcando o desmarcando.
+descansa sábado y domingo, y **las dos de Zona 2 trabajan el domingo**. Cualquiera se cambia
+marcando o desmarcando.
 
 Eso cambia tres cosas:
 
@@ -235,6 +263,22 @@ En la tabla de productos, **Editar** cambia la clave y arrastra promedios e hist
 que hace falta cuando IN16 pase a ser LS19B — y **Agregar producto** da de alta uno nuevo con
 su rendimiento, unidad, múltiplo y plantas. Los topes de producción salen de los turnos que se
 le marquen.
+
+## Feriados
+
+En panadería el feriado no se toma como un día libre: se **descansa el día anterior** y se
+**produce el día del feriado**. En Parámetros, al agregar un feriado con su fecha, la app arma
+una tabla con los días alrededor —dos antes y uno después— ya puesta así, y de ahí se cambia
+celda por celda con un toque. Cada toque pasa por SI, Descanso, Normal y X.
+
+Las filas van por planta y partidas en AM y PM, porque es ahí donde la mañana y la tarde se
+separan: se descansa la tarde anterior y se produce la mañana del feriado. Eso manda sobre el
+calendario de la semana y mueve el horizonte, el reparto y los avisos, igual que si la planta
+descansara.
+
+Las filas de **empaque** —EMP HM, EMP HR, EMP SAND— no entran al cálculo: la app planifica
+producción, no empaque. Están para que la tabla sirva como mensaje. El botón **Compartir
+imagen** la manda por WhatsApp con el mismo estilo del resumen del día.
 
 ## Mis valores por defecto
 
@@ -278,10 +322,12 @@ equipo. La sincronización mantiene a los dos iguales, así que un borrado por e
 | `js/calculo.js` | Motor del sugerido y del reparto por turno |
 | `js/excel.js` | Leer el libro de cálculo y escribir el historial |
 | `js/lector.js` | Lectura de la foto del inventario |
+| `js/lectorz2.js` | Lectura de la foto de producción de Zona 2 |
 | `js/sync.js` | Mezcla y sincronización entre equipos |
 | `js/resumen.js` | Imágenes y PDF del resumen del día |
 | `js/ui.js` | Pantallas |
-| `api/extract.js` | El lector, para desplegar en Vercel |
+| `api/extract.js` | El lector de inventario, para desplegar en Vercel |
+| `api/leer.js` | El lector que acepta instrucciones, para las dos hojas |
 | `api/estado.js` | La sincronización, guardada en Vercel Blob |
 | `LECTOR.md` | Cómo conectar el lector de fotos |
 | `SINCRONIZAR.md` | Cómo encender la sincronización |

@@ -8,10 +8,14 @@
 
   const DIAS = ['LUNES', 'MARTES', 'MIERCOLES', 'JUEVES', 'VIERNES', 'SABADO', 'DOMINGO'];
 
-  /* Las dos plantas. Cada turno pertenece a una. */
+  /* Las tres plantas. Cada turno pertenece a una.
+     Zona 2 CZ es la de dulces —Byron y Julio—; Zona 2 es la de los seis turnos
+     que mandan la hoja a mano todos los días. Son plantas distintas con su
+     propio calendario, igual que aparecen separadas en la tabla de feriados. */
   const PLANTAS = [
-    { id: 'Z18', nombre: 'Zona 18' },
-    { id: 'Z2',  nombre: 'Zona 2' },
+    { id: 'Z18',  nombre: 'Zona 18' },
+    { id: 'Z2CZ', nombre: 'Zona 2 CZ' },
+    { id: 'Z2',   nombre: 'Zona 2' },
   ];
 
   /* Turnos. El tope es el máximo de quintales que ese turno alcanza a hacer. */
@@ -22,11 +26,16 @@
     /* Panaderos PM corre lleno con 10HD7 todos los días, por eso trae mínimo. */
     { id: 'PAN_PM',  nombre: 'Panaderos PM', papel: 'Grande PM',  tope: 12, minimo: 12, momento: 'PM', planta: 'Z18' },
     { id: 'RED_PM',  nombre: 'Redondo PM',   papel: 'Máquina PM', tope: 34, minimo: 0,  momento: 'PM', planta: 'Z18' },
-    { id: 'BYRON',   nombre: 'Byron',        papel: 'B',          tope: 12, minimo: 0,  momento: 'PM', planta: 'Z2' },
-    { id: 'JULIO',   nombre: 'Julio',        papel: 'J',          tope: 12, minimo: 0,  momento: 'PM', planta: 'Z2' },
-    /* Máquina de Zona 2: hace 5HM4 y 10HD7. El tope de 40 qq es el que se le vio
-       a la máquina en la hoja del 14/oct; cámbialo en Parámetros si es otro. */
-    { id: 'MAQ_Z2',  nombre: 'Máquina Z2',   papel: 'Máquina',    tope: 40, minimo: 0,  momento: 'AM', planta: 'Z2' },
+    { id: 'BYRON',   nombre: 'Byron',        papel: 'B',          tope: 12, minimo: 0,  momento: 'PM', planta: 'Z2CZ' },
+    { id: 'JULIO',   nombre: 'Julio',        papel: 'J',          tope: 12, minimo: 0,  momento: 'PM', planta: 'Z2CZ' },
+    /* Planta Zona 2. Los topes son un punto de partida: la hoja a mano trae
+       entre 11 y 17 qq por persona. Se ajustan en Parámetros. */
+    { id: 'LUCAS',   nombre: 'Lucas',        papel: 'L',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
+    { id: 'GILO',    nombre: 'Gilo',         papel: 'G',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
+    { id: 'ARMANDO', nombre: 'Armando',      papel: 'A',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
+    { id: 'RODRIGO', nombre: 'Rodrigo',      papel: 'R',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
+    { id: 'VICTOR',  nombre: 'Victor',       papel: 'V',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
+    { id: 'MAQ_Z2',  nombre: 'Máquina',      papel: 'Máquina',    tope: 40, minimo: 0,  momento: 'AM', planta: 'Z2' },
   ];
 
   /* Familias: agrupan vida útil y ordenan la pantalla. */
@@ -35,6 +44,21 @@
     { id: 'REDONDO',   nombre: 'Redondo',           vidaUtil: 21, minDespacho: 14, colchon: 1 },
     { id: 'MAGDALENA', nombre: 'Magdalenas',        vidaUtil: 21, minDespacho: 14, colchon: 1 },
     { id: 'DULCE',     nombre: 'Dulces y especial', vidaUtil: 21, minDespacho: 14, colchon: 1 },
+    { id: 'Z2',        nombre: 'Planta Zona 2',     vidaUtil: 21, minDespacho: 14, colchon: 1 },
+  ];
+
+  /* Áreas de producción: cada tarjeta de la pantalla de producción.
+     Un área es un juego de turnos, no una familia, y por eso una clave que se
+     hace en las dos plantas —10HR3, S32— sale en las dos tarjetas, cada una
+     con lo que se decidió ahí. Antes se agrupaba por familia y eso no daba
+     cabida a la misma clave en dos plantas. */
+  const AREAS = [
+    { id: 'Z18_SAND', nombre: 'Sándwich',             planta: 'Z18',  familia: 'SANDWICH',  turnos: ['SAND_AM'] },
+    { id: 'Z18_RED',  nombre: 'Redondo',              planta: 'Z18',  familia: 'REDONDO',   turnos: ['RED_AM', 'PAN_PM', 'RED_PM'] },
+    { id: 'Z18_MGD',  nombre: 'Magdalenas',           planta: 'Z18',  familia: 'MAGDALENA', turnos: ['MGD'] },
+    { id: 'Z2CZ',     nombre: 'Dulce y Especiales',   planta: 'Z2CZ', familia: null,        turnos: ['BYRON', 'JULIO'] },
+    { id: 'Z2',       nombre: 'Producción Planta Z2', planta: 'Z2',   familia: null,
+      turnos: ['LUCAS', 'GILO', 'ARMANDO', 'RODRIGO', 'VICTOR', 'MAQ_Z2'] },
   ];
   /* Un pedido especial se produce con días de anticipación sobre la entrega.
      Vale para todas las familias salvo que alguna traiga el suyo. */
@@ -42,31 +66,93 @@
 
   /* Un producto por fila. `turnos` va en orden de preferencia: el reparto
      automático llena el primero que tenga cupo antes de pasar al siguiente.
-     z2 / z18 dicen en qué planta se puede producir.
+     `plantas` dice en qué plantas se puede producir.
      prodEnConteo marca el producto que se hace de mañana y que el conteo
      de cierre ya trae adentro, para no sumarlo dos veces. */
+  const T_Z2 = ['LUCAS', 'GILO', 'ARMANDO', 'RODRIGO', 'VICTOR', 'MAQ_Z2'];
   const PRODUCTOS = [
-    { clave: 'S26',   codigo: 25,  familia: 'SANDWICH',  rend: 94,   mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
-    { clave: 'S19',   codigo: 26,  familia: 'SANDWICH',  rend: 120,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
-    { clave: 'S16',   codigo: 549, familia: 'SANDWICH',  rend: 150,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
-    { clave: 'S11',   codigo: 28,  familia: 'SANDWICH',  rend: 210,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
-    { clave: '10PM3', codigo: 32,  familia: 'REDONDO',   rend: 120,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], z18: true, z2: false },
-    { clave: '10HD7', codigo: 5,   familia: 'REDONDO',   rend: 110,  mult: 1,    turnos: ['PAN_PM', 'MAQ_Z2', 'RED_AM', 'RED_PM'], z18: true, z2: true },
-    { clave: '10HR3', codigo: 1,   familia: 'REDONDO',   rend: 150,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], z18: true, z2: false, alias: 'HR3' },
-    { clave: '12BLL', codigo: 436, familia: 'REDONDO',   rend: 200,  mult: 0.5,  turnos: ['RED_AM', 'RED_PM'], z18: true, z2: false },
-    { clave: '15PL1', codigo: 34,  familia: 'REDONDO',   rend: 144,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], z18: true, z2: false },
-    { clave: '5HM4',  codigo: 9,   familia: 'REDONDO',   rend: 220,  mult: 1,    turnos: ['MAQ_Z2'], z18: false, z2: true, alias: 'HM4' },
-    { clave: 'MG1',   codigo: 77,  familia: 'MAGDALENA', rend: 130,  mult: 0.1,  turnos: ['MGD'], z18: true, z2: false },
-    { clave: 'MG4',   codigo: 79,  familia: 'MAGDALENA', rend: 64,   mult: 0.1,  turnos: ['MGD'], z18: true, z2: false },
-    { clave: 'MGN',   codigo: 414, familia: 'MAGDALENA', rend: 108,  mult: 0.1,  turnos: ['MGD'], z18: true, z2: false },
-    { clave: 'CZ3',   codigo: 134, familia: 'DULCE',     rend: 1550, mult: 0.5,  turnos: ['JULIO', 'BYRON'], z18: false, z2: true },
-    { clave: '10CZ4', codigo: 573, familia: 'DULCE',     rend: 226,  mult: 0.25, turnos: ['BYRON', 'JULIO'], z18: false, z2: true, prodEnConteo: true },
-    { clave: '6CG2N', codigo: 391, familia: 'DULCE',     rend: 280,  mult: 0.25, turnos: ['BYRON'], z18: false, z2: true },
-    { clave: '6CG2V', codigo: 390, familia: 'DULCE',     rend: 280,  mult: 0.25, turnos: ['BYRON'], z18: false, z2: true },
-    { clave: '6CHO',  codigo: 355, familia: 'DULCE',     rend: 300,  mult: 0.25, turnos: ['BYRON'], z18: false, z2: true },
-    { clave: '6QU1',  codigo: 490, familia: 'DULCE',     rend: 378,  mult: 0.25, turnos: ['JULIO'], z18: false, z2: true },
-    { clave: 'IN16',  codigo: 473, familia: 'SANDWICH',  rend: 110,  mult: 2,    turnos: ['SAND_AM'], z18: true,  z2: false },
-    { clave: 'S32',   codigo: 31,  familia: 'SANDWICH',  rend: 84,   mult: 0.5,  turnos: ['SAND_AM'], z18: true,  z2: true },
+    /* Las claves que se hacen en las dos plantas sólo llevan sus turnos de
+       Zona 18 en la lista: lo de Zona 2 entra por la foto, no por el reparto
+       automático, que si no se derramaría para allá al llenarse Sándwich. */
+    { clave: 'S26',   codigo: 25,  familia: 'SANDWICH',  rend: 94,   mult: 2,    turnos: ['SAND_AM'], plantas: ['Z18', 'Z2'] },
+    { clave: 'S19',   codigo: 26,  familia: 'SANDWICH',  rend: 120,  mult: 2,    turnos: ['SAND_AM'], plantas: ['Z18'] },
+    { clave: 'S16',   codigo: 549, familia: 'SANDWICH',  rend: 150,  mult: 2,    turnos: ['SAND_AM'], plantas: ['Z18'] },
+    { clave: 'S11',   codigo: 28,  familia: 'SANDWICH',  rend: 210,  mult: 2,    turnos: ['SAND_AM'], plantas: ['Z18'] },
+    { clave: '10PM3', codigo: 32,  familia: 'REDONDO',   rend: 120,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], plantas: ['Z18'] },
+    { clave: '10HD7', codigo: 5,   familia: 'REDONDO',   rend: 110,  mult: 1,    turnos: ['PAN_PM', 'MAQ_Z2', 'RED_AM', 'RED_PM'], plantas: ['Z18', 'Z2'] },
+    { clave: '10HR3', codigo: 1,   familia: 'REDONDO',   rend: 150,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], plantas: ['Z18', 'Z2'], alias: 'HR3' },
+    { clave: '12BLL', codigo: 436, familia: 'REDONDO',   rend: 200,  mult: 0.5,  turnos: ['RED_AM', 'RED_PM'], plantas: ['Z18'] },
+    { clave: '15PL1', codigo: 34,  familia: 'REDONDO',   rend: 144,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], plantas: ['Z18'] },
+    { clave: '5HM4',  codigo: 9,   familia: 'REDONDO',   rend: 220,  mult: 1,    turnos: T_Z2.slice(), plantas: ['Z2'], alias: 'HM4' },
+    { clave: 'MG1',   codigo: 77,  familia: 'MAGDALENA', rend: 130,  mult: 0.1,  turnos: ['MGD'], plantas: ['Z18'] },
+    { clave: 'MG4',   codigo: 79,  familia: 'MAGDALENA', rend: 64,   mult: 0.1,  turnos: ['MGD'], plantas: ['Z18'] },
+    { clave: 'MGN',   codigo: 414, familia: 'MAGDALENA', rend: 108,  mult: 0.1,  turnos: ['MGD'], plantas: ['Z18'] },
+    { clave: 'CZ3',   codigo: 134, familia: 'DULCE',     rend: 1550, mult: 0.5,  turnos: ['JULIO', 'BYRON'], plantas: ['Z2CZ'] },
+    { clave: '10CZ4', codigo: 573, familia: 'DULCE',     rend: 226,  mult: 0.25, turnos: ['BYRON', 'JULIO'], plantas: ['Z2CZ'], prodEnConteo: true },
+    { clave: '6CG2N', codigo: 391, familia: 'DULCE',     rend: 280,  mult: 0.25, turnos: ['BYRON'], plantas: ['Z2CZ'] },
+    { clave: '6CG2V', codigo: 390, familia: 'DULCE',     rend: 280,  mult: 0.25, turnos: ['BYRON'], plantas: ['Z2CZ'] },
+    { clave: '6CHO',  codigo: 355, familia: 'DULCE',     rend: 300,  mult: 0.25, turnos: ['BYRON'], plantas: ['Z2CZ'] },
+    { clave: '6QU1',  codigo: 490, familia: 'DULCE',     rend: 378,  mult: 0.25, turnos: ['JULIO'], plantas: ['Z2CZ'] },
+    { clave: 'IN16',  codigo: 473, familia: 'SANDWICH',  rend: 110,  mult: 2,    turnos: ['SAND_AM'], plantas: ['Z18'] },
+    { clave: 'S32',   codigo: 31,  familia: 'SANDWICH',  rend: 84,   mult: 0.5,  turnos: ['SAND_AM'], plantas: ['Z18', 'Z2'] },
+
+    /* Planta Zona 2. Los rendimientos salen de la columna RENDIM de Calc_Bolsa;
+       el múltiplo de 0.25 es un punto de partida, igual que los topes. */
+    { clave: '10FP8', codigo: null, familia: 'Z2', rend: 114,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: '5HC1',  codigo: null, familia: 'Z2', rend: 316,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: '10HD6', codigo: null, familia: 'Z2', rend: 120,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: '5HD8',  codigo: null, familia: 'Z2', rend: 178,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: '5HE8',  codigo: null, familia: 'Z2', rend: 200,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: '5HG7',  codigo: null, familia: 'Z2', rend: 182,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: '10HM5', codigo: null, familia: 'Z2', rend: 130,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: 'MA1',   codigo: null, familia: 'Z2', rend: 132,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: 'MA3',   codigo: null, familia: 'Z2', rend: 1290, mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: '6PC4',  codigo: null, familia: 'Z2', rend: 210,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: 'S25',   codigo: null, familia: 'Z2', rend: 100,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: '12WY1', codigo: null, familia: 'Z2', rend: 80,   mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: '12WYK', codigo: null, familia: 'Z2', rend: 80,   mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: 'SE2',   codigo: null, familia: 'Z2', rend: 1230, mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    { clave: '6HD12', codigo: null, familia: 'Z2', rend: 264,  mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    /* El Excel la llama 12PB2; acá va como PB2, que es como viene en la hoja. */
+    { clave: 'PB2',   codigo: null, familia: 'Z2', rend: 183.33, mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+    /* WYK+P no está en Calc_Bolsa: toma el rendimiento de 12WYK hasta que se
+       confirme el suyo. */
+    { clave: 'WYK+P', codigo: null, familia: 'Z2', rend: 80,   mult: 0.25, turnos: T_Z2.slice(), plantas: ['Z2'] },
+  ];
+
+  /* ---------- feriados ----------
+     En panadería el feriado no es un día sin trabajo: se descansa el día
+     ANTERIOR y se produce el día del feriado. Por eso un feriado no es una
+     fecha suelta sino una ventana de días con lo que hace cada planta en cada
+     momento, que es lo que se le pasa al equipo por WhatsApp.
+
+     Las filas de empaque no entran al cálculo —la app planifica producción,
+     no empaque— pero sí van en la tabla, porque son la mitad del mensaje. */
+  const EMPAQUE = [
+    { id: 'HM',   nombre: 'EMP HM',   planta: 'Z2' },
+    { id: 'HR',   nombre: 'EMP HR',   planta: 'Z2' },
+    { id: 'SAND', nombre: 'EMP SAND', planta: 'Z18' },
+  ];
+  /* SI y NO son los únicos que mueven el cálculo; los otros dos son recados
+     para el equipo. */
+  const ESTADOS = [
+    { id: 'SI',     nombre: 'SI',       trabaja: true },
+    { id: 'NO',     nombre: 'Descanso', trabaja: false },
+    { id: 'NORMAL', nombre: 'Normal',   trabaja: true },
+    { id: 'X',      nombre: 'X',        trabaja: false },
+  ];
+  const MOMENTOS = ['AM', 'PM'];
+  const FERIADO_ANTES = 2, FERIADO_DESPUES = 1;
+
+  const filaPlanta = (planta, momento) => `${planta}|${momento}`;
+  const filaEmpaque = (empId, momento) => `EMP:${empId}|${momento}`;
+
+  /* El orden de las claves dentro de la tarjeta de Planta Z2, tal como viene
+     en la hoja que mandan a diario. Lo que no esté acá sale después. */
+  const ORDEN_Z2 = [
+    '10FP8', '5HC1', '10HD6', '5HD8', '5HE8', '5HG7', '5HM4', '10HM5', '10HR3',
+    'MA1', 'MA3', '6PC4', 'S25', 'S26', 'S32', '12WY1', '12WYK', 'SE2',
+    '6HD12', 'PB2', 'WYK+P',
   ];
 
   /* Productos diferenciados: presentaciones distintas del mismo producto.
@@ -122,19 +208,42 @@
   };
 
   /* Calendario: qué días trabaja cada planta. Zona 18 descansa sábado y domingo;
-     Zona 2 trabaja también el domingo. Todo se cambia en Parámetros. */
+     las dos de Zona 2 trabajan también el domingo. Todo se cambia en Parámetros. */
   const CALENDARIO_INICIAL = DIAS.map((d) => {
     const z18 = !['SABADO', 'DOMINGO'].includes(d);
     const z2 = d !== 'SABADO';
-    return { dia: d, produce: z18 || z2, factor: 1, plantas: { Z18: z18, Z2: z2 } };
+    const plantas = { Z18: z18, Z2CZ: z2, Z2: z2 };
+    return { dia: d, produce: z18 || z2, factor: 1, plantas };
   });
 
   /* Sube cuando hay un cambio de fábrica que debe alcanzar a quien ya tenía
      parámetros guardados.
        2 = llegó el turno Máquina Z2.
        3 = el calendario de producción pasó a ser por planta.
-       4 = el catálogo se ordenó como la hoja de papel. */
-  const ESQUEMA = 4;
+       4 = el catálogo se ordenó como la hoja de papel.
+       5 = se separó la planta Zona 2 de la de dulces (Zona 2 CZ). */
+  const ESQUEMA = 5;
+
+  /**
+   * Mapa de plantas de un producto. Acepta la forma nueva (`plantas` como
+   * lista o como mapa) y la vieja de dos banderas, que es la que traen los
+   * parámetros guardados antes de que existiera la tercera planta.
+   */
+  function mapaPlantas(p) {
+    const out = {};
+    PLANTAS.forEach((x) => { out[x.id] = false; });
+    if (Array.isArray(p.plantas)) {
+      p.plantas.forEach((id) => { if (id in out) out[id] = true; });
+    } else if (p.plantas && typeof p.plantas === 'object') {
+      PLANTAS.forEach((x) => { out[x.id] = !!p.plantas[x.id]; });
+    } else {
+      /* Forma vieja: z18 + z2. El z2 de antes era la planta de dulces. */
+      out.Z18 = p.z18 !== false;
+      out.Z2CZ = !!p.z2;
+    }
+    if (!Object.values(out).some(Boolean)) out.Z18 = true;
+    return out;
+  }
 
   /** Ficha de producto completa, con todos los campos en su lugar. */
   function fichaDe(p) {
@@ -146,8 +255,7 @@
       mult: p.mult,
       unidad: p.unidad || 'bolsas',
       turnos: (p.turnos || []).slice(),
-      z18: p.z18 !== false,
-      z2: !!p.z2,
+      plantas: mapaPlantas(p),
       prodEnConteo: !!p.prodEnConteo,
       alias: p.alias || '',
       // null = hereda de la familia
@@ -181,7 +289,9 @@
       diferenciados: JSON.parse(JSON.stringify(DIFERENCIADOS)),
       pedidos: { anticipacion: ANTICIPACION },
       calendario: CALENDARIO_INICIAL.map((c) => ({ ...c })),
-      feriados: [],                  // ['AAAA-MM-DD', ...]
+      /* [{ fecha, nombre, dias: { 'AAAA-MM-DD': { 'Z18|AM': 'SI', ... } } }] */
+      feriados: [],
+      empaque: EMPAQUE.map((e) => ({ ...e })),
     };
   }
 
@@ -230,8 +340,14 @@
     out.prod = {};
     cat.forEach((c) => {
       const b = base.prod[c] || fichaDe({ clave: c, familia: 'REDONDO', rend: 100, mult: 1, turnos: [] });
-      out.prod[c] = { ...b, ...(guardadoProd[c] || {}), clave: c };
+      const g = guardadoProd[c] || {};
+      out.prod[c] = { ...b, ...g, clave: c };
       if (!Array.isArray(out.prod[c].turnos)) out.prod[c].turnos = b.turnos.slice();
+      /* Las banderas de planta: lo guardado manda si ya viene en la forma
+         nueva; si trae las dos viejas, `mapaPlantas` las traduce —el z2 de
+         antes era la planta de dulces, que ahora se llama Z2 CZ. */
+      out.prod[c].plantas = mapaPlantas(g.plantas !== undefined ? g : (('z18' in g || 'z2' in g) ? g : b));
+      delete out.prod[c].z18; delete out.prod[c].z2;
     });
 
     out.turnos = { ...base.turnos };
@@ -243,17 +359,43 @@
       if (base.familias[k]) out.familias[k] = { ...base.familias[k], ...guardado.familias[k] };
     });
     if (!Array.isArray(out.calendario) || out.calendario.length !== 7) out.calendario = base.calendario;
-    /* Calendario por planta: lo que había pasa a Zona 18, y Zona 2 arranca
-       igual más el domingo, que es lo que de verdad trabaja. */
+    /* Calendario por planta. Lo que había de una sola planta pasa a Zona 18;
+       el calendario viejo de «Z2» era el de dulces y se lo queda Zona 2 CZ,
+       y la planta Zona 2 nueva arranca con ese mismo calendario. */
+    const viejoEsquema = Number(guardado.esquema) || 0;
     out.calendario = out.calendario.map((c, i) => {
       const dia = DIAS[i];
-      const pl = c && c.plantas;
-      const z18 = pl && typeof pl.Z18 === 'boolean' ? pl.Z18 : !!(c && c.produce);
-      const z2 = pl && typeof pl.Z2 === 'boolean' ? pl.Z2
-        : (dia === 'DOMINGO' ? true : !!(c && c.produce));
-      return { dia, factor: Number(c && c.factor) || 1, plantas: { Z18: z18, Z2: z2 }, produce: z18 || z2 };
+      const pl = (c && c.plantas) || {};
+      const bool = (v, alt) => (typeof v === 'boolean' ? v : alt);
+      const z18 = bool(pl.Z18, !!(c && c.produce));
+      const cz = bool(pl.Z2CZ, bool(pl.Z2, dia === 'DOMINGO' ? true : !!(c && c.produce)));
+      /* Antes del esquema 5 no existía Z2 aparte: hereda el de dulces. */
+      const z2 = viejoEsquema >= 5 ? bool(pl.Z2, cz) : cz;
+      return {
+        dia, factor: Number(c && c.factor) || 1,
+        plantas: { Z18: z18, Z2CZ: cz, Z2: z2 },
+        produce: z18 || cz || z2,
+      };
     });
-    if (!Array.isArray(out.feriados)) out.feriados = [];
+    /* Los feriados eran una lista de fechas sueltas que apagaban el día
+       entero, que es justo al revés de como trabaja la panadería. Las que
+       haya guardadas se convierten en feriados de verdad al abrir. */
+    out.feriados = (Array.isArray(guardado.feriados) ? guardado.feriados : [])
+      .map((f) => (typeof f === 'string'
+        ? { fecha: f, nombre: 'Feriado', antes: FERIADO_ANTES, despues: FERIADO_DESPUES, dias: null }
+        : f))
+      .filter((f) => f && /^\d{4}-\d{2}-\d{2}$/.test(f.fecha))
+      .map((f) => ({
+        fecha: f.fecha,
+        nombre: String(f.nombre || 'Feriado'),
+        antes: Number(f.antes) >= 0 ? Number(f.antes) : FERIADO_ANTES,
+        despues: Number(f.despues) >= 0 ? Number(f.despues) : FERIADO_DESPUES,
+        dias: f.dias && typeof f.dias === 'object' ? f.dias : null,
+      }));
+    out.empaque = (Array.isArray(guardado.empaque) && guardado.empaque.length
+      ? guardado.empaque : EMPAQUE)
+      .filter((e) => e && e.id)
+      .map((e) => ({ id: String(e.id), nombre: String(e.nombre || e.id), planta: e.planta || 'Z18' }));
 
     out.pedidos = { ...base.pedidos, ...(guardado.pedidos || {}) };
     out.pedidos.anticipacion = Math.max(0, Number(out.pedidos.anticipacion) || 0);
@@ -281,16 +423,36 @@
 
     /* Máquina Z2: 5HM4 pasa a hacerse ahí y 10HD7 puede hacerse ahí o en
        Panaderos PM. Se aplica una sola vez sobre los parámetros guardados. */
-    if ((Number(guardado.esquema) || 0) < 2) {
+    if (viejoEsquema < 2) {
       if (out.prod['5HM4']) {
         out.prod['5HM4'].turnos = ['MAQ_Z2'];
-        out.prod['5HM4'].z2 = true; out.prod['5HM4'].z18 = false;
+        out.prod['5HM4'].plantas = mapaPlantas({ plantas: ['Z2'] });
       }
       if (out.prod['10HD7']) {
         const t = out.prod['10HD7'].turnos || [];
         if (!t.includes('MAQ_Z2')) out.prod['10HD7'].turnos = ['PAN_PM', 'MAQ_Z2', ...t.filter((x) => x !== 'PAN_PM')];
-        out.prod['10HD7'].z2 = true;
+        out.prod['10HD7'].plantas.Z2 = true;
       }
+    }
+
+    /* La planta de dulces se separa de la planta Zona 2.
+       Lo guardado decía «Z2» para Byron y Julio: eso ahora es Z2 CZ. La
+       Máquina se queda en la Zona 2 nueva, junto a los cinco panaderos. */
+    if (viejoEsquema < 5) {
+      ['BYRON', 'JULIO'].forEach((id) => { if (out.turnos[id]) out.turnos[id].planta = 'Z2CZ'; });
+      if (out.turnos.MAQ_Z2) out.turnos.MAQ_Z2.planta = 'Z2';
+      /* Un producto que se hacía en Byron o Julio es de dulces; el que se
+         hacía en la Máquina pasa a la planta nueva. */
+      cat.forEach((c) => {
+        const f = out.prod[c];
+        if (!f) return;
+        const t = f.turnos || [];
+        if (t.some((x) => x === 'BYRON' || x === 'JULIO')) { f.plantas.Z2CZ = true; f.plantas.Z2 = false; }
+        if (t.includes('MAQ_Z2')) f.plantas.Z2 = true;
+      });
+      /* Las claves y los turnos nuevos de la planta Zona 2 ya entraron con los
+         valores de fábrica unas líneas más arriba, junto con todo lo que el
+         catálogo guardado no traía. */
     }
     out.esquema = ESQUEMA;
 
@@ -332,6 +494,139 @@
     return c.planta || (t && t.planta) || 'Z18';
   };
   const turnosDePlanta = (planta) => TURNOS.filter((t) => plantaDeTurno(t.id) === planta);
+
+  // ---------- feriados ----------
+  /** Los días que entran en la tabla de un feriado, en orden. */
+  function diasFeriado(f) {
+    const out = [];
+    const a = Number(f.antes) >= 0 ? Number(f.antes) : FERIADO_ANTES;
+    const d = Number(f.despues) >= 0 ? Number(f.despues) : FERIADO_DESPUES;
+    for (let i = -a; i <= d; i++) out.push(sumarDias(f.fecha, i));
+    return out;
+  }
+
+  /** Lo que hace normalmente una planta ese día, según el calendario semanal. */
+  function normalDe(planta, iso) {
+    const c = estado.params.calendario[indiceDia(iso)];
+    if (!c) return false;
+    const pl = c.plantas || {};
+    return typeof pl[planta] === 'boolean' ? pl[planta] : !!c.produce;
+  }
+
+  /**
+   * Un feriado recién puesto ya trae lo que casi siempre pasa: el día anterior
+   * se descansa y el día del feriado se produce. Los demás días quedan como el
+   * calendario de siempre. Todo se puede cambiar celda por celda.
+   */
+  function feriadoNuevo(fecha, nombre) {
+    const f = { fecha, nombre: nombre || 'Feriado', antes: FERIADO_ANTES, despues: FERIADO_DESPUES, dias: {} };
+    const ayer = sumarDias(fecha, -1);
+    diasFeriado(f).forEach((iso) => {
+      const celdas = {};
+      PLANTAS.forEach((p) => {
+        MOMENTOS.forEach((mo) => {
+          const v = iso === fecha ? 'SI' : (iso === ayer ? 'NO' : (normalDe(p.id, iso) ? 'SI' : 'NO'));
+          celdas[filaPlanta(p.id, mo)] = v;
+        });
+      });
+      (estado.params.empaque || EMPAQUE).forEach((e) => {
+        MOMENTOS.forEach((mo) => {
+          /* El empaque del feriado descansa, porque lo que se produce ese día
+             se empaca al siguiente. Es lo que se ve en la hoja. */
+          celdas[filaEmpaque(e.id, mo)] = iso === fecha ? 'NO' : (normalDe(e.planta, iso) ? 'SI' : 'NO');
+        });
+      });
+      f.dias[iso] = celdas;
+    });
+    return f;
+  }
+
+  /** El feriado que cubre esa fecha, si hay alguno. */
+  function feriadoDe(iso) {
+    return (estado.params.feriados || []).find((f) => f && f.dias && f.dias[iso]) || null;
+  }
+
+  /**
+   * Si una planta trabaja esa fecha en ese momento, con el feriado mandando
+   * por encima del calendario semanal. Sin momento, basta con que trabaje en
+   * alguno de los dos.
+   */
+  function plantaTrabaja(params, planta, iso, momento) {
+    const f = (params.feriados || []).find((x) => x && x.dias && x.dias[iso]);
+    const trabaja = (id) => {
+      const e = ESTADOS.find((x) => x.id === id);
+      return e ? e.trabaja : null;
+    };
+    if (f) {
+      const celdas = f.dias[iso] || {};
+      const mos = momento ? [momento] : MOMENTOS;
+      const vals = mos.map((mo) => trabaja(celdas[filaPlanta(planta, mo)])).filter((v) => v !== null);
+      if (vals.length) return vals.some(Boolean);
+    }
+    const c = params.calendario[indiceDia(iso)];
+    if (!c) return false;
+    const pl = c.plantas || {};
+    const base = typeof pl[planta] === 'boolean' ? pl[planta] : !!c.produce;
+    if (!base || !momento) return base;
+    /* Sin feriado el calendario no distingue mañana de tarde: trabaja si hay
+       algún turno de ese momento en la planta. */
+    return turnosDePlanta(planta).some((t) => t.momento === momento
+      && (estado.params.turnos[t.id] || {}).activo !== false);
+  }
+
+  // ---------- áreas de producción ----------
+  /** Si esa clave se produce en esa planta. */
+  const enPlanta = (clave, planta) => {
+    const f = estado.params.prod[clave];
+    return !!(f && f.plantas && f.plantas[planta]);
+  };
+
+  /**
+   * Las claves de un área, en el orden que le toca: la planta Zona 2 sigue el
+   * orden de la hoja que mandan a diario; las demás, el del catálogo.
+   */
+  function clavesDeArea(areaId) {
+    const a = AREAS.find((x) => x.id === areaId);
+    if (!a) return [];
+    const dentro = activos().filter((p) =>
+      enPlanta(p.clave, a.planta) && (!a.familia || p.familia === a.familia));
+    if (a.id !== 'Z2') return dentro.map((p) => p.clave);
+    const pos = (c) => { const i = ORDEN_Z2.indexOf(c); return i < 0 ? ORDEN_Z2.length : i; };
+    return dentro.map((p) => p.clave).sort((x, y) => pos(x) - pos(y));
+  }
+
+  /**
+   * Los turnos que se muestran como columnas en un área: los que el área
+   * declara, más los de esa planta que ninguna área nombra —un turno nuevo
+   * tiene que salir en algún lado, no desaparecer.
+   */
+  function turnosDeArea(areaId) {
+    const a = AREAS.find((x) => x.id === areaId);
+    if (!a) return [];
+    const nombrados = new Set(AREAS.flatMap((x) => x.turnos || []));
+    const dePlanta = AREAS.filter((x) => x.planta === a.planta);
+    const esPrimera = dePlanta[0] && dePlanta[0].id === a.id;
+    return turnosDePlanta(a.planta).filter((t) => {
+      if ((estado.params.turnos[t.id] || {}).activo === false) return false;
+      if ((a.turnos || []).includes(t.id)) return true;
+      return esPrimera && !nombrados.has(t.id);
+    });
+  }
+
+  /**
+   * Si esa clave se puede anotar en ese turno. La lista `turnos` de la ficha
+   * es el orden que sigue el reparto automático; para escribir a mano —o para
+   * que entre lo que viene de la foto— basta con que la clave se produzca en
+   * la planta de ese turno. Así 10HR3 se anota en Zona 2 sin que el reparto
+   * automático se le vaya para allá.
+   */
+  const puedeEnTurno = (clave, turnoId) => {
+    if ((estado.params.turnos[turnoId] || {}).activo === false) return false;
+    return enPlanta(clave, plantaDeTurno(turnoId));
+  };
+
+  /** Las áreas que hoy tienen algo que mostrar. */
+  const areasUsadas = () => AREAS.filter((a) => clavesDeArea(a.id).length);
 
   const guardarParams = () => grabar('params', estado.params);
   const guardarPedidos = () => grabar('pedidos', estado.pedidos);
@@ -579,10 +874,19 @@
   const prodPorClave = Object.fromEntries(PRODUCTOS.map((p) => [p.clave, p]));
   const turnoPorId = Object.fromEntries(TURNOS.map((t) => [t.id, t]));
 
+  /* Los feriados que venían de la versión vieja —una fecha suelta— se arman
+     ahora, cuando ya existen el calendario y las plantas para consultarlos. */
+  estado.params.feriados.forEach((f, i) => {
+    if (!f.dias) estado.params.feriados[i] = feriadoNuevo(f.fecha, f.nombre);
+  });
+
   const api = {
-    DIAS, TURNOS, FAMILIAS, PRODUCTOS, PLANTAS, PROM_INICIAL, DIFERENCIADOS,
-    prodPorClave, turnoPorId, fichaDe,
+    DIAS, TURNOS, FAMILIAS, PRODUCTOS, PLANTAS, AREAS, ORDEN_Z2, PROM_INICIAL, DIFERENCIADOS,
+    prodPorClave, turnoPorId, fichaDe, mapaPlantas,
     productos, activos, claves, fichaPorClave, plantaDeTurno, turnosDePlanta,
+    clavesDeArea, turnosDeArea, areasUsadas, enPlanta, puedeEnTurno,
+    EMPAQUE, ESTADOS, MOMENTOS, filaPlanta, filaEmpaque,
+    diasFeriado, feriadoNuevo, feriadoDe, plantaTrabaja, normalDe,
     paramsPorDefecto, fusionarParams,
     estado, guardarParams, guardarProm, guardarDias, guardarPedidos, leer, grabar,
     nuevoPedido, pedidosLista, pedidosVivos, estadoPedido, clientes, ANTICIPACION,
