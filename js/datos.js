@@ -472,6 +472,11 @@
     prom: leer('prom', null) || JSON.parse(JSON.stringify(PROM_INICIAL)),
     dias: leer('dias', {}),      // { 'AAAA-MM-DD': registro }
     pedidos: leer('pedidos', {}),// { id: pedido }
+    /* Lo de impresión de bolsa vive aparte de los días a propósito: es una
+       hoja de trabajo local de la computadora donde se imprime, y no se
+       sincroniza con la tablet. Guardarla fuera del día es lo que la deja
+       fuera del envío, sin tener que acordarse de filtrarla. */
+    bolsa: leer('bolsa', {}),    // { 'AAAA-MM-DD': { qqAmZ2, oh, manual, hd7z2, mu1 } }
   };
   /* Versión vieja de los promedios: S13 pasó a S11. */
   if (estado.prom.S13 && !estado.prom.S11) { estado.prom.S11 = estado.prom.S13; delete estado.prom.S13; }
@@ -638,6 +643,7 @@
   const borrarDefecto = () => { try { localStorage.removeItem(K + 'defecto'); return true; } catch (_) { return false; } };
   const hayDefecto = () => !!misDefecto();
   const guardarProm = () => grabar('prom', estado.prom);
+  const guardarBolsa = () => grabar('bolsa', estado.bolsa);
 
   /** Un día sin nada capturado no merece guardarse: ensucia el historial. */
   function vacio(r) {
@@ -888,7 +894,7 @@
     EMPAQUE, ESTADOS, MOMENTOS, filaPlanta, filaEmpaque,
     diasFeriado, feriadoNuevo, feriadoDe, plantaTrabaja, normalDe,
     paramsPorDefecto, fusionarParams,
-    estado, guardarParams, guardarProm, guardarDias, guardarPedidos, leer, grabar,
+    estado, guardarParams, guardarProm, guardarDias, guardarPedidos, guardarBolsa, leer, grabar,
     nuevoPedido, pedidosLista, pedidosVivos, estadoPedido, clientes, ANTICIPACION,
     misDefecto, fijarDefecto, borrarDefecto, hayDefecto, ESQUEMA,
     hoyISO, desdeISO, aISO, sumarDias, indiceDia, nombreDia, fechaCorta,

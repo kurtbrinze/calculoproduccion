@@ -36,6 +36,7 @@
     <button type="button" role="tab" id="tabProd"  aria-selected="true"  aria-controls="pProd">Producción</button>
     <button type="button" role="tab" id="tabInv"   aria-selected="false" aria-controls="pInv">Inventario</button>
     <button type="button" role="tab" id="tabPed"   aria-selected="false" aria-controls="pPed">Pedidos</button>
+    <button type="button" role="tab" id="tabBolsa" aria-selected="false" aria-controls="pBolsa">Impresión bolsa</button>
     <button type="button" role="tab" id="tabHist"  aria-selected="false" aria-controls="pHist">Historial</button>
     <button type="button" role="tab" id="tabProm"  aria-selected="false" aria-controls="pProm">Promedios</button>
     <button type="button" role="tab" id="tabParam" aria-selected="false" aria-controls="pParam">Parámetros</button>
@@ -144,6 +145,36 @@
   </section>
 
   <!-- ============ HISTORIAL ============ -->
+  <!-- ============ IMPRESION BOLSA ============ -->
+  <section class="panel" id="pBolsa" role="tabpanel" aria-labelledby="tabBolsa" hidden>
+    <div class="card" style="margin-bottom:14px">
+      <div class="fila">
+        <div class="campo"><label for="inFechaBolsa">Día de producción</label>
+          <input type="date" id="inFechaBolsa" style="min-width:160px"></div>
+        <div class="campo"><label for="inHd7z2">10HD7 en Zona 2 (qq)</label>
+          <input class="inqq" inputmode="decimal" id="inHd7z2" style="width:120px"></div>
+        <div class="campo"><label for="inMu1">MU1 producido (unidades)</label>
+          <input class="inqq" inputmode="decimal" id="inMu1" style="width:140px"></div>
+        <div class="campo" style="margin-left:auto;align-items:flex-end">
+          <label>&nbsp;</label>
+          <button class="btn" id="btnBolsaPdf" type="button">PDF para imprimir</button></div>
+      </div>
+      <p class="sub" style="margin-bottom:0">
+        Los quintales de Zona 18 y de Zona 2 CZ salen del reparto del día. <b>QQ AM Z2</b> se
+        escribe a mano: son los quintales producidos <b>hoy</b> en esa planta, y la foto de Z2
+        trae los de ayer. Debajo de cada casilla sale lo que puso el reparto, por si sirve:
+        tócalo para copiarlo. Enter y Tab bajan por la misma columna. <b>OH</b> es lo que ya hay
+        impreso y se resta. Esta hoja <b>no se sincroniza</b>: se queda en este equipo.
+      </p>
+    </div>
+    <div class="kpis" id="kpisBolsa"></div>
+    <div id="avisosBolsa"></div>
+    <div class="tablabox">
+      <table id="tablaBolsa"><thead id="theadBolsa"></thead><tbody id="tbodyBolsa"></tbody>
+        <tfoot id="tfootBolsa"></tfoot></table>
+    </div>
+  </section>
+
   <section class="panel" id="pHist" role="tabpanel" aria-labelledby="tabHist" hidden>
     <div class="card" style="margin-bottom:14px">
       <h3>Historial</h3>
@@ -223,6 +254,7 @@
 <script src="js/lectorz2.js"></script>
 <script src="js/archivo.js"></script>
 <script src="js/resumen.js"></script>
+<script src="js/bolsa.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/ui.js"></script>
 <script>

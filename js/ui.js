@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.14';
+  const VERSION = 'V.2026.15';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -556,6 +556,88 @@
           <button class="btn sec mini" type="button" data-pedborrar="${esc(p.id)}" aria-label="Borrar">×</button></td>
       </tr>`;
     }).join('');
+  }
+
+  // ================= IMPRESIÓN BOLSA =================
+  /* La fecha de esta pestaña sigue a la de Producción: es la misma jornada.
+     Se puede mover aparte para revisar un día viejo sin perder el de trabajo. */
+  function pintarBolsa() {
+    const B = window.Bolsa;
+    const fecha = ui.fechaBolsa || ui.fecha;
+    ui.fechaBolsa = fecha;
+    const b = D.estado.bolsa[fecha] || {};
+    $('#inFechaBolsa').value = fecha;
+    $('#inHd7z2').value = b.hd7z2 || '';
+    $('#inMu1').value = b.mu1 || '';
+
+    const fs = B.enTotal(B.calcular(fecha));
+    const t = B.totales(fs);
+    const dAM = D.fechaCorta(fecha);
+    const dPM = D.fechaCorta(D.sumarDias(fecha, 1));
+
+    $('#theadBolsa').innerHTML = `<tr>
+      ${th2('P PROD', '')}${th2('ITEM', '', 'l')}${th2('RENDIM', 'bolsas/qq')}
+      ${th2('QQ AM Z18', dAM)}${th2('QQ PM Z18', dAM)}${th2('QQ PM Z2', dAM)}${th2('QQ AM Z2', dAM)}
+      ${th2('PROD AM', dAM)}${th2('PROD PM', dAM)}${th2('OH', 'ya impreso')}
+      ${th2('EMPAQUE AM', dPM)}${th2('EMPAQUE PM', dAM)}${th2('TOTAL PROD', '')}</tr>`;
+
+    const celQQ = (f, k) => `<td class="num dim">${f.qq[k] ? n2(f.qq[k]) : ''}</td>`;
+    $('#tbodyBolsa').innerHTML = fs.map((f) => {
+      const calc = f.tipo === 'clave' || f.tipo === 'suma';
+      const cls = [f.tipo === 'suma' ? 'suma' : (calc ? '' : 'aparte'),
+        f.cuenta === false ? 'nocuenta' : ''].filter(Boolean).join(' ');
+      const pie = f.nota ? f.nota : (f.cuenta === false ? 'va en la fila 2 + 18' : '');
+      return `<tr${cls ? ` class="${cls}"` : ''}>
+        <td class="num dim">${esc(f.pprod)}</td>
+        <td class="l clave">${esc(f.nombre)}${pie ? `<span class="mini">${esc(pie)}</span>` : ''}</td>
+        <td class="num dim">${f.rend ? n0(f.rend) : ''}</td>
+        ${calc ? celQQ(f, 'amZ18') + celQQ(f, 'pmZ18') + celQQ(f, 'pmZ2') : '<td></td><td></td><td></td>'}
+        <td>${calc ? `<input class="inqq ${f.amZ2Manual ? 'puesto' : ''}" inputmode="decimal"
+          enterkeyhint="next" data-bcampo="qqAmZ2" data-bid="${esc(f.id)}"
+          value="${f.amZ2Manual ? n2(f.qq.amZ2) : ''}"
+          aria-label="QQ AM Z2 de ${esc(f.nombre)}">${f.plan && !f.amZ2Manual
+            ? `<button type="button" class="plan" data-bplan="${esc(f.id)}" data-bval="${f.plan}"
+                title="Lo que el reparto puso en Zona 2 ese día. Tócalo para copiarlo.">${n2(f.plan)}</button>`
+            : ''}` : ''}</td>
+        <td class="num">${f.prodAM ? n0(f.prodAM) : ''}</td>
+        <td class="num">${f.prodPM ? n0(f.prodPM) : ''}</td>
+        <td><input class="inqq" inputmode="decimal" enterkeyhint="next"
+          data-bcampo="oh" data-bid="${esc(f.id)}" value="${f.oh || ''}"
+          aria-label="OH de ${esc(f.nombre)}"></td>
+        <td class="num bolsas">${f.empAM ? n0(f.empAM) : ''}</td>
+        <td class="num bolsas">${f.empPM ? n0(f.empPM) : ''}</td>
+        <td>${f.manual
+          ? `<input class="inqq" inputmode="decimal" enterkeyhint="next"
+              data-bcampo="manual" data-bid="${esc(f.id)}" value="${f.total || ''}"
+              aria-label="Total de ${esc(f.nombre)}">`
+          : `<b class="num">${f.total ? n0(f.total) : ''}</b>`}</td>
+      </tr>`;
+    }).join('');
+
+    $('#tfootBolsa').innerHTML = `<tr>
+      <td></td><td class="l">TOTAL</td><td></td><td></td><td></td><td></td><td></td>
+      <td class="num"><b>${n0(t.prodAM)}</b></td><td class="num"><b>${n0(t.prodPM)}</b></td><td></td>
+      <td class="num"><b>${n0(t.empAM)}</b></td><td class="num"><b>${n0(t.empPM)}</b></td>
+      <td class="num"><b>${n0(t.total)}</b></td></tr>`;
+
+    $('#kpisBolsa').innerHTML =
+      kpi('Bolsas a imprimir', n0(t.total)) +
+      kpi(`Empaque AM · ${dPM}`, n0(t.empAM)) +
+      kpi(`Empaque PM · ${dAM}`, n0(t.empPM)) +
+      kpi('Claves con bolsa', fs.filter((f) => f.total > 0).length);
+
+    const av = [];
+    const sinQQ = fs.filter((f) => (f.tipo === 'clave' || f.tipo === 'suma')
+      && !f.qq.amZ18 && !f.qq.pmZ18 && !f.qq.amZ2 && !f.qq.pmZ2).length;
+    if (sinQQ === fs.filter((f) => f.tipo === 'clave' || f.tipo === 'suma').length) {
+      av.push(['warn', 'Todavía no hay reparto de ese día',
+        'Los quintales salen de la pestaña Producción. Reparte ahí y esta tabla se llena sola.']);
+    }
+    av.push(['', 'El empaque va cruzado a propósito',
+      `EMPAQUE AM sale de PROD PM y EMPAQUE PM de PROD AM: la bolsa que se imprime en la `
+      + `mañana del ${dPM} lleva el pan hecho la tarde del ${dAM}.`]);
+    $('#avisosBolsa').innerHTML = av.map(([c, h, p]) =>
+      `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p)}</p></div>`).join('');
   }
 
   // ================= HISTORIAL =================
@@ -1321,8 +1403,10 @@
 
   function enlazar() {
     // pestañas
-    const paneles = { prod: '#pProd', inv: '#pInv', ped: '#pPed', hist: '#pHist', prom: '#pProm', param: '#pParam' };
-    const tabs = { prod: '#tabProd', inv: '#tabInv', ped: '#tabPed', hist: '#tabHist', prom: '#tabProm', param: '#tabParam' };
+    const paneles = { prod: '#pProd', inv: '#pInv', ped: '#pPed', bolsa: '#pBolsa',
+      hist: '#pHist', prom: '#pProm', param: '#pParam' };
+    const tabs = { prod: '#tabProd', inv: '#tabInv', ped: '#tabPed', bolsa: '#tabBolsa',
+      hist: '#tabHist', prom: '#tabProm', param: '#tabParam' };
     window.irA = (k) => {
       ui.tab = k;
       Object.keys(paneles).forEach((x) => {
@@ -1333,6 +1417,7 @@
       if (k === 'prod') pintarProduccion();
       if (k === 'inv') pintarInventario();
       if (k === 'ped') pintarPedidos();
+      if (k === 'bolsa') pintarBolsa();
       if (k === 'hist') pintarHistorial();
       if (k === 'prom') pintarPromedios();
       if (k === 'param') pintarParametros();
@@ -1535,9 +1620,12 @@
 
     /* La foto de Zona 2 trae lo que YA se produjo, así que pisa el reparto de
        esos turnos en vez de sumarse: lo que diga la hoja es lo que hubo. Los
-       demás turnos no se tocan. */
+       demás turnos no se tocan.
+       Va al día que dice la hoja, sin preguntar: esa foto llega al día
+       siguiente y siempre trae la producción de ayer. Preguntarlo todos los
+       días sería un clic de más para la respuesta de siempre. */
     $('#btnFotoZ2').onclick = () => window.LectorZ2.abrir(async (res) => {
-      const destino = await entraEn(res.fecha, 'la producción de Zona 2');
+      const destino = res.fecha || ui.fecha;
       const r = D.registro(destino);
       const ids = D.turnosDeArea('Z2').map((t) => t.id);
       let n = 0;
@@ -1553,9 +1641,68 @@
       pintarInventario(); pintarProduccion();
       const qq = Object.values(res.matriz).reduce((a, f) =>
         a + Object.values(f).reduce((x, v) => x + v, 0), 0);
-      aviso(`Producción de Zona 2 en ${D.fechaCorta(destino)}: ${n} claves, ${n2(C.redondea(qq, 2))} qq.`
+      aviso(`Producción de Zona 2 guardada en el ${D.fechaCorta(destino)}`
+        + `${destino !== ui.fecha ? ', que es el día de la hoja' : ''}: `
+        + `${n} claves, ${n2(C.redondea(qq, 2))} qq.`
         + (res.dudosas && res.dudosas.length ? ` Revisa ${res.dudosas.length} celda${res.dudosas.length > 1 ? 's' : ''}.` : ''));
     });
+
+    // impresión bolsa
+    $('#inFechaBolsa').onchange = (e) => {
+      ui.fechaBolsa = e.target.value || D.hoyISO(); pintarBolsa();
+    };
+    ['#inHd7z2', '#inMu1'].forEach((s) => {
+      $(s).onchange = (e) => {
+        window.Bolsa.escribir(ui.fechaBolsa, s === '#inHd7z2' ? 'hd7z2' : 'mu1', null, e.target.value);
+        pintarBolsa();
+      };
+    });
+    $('#tbodyBolsa').addEventListener('change', (e) => {
+      const t = e.target;
+      if (!t.matches('input.inqq')) return;
+      window.Bolsa.escribir(ui.fechaBolsa, t.dataset.bcampo, t.dataset.bid, t.value);
+      pintarBolsa();
+    });
+    /* La sugerencia del reparto se copia tocándola, no entra sola: lo que va
+       en esa columna es lo que de verdad se produjo hoy en Zona 2. */
+    $('#tbodyBolsa').addEventListener('click', (e) => {
+      const p = e.target.closest('[data-bplan]');
+      if (!p) return;
+      window.Bolsa.escribir(ui.fechaBolsa, 'qqAmZ2', p.dataset.bplan, p.dataset.bval);
+      pintarBolsa();
+    });
+    /* Enter baja por la misma columna, que es como se llena una hoja así: una
+       columna entera de arriba abajo, no una fila a la vez. */
+    $('#tbodyBolsa').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || !e.target.matches('input.inqq')) return;
+      e.preventDefault();
+      const campo = e.target.dataset.bcampo;
+      const ins = [...document.querySelectorAll(`#tbodyBolsa input.inqq[data-bcampo="${campo}"]`)];
+      const i = ins.indexOf(e.target);
+      /* Al cambiar el valor la tabla se vuelve a pintar, así que el siguiente
+         campo se busca después de ese repintado. */
+      const sig = ins[i + 1];
+      const id = sig && sig.dataset.bid;
+      e.target.blur();
+      if (!id) return;
+      setTimeout(() => {
+        const n = document.querySelector(`#tbodyBolsa input.inqq[data-bcampo="${campo}"][data-bid="${CSS.escape(id)}"]`);
+        if (n) { n.focus(); n.select(); }
+      }, 0);
+    });
+    /* Un toque en la celda del teléfono o la tablet selecciona lo que hay,
+       para escribir encima sin tener que borrar. */
+    $('#tbodyBolsa').addEventListener('focusin', (e) => {
+      if (e.target.matches('input.inqq')) e.target.select();
+    });
+    $('#btnBolsaPdf').onclick = async () => {
+      try {
+        const { blob, nombre } = window.Bolsa.pdf(ui.fechaBolsa);
+        const r = await descargar(blob, nombre, window.Archivo.TIPO_PDF);
+        if (r.modo === 'cancelado') return;
+        aviso(`PDF guardado${donde(r)}.`);
+      } catch (err) { aviso('No se pudo armar el PDF: ' + err.message, 'err'); }
+    };
 
     $('#btnImportInv').onclick = () => $('#fileInv').click();
     $('#fileInv').onchange = (e) => importar(e, async (libro, archivo) => {
@@ -1608,7 +1755,8 @@
     });
     $('#btnRespaldo').onclick = async () => {
       const data = { version: VERSION, fecha: new Date().toISOString(),
-        params: D.estado.params, prom: D.estado.prom, pedidos: D.estado.pedidos, dias: D.estado.dias };
+        params: D.estado.params, prom: D.estado.prom, pedidos: D.estado.pedidos,
+        dias: D.estado.dias, bolsa: D.estado.bolsa };
       const r = await descargar(new Blob([JSON.stringify(data)], { type: 'application/json' }),
         `Respaldo_Produccion_${D.hoyISO().replace(/-/g, '_')}.json`, TIPO_JSON);
       if (r.modo === 'cancelado') return;
@@ -1626,8 +1774,9 @@
         D.estado.params = D.fusionarParams(d.params);
         if (d.prom) D.estado.prom = d.prom;
         if (d.pedidos) D.estado.pedidos = d.pedidos;
+        if (d.bolsa) D.estado.bolsa = d.bolsa;
         D.estado.dias = d.dias;
-        D.guardarParams(); D.guardarProm(); D.guardarPedidos(); D.guardarDias();
+        D.guardarParams(); D.guardarProm(); D.guardarPedidos(); D.guardarDias(); D.guardarBolsa();
         pintarHistorial(); aviso('Respaldo restaurado.');
       } catch (err) { aviso('No se pudo restaurar: ' + err.message, 'err'); }
     };

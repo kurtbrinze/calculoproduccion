@@ -76,12 +76,15 @@
      tablet y el reparto que hizo la laptop el mismo día. */
   const PROF = { params: 0, prom: 1, pedidos: 1 };
 
-  /* Los días recientes se comparan clave por clave: ahí es donde los dos
-     equipos escriben el mismo día y hay que conservar lo de ambos. Los días
-     viejos ya nadie los toca, así que con una sola huella por día alcanza y la
-     memoria de comparación pesa la mitad que comparando todo por sección. */
+  /* Los días recientes se comparan hasta la última casilla: la clave dentro de
+     la sección y, donde hay otro nivel, el turno o la celda de impresión de
+     bolsa. Ahí es donde los dos equipos escriben el mismo día y hay que
+     conservar lo de ambos. Los días viejos ya nadie los toca, así que con una
+     sola huella por día alcanza y la memoria de comparación pesa la mitad que
+     comparando todo por sección. */
   const DIAS_FINOS = 60;
-  const profDia = (fecha) => (fecha >= D.sumarDias(D.hoyISO(), -DIAS_FINOS) ? 2 : 0);
+  const PROF_DIA = 3;
+  const profDia = (fecha) => (fecha >= D.sumarDias(D.hoyISO(), -DIAS_FINOS) ? PROF_DIA : 0);
 
   const esObjeto = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
@@ -96,6 +99,27 @@
     });
     return out;
   }
+  /**
+   * El mismo valor, resumido con la FORMA que tenga la base en vez de con la
+   * profundidad de hoy: donde la base guardó una huella suelta se compara una
+   * huella, y donde guardó un árbol se baja.
+   *
+   * Hace falta porque la profundidad cambia entre versiones. Comparando con la
+   * profundidad de hoy contra una base escrita por la versión anterior, nada
+   * cuadraría nunca, y un día borrado en el otro equipo reviviría la primera
+   * vez que se sincroniza después de actualizar.
+   */
+  function comoLaBase(v, b) {
+    if (!esObjeto(b) || !esObjeto(v)) return huella(v);
+    const out = {};
+    new Set([...Object.keys(v), ...Object.keys(b)]).forEach((k) => {
+      if (k === 'migrado') return;
+      if (esObjeto(v[k]) && !Object.keys(v[k]).length) return;
+      out[k] = comoLaBase(v[k], b[k]);
+    });
+    return out;
+  }
+
   /** Los días no van todos a la misma profundidad. */
   function arbolDias(dias) {
     const out = {};
@@ -166,7 +190,12 @@
     const hayL = l !== undefined, hayR = r !== undefined;
     if (!hayL && !hayR) return AUSENTE;
 
-    if (prof > 0 && esObjeto(l) && esObjeto(r)) {
+    /* Una base guardada por una versión que comparaba más grueso deja una
+       huella suelta donde ésta esperaría un árbol. Ahí se para: se compara ese
+       nodo entero, como lo hacía la versión que la escribió. Si no, un día
+       borrado del otro lado reviviría la primera vez que se sincroniza después
+       de actualizar. La base se reescribe con la forma nueva al terminar. */
+    if (prof > 0 && esObjeto(l) && esObjeto(r) && typeof b !== 'string') {
       const out = {};
       const bb = esObjeto(b) ? b : {};
       new Set([...Object.keys(l), ...Object.keys(r), ...Object.keys(bb)]).forEach((k) => {
@@ -180,7 +209,7 @@
     /* La comparación contra la base se hace con la misma forma de árbol que
        tenga esa rama: si no, una huella suelta nunca cuadra contra un árbol y
        un borrado se deshace solo. */
-    const comoBase = (v) => b !== undefined && canon(arbol(v, prof)) === canon(b);
+    const comoBase = (v) => b !== undefined && canon(comoLaBase(v, b)) === canon(b);
     const hL = hayL ? huella(l) : null;
     const hR = hayR ? huella(r) : null;
     const hayB = b !== undefined;

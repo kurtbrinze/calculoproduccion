@@ -562,7 +562,7 @@
 
   window.Resumen = {
     abrir, datos, imagenSimple, imagenCompleta, pdf, pdfBytes,
-    // el dibujo, que reusa la tabla de feriados
-    lienzo, celda, aBlob, compartir, COL,
+    // el dibujo, que reusan la tabla de feriados y la de impresión de bolsa
+    lienzo, celda, aBlob, compartir, COL, hoja, anchoTexto, fechaArchivo,
   };
 })();

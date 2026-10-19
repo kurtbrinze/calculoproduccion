@@ -66,7 +66,9 @@ Incluye TODAS las claves de la lista, en el mismo orden, y dentro de cada una TO
     turnos.forEach((t) => { porNombre[t.nombre.toUpperCase()] = t.id; });
 
     const vacia = () => Object.fromEntries(claves.map((c) => [c, {}]));
-    const st = { dataUrl: null, b64: null, mime: null, fecha: null,
+    /* La hoja llega al día siguiente: trae la producción de ayer. Si la foto
+       no deja leer la fecha, ayer es la apuesta correcta. */
+    const st = { dataUrl: null, b64: null, mime: null, fecha: D.sumarDias(D.hoyISO(), -1),
       vals: vacia(), crudos: {}, dudosas: new Set(), leido: false };
 
     const m = document.createElement('div');
@@ -83,6 +85,8 @@ Incluye TODAS las claves de la lista, en el mismo orden, y dentro de cada una TO
             <p class="sub" style="margin-top:0">
               Toma la foto de la hoja completa y plana. La app copia sólo el bloque
               de columnas de las personas; el inventario de la izquierda se descarta.
+              Lo leído se guarda en el día que dice la hoja, que es el de la producción
+              de ayer, no el de hoy.
             </p>
             <div class="fila">
               <button class="btn ghost" type="button" id="zCam">Tomar foto</button>
@@ -207,7 +211,7 @@ Incluye TODAS las claves de la lista, en el mismo orden, y dentro de cada una TO
             + 'Si usas servidor propio, necesita una versión que acepte instrucciones; '
             + 'mientras tanto el modo llave sí funciona.');
         }
-        st.fecha = (data.fecha && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) ? data.fecha : null;
+        if (data.fecha && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) st.fecha = data.fecha;
         st.dudosas = new Set((data.dudosas || []).map((x) => {
           const [c, p] = String(x).split('|');
           const id = porNombre[String(p || '').trim().toUpperCase()];
@@ -227,8 +231,10 @@ Incluye TODAS las claves de la lista, en el mismo orden, y dentro de cada una TO
         st.vals = dst;
         st.leido = true;
         pintar();
-        decir(st.fecha ? `Listo. Fecha leída: ${ddmmaaaa(st.fecha)}.` : 'Listo, pero no se leyó la fecha. Escríbela arriba.');
-        if (!st.fecha) q('#zFecha').focus();
+        const leida = data.fecha && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha);
+        decir(leida ? `Listo. Fecha leída: ${ddmmaaaa(st.fecha)}.`
+          : `Listo, pero no se leyó la fecha. Quedó en ${ddmmaaaa(st.fecha)}; cámbiala si no es.`);
+        if (!leida) q('#zFecha').focus();
       } catch (err) {
         decir('No se pudo leer: ' + err.message, true);
         q('#zLeer').disabled = false;

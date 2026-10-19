@@ -245,6 +245,21 @@ tr.detalle td{background:#0E1621;padding:0;border-bottom:2px solid var(--line-2)
 .planta .qq span{color:var(--muted);font-size:.85rem}
 .planta.ambas{border-style:dashed}
 
+/* ---------- impresión de bolsa ---------- */
+/* Las filas que suman dos plantas y las que se cuentan a mano se separan de
+   las de catálogo, que es como están en la hoja de papel. */
+#tbodyBolsa tr.suma td{border-top:1px solid var(--line);background:rgba(255,255,255,.03)}
+#tbodyBolsa tr.aparte td{color:var(--muted)}
+/* la fila de una clave que más abajo se suma: no es la que se imprime */
+#tbodyBolsa tr.nocuenta td.num,#tbodyBolsa tr.nocuenta td.bolsas{opacity:.55}
+#tfootBolsa td{border-top:2px solid var(--line);padding-top:8px}
+#tablaBolsa td{padding-top:4px;padding-bottom:4px}
+#tablaBolsa .inqq{width:74px}
+/* la sugerencia del reparto: se ve, se toca y se copia, pero no es un dato */
+.plan{display:block;margin:3px auto 0;border:0;background:none;padding:2px 5px;
+  color:var(--muted);font:inherit;font-size:.72rem;cursor:pointer;border-radius:5px}
+.plan:hover{color:var(--btn-texto);background:rgba(255,255,255,.05)}
+
 /* ---------- feriados ---------- */
 table.tfer td.mom{color:var(--muted);font-size:.78rem;width:34px}
 table.tfer th.hoyfer{color:var(--ok)}

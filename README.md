@@ -7,7 +7,7 @@ como historial para comparar temporadas.
 Todo se procesa en el dispositivo. Lo único que sale es la foto del inventario, y sólo hacia
 el lector que tú conectes (ver [LECTOR.md](LECTOR.md)).
 
-## Las seis pestañas
+## Las siete pestañas
 
 **Producción** es el tablero. Arriba, los totales y cómo va cada turno contra su tope. Abajo,
 una tabla por **área de producción** —Sándwich, Redondo y Magdalenas de Zona 18, Dulce y
@@ -40,6 +40,11 @@ de la izquierda: ese sigue entrando por **Leer INV PM**. La tabla se revisa cont
 de pasarla, con las celdas dudosas marcadas, y Enter baja por la columna de la misma persona,
 que es como se teclea una hoja así. Al pasarla **pisa** lo que hubiera en esos turnos: la hoja
 dice lo que de verdad se produjo.
+
+**Esa hoja llega al día siguiente**, así que trae la producción de ayer. Lo leído se guarda en
+el día que dice la hoja, sin preguntar, y el día de trabajo no se mueve. De ahí sale el
+`PROD AYER` de hoy: lo que Zona 2 hizo ayer se suma al conteo de ayer para saber con qué se
+amanece. Si la foto no deja leer la fecha, queda en ayer y se puede cambiar arriba.
 
 ### Resumen del día
 
@@ -131,6 +136,9 @@ Dos cosas que conviene saber: el app **no aparta producto**, sólo se asegura de
 esté, así que la venta normal puede comerse lo que se hizo para un pedido; y la anticipación
 mínima real es de un día, porque lo que se produce hoy está disponible desde mañana.
 
+**Impresión bolsa** arma las bolsas a imprimir con su lote y vencimiento, a partir del reparto
+del día. Tiene su propia sección [más abajo](#impresión-bolsa).
+
 **Historial** guarda cada día cerrado, con cuatro vistas —por turno, por planta, por clave e
 inventario INV PM— y las exporta a Excel, cada tabla por separado o todas en un libro:
 `Hx Prod`, `Hx Prod_x_Planta`, `Hx Prod_x_Turno`, `Hx Prod_Clave_Planta`, `Hx Inv` y un
@@ -213,8 +221,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.14';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.14';`
+1. `js/ui.js` → `const VERSION = 'V.2026.15';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.15';`
 
 ## Plantas, claves y productos nuevos
 
@@ -263,6 +271,58 @@ En la tabla de productos, **Editar** cambia la clave y arrastra promedios e hist
 que hace falta cuando IN16 pase a ser LS19B — y **Agregar producto** da de alta uno nuevo con
 su rendimiento, unidad, múltiplo y plantas. Los topes de producción salen de los turnos que se
 le marquen.
+
+## Impresión bolsa
+
+La pestaña **Impresión bolsa** dice cuántas bolsas hay que mandar a imprimir con su lote y
+vencimiento. Es la tabla `Nueva` de `Calc_Bolsa`, con los quintales ya puestos.
+
+| Columna | De dónde sale |
+|---|---|
+| P PROD | La planta de esa fila: `18`, `2 CZ`, `2` o `2 + 18` |
+| ITEM | La clave, con su alias si tiene |
+| RENDIM | Bolsas por quintal, del catálogo |
+| QQ AM Z18 / QQ PM Z18 | Lo decidido en los turnos de Zona 18, de mañana y de tarde |
+| QQ PM Z2 | Byron y Julio, y lo que caiga de tarde en la planta Zona 2 |
+| QQ AM Z2 | **Se escribe a mano**: los quintales producidos **hoy** en Zona 2 |
+| PROD AM / PROD PM | Rendimiento × quintales de ese momento |
+| OH | Lo que ya hay impreso. Se resta del empaque |
+| EMPAQUE AM | `PROD PM − OH`, redondeado a diez |
+| EMPAQUE PM | `PROD AM − OH`, redondeado a diez |
+| TOTAL PROD | Los dos empaques |
+
+**`QQ AM Z2` va a mano y es a propósito.** Ahí van los quintales que Zona 2 produce **hoy**,
+y ese dato todavía no está en el app cuando se arma la hoja: la foto de Zona 2 que se lee hoy
+trae la producción de **ayer**. Lo que el reparto haya puesto en esos turnos sale debajo de la
+casilla como sugerencia —se toca y se copia— pero nunca entra solo, porque un plan no es un
+hecho.
+
+**Esta hoja no se sincroniza.** Se guarda aparte de los días, en el equipo donde se imprime.
+Sí entra en el respaldo.
+
+**El cruce es a propósito.** EMPAQUE AM sale de PROD PM y EMPAQUE PM de PROD AM: la bolsa que
+se imprime en la mañana lleva el pan hecho la tarde anterior. Los encabezados traen la fecha de
+cada uno para que se vea.
+
+Una clave que se hace en dos plantas lleva una fila por planta y, más abajo, una fila **2 + 18**
+que las suma, porque la bolsa es la misma. Esa suma es la que se imprime: las filas de arriba
+salen apagadas con «va en la fila 2 + 18» y **no entran en el total**, para no pedir el doble.
+
+Tres casos aparte, como en la hoja:
+
+- **10HD7 en Zona 2** se anota arriba en quintales y manda sobre el empaque PM de su fila.
+- **MU1** no lo calcula esta app: se escriben las unidades producidas y de ahí salen las bolsas
+  de seis — `techo(redondeo(1.01 × entero(unidades ÷ 6)) a diez)` — menos las de doce, que
+  llevan el doble de unidades cada una.
+- Las presentaciones que se cuentan a mano (5HD2, 15PL1, 8PL1, 10S11T, 12S11T, 10WY1 M y G)
+  tienen el TOTAL escribible.
+
+**Enter y Tab bajan por la misma columna**, no por la fila: una hoja así se llena una columna
+entera de arriba abajo. Al entrar a una celda se selecciona lo que hay, para escribir encima de
+un toque en la tablet.
+
+**PDF para imprimir** saca la tabla entera en carta vertical, con el mismo recorte que el área
+de impresión del Excel. Se guarda en la carpeta elegida, igual que los demás archivos.
 
 ## Feriados
 
@@ -325,6 +385,7 @@ equipo. La sincronización mantiene a los dos iguales, así que un borrado por e
 | `js/lectorz2.js` | Lectura de la foto de producción de Zona 2 |
 | `js/sync.js` | Mezcla y sincronización entre equipos |
 | `js/resumen.js` | Imágenes y PDF del resumen del día |
+| `js/bolsa.js` | Impresión de bolsa: la tabla y su PDF |
 | `js/ui.js` | Pantallas |
 | `api/extract.js` | El lector de inventario, para desplegar en Vercel |
 | `api/leer.js` | El lector que acepta instrucciones, para las dos hojas |

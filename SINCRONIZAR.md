@@ -72,9 +72,16 @@ los dos equipos — gana el equipo donde tocaste **Sincronizar** y el aviso dice
 cuál casilla, no sólo el día: `MIE 14/10 (INV PM S19)`. Si lo bueno era lo del
 otro, se corrige ahí y se sincroniza de nuevo.
 
-Los días de los últimos dos meses se comparan clave por clave; los más viejos,
-que ya nadie toca, de un solo golpe. Así la memoria de comparación se queda en
-unos 100 KB en vez de crecer sin freno.
+Los días de los últimos dos meses se comparan hasta la última casilla —la
+clave, y dentro de ella el turno o la celda de impresión de bolsa—; los más
+viejos, que ya nadie toca, de un solo golpe. Así la memoria de comparación se
+queda en unos 110 KB en vez de crecer sin freno.
+
+## Qué no viaja
+
+**Impresión bolsa** no se sincroniza: es una hoja de trabajo del equipo donde se imprime y se
+guarda aparte de los días. Tampoco viajan el PDF ni las imágenes del resumen, que se generan
+en el momento. Todo lo demás —ajustes, promedios, días, pedidos— sí.
 
 ## Cuándo sincroniza
 
