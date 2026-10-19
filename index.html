@@ -37,6 +37,7 @@
     <button type="button" role="tab" id="tabInv"   aria-selected="false" aria-controls="pInv">Inventario</button>
     <button type="button" role="tab" id="tabPed"   aria-selected="false" aria-controls="pPed">Pedidos</button>
     <button type="button" role="tab" id="tabBolsa" aria-selected="false" aria-controls="pBolsa">Impresión bolsa</button>
+    <button type="button" role="tab" id="tabSec"   aria-selected="false" aria-controls="pSec">Cálculos</button>
     <button type="button" role="tab" id="tabHist"  aria-selected="false" aria-controls="pHist">Historial</button>
     <button type="button" role="tab" id="tabProm"  aria-selected="false" aria-controls="pProm">Promedios</button>
     <button type="button" role="tab" id="tabParam" aria-selected="false" aria-controls="pParam">Parámetros</button>
@@ -175,6 +176,27 @@
     </div>
   </section>
 
+  <!-- ============ CALCULOS SECUNDARIOS ============ -->
+  <section class="panel" id="pSec" role="tabpanel" aria-labelledby="tabSec" hidden>
+    <div class="card" style="margin-bottom:14px">
+      <div class="fila">
+        <div>
+          <h3 style="margin:0 0 4px">Cálculos secundarios</h3>
+          <p class="sub" style="margin:0">
+            Conversiones sueltas de parrillas y perchas, para decidir en el momento y
+            apuntarlas a mano. <b>No tocan nada</b>: ni el inventario, ni la producción,
+            ni el historial, y no se sincronizan. Se guardan sólo en este equipo para
+            que una recarga no borre lo escrito.
+          </p>
+        </div>
+        <div class="campo" style="margin-left:auto;align-items:flex-end">
+          <label>&nbsp;</label>
+          <button class="btn sec" id="btnSecLimpiar" type="button">Limpiar todo</button></div>
+      </div>
+    </div>
+    <div id="secCont"></div>
+  </section>
+
   <section class="panel" id="pHist" role="tabpanel" aria-labelledby="tabHist" hidden>
     <div class="card" style="margin-bottom:14px">
       <h3>Historial</h3>
@@ -255,6 +277,7 @@
 <script src="js/archivo.js"></script>
 <script src="js/resumen.js"></script>
 <script src="js/bolsa.js"></script>
+<script src="js/secundarios.js"></script>
 <script src="js/sync.js"></script>
 <script src="js/ui.js"></script>
 <script>

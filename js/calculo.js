@@ -371,8 +371,8 @@
    */
   function turnoTrabaja(params, turnoId, fecha) {
     if (!fecha) return true;
-    const t = D.turnoPorId[turnoId] || (params.turnos[turnoId] || {});
-    return D.plantaTrabaja(params, D.plantaDeTurno(turnoId), fecha, t.momento || null);
+    return D.plantaTrabaja(params, D.plantaDeTurno(turnoId), fecha,
+      D.momentoDeTurno(turnoId, fecha));
   }
 
   /** Cuánto lleva cada turno contra su tope. */
@@ -382,7 +382,8 @@
       const cfg = estado.params.turnos[t.id] || {};
       const trabaja = turnoTrabaja(estado.params, t.id, fecha);
       out[t.id] = {
-        id: t.id, nombre: t.nombre, papel: t.papel, momento: t.momento,
+        id: t.id, nombre: t.nombre, papel: t.papel,
+        momento: D.momentoDeTurno(t.id, fecha), rota: !!t.rota,
         planta: D.plantaDeTurno(t.id), trabaja,
         tope: Number(cfg.tope) || 0, minimo: Number(cfg.minimo) || 0,
         activo: cfg.activo !== false && trabaja,

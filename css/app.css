@@ -260,6 +260,16 @@ tr.detalle td{background:#0E1621;padding:0;border-bottom:2px solid var(--line-2)
   color:var(--muted);font:inherit;font-size:.72rem;cursor:pointer;border-radius:5px}
 .plan:hover{color:var(--btn-texto);background:rgba(255,255,255,.05)}
 
+/* el momento que le toca esta semana a un turno que rota */
+.chip.mom{font-size:.66rem;padding:1px 6px;vertical-align:middle;
+  background:var(--info-soft);color:var(--btn-texto)}
+
+/* ---------- cálculos secundarios ---------- */
+#secCont .inqq{width:92px}
+/* la casilla que es la misma de otra tabla */
+#secCont .inqq.espejo{border-style:dashed}
+#secCont tfoot td{border-top:1px solid var(--line);padding-top:8px}
+
 /* ---------- feriados ---------- */
 table.tfer td.mom{color:var(--muted);font-size:.78rem;width:34px}
 table.tfer th.hoyfer{color:var(--ok)}

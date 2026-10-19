@@ -26,8 +26,11 @@
     /* Panaderos PM corre lleno con 10HD7 todos los días, por eso trae mínimo. */
     { id: 'PAN_PM',  nombre: 'Panaderos PM', papel: 'Grande PM',  tope: 12, minimo: 12, momento: 'PM', planta: 'Z18' },
     { id: 'RED_PM',  nombre: 'Redondo PM',   papel: 'Máquina PM', tope: 34, minimo: 0,  momento: 'PM', planta: 'Z18' },
-    { id: 'BYRON',   nombre: 'Byron',        papel: 'B',          tope: 12, minimo: 0,  momento: 'PM', planta: 'Z2CZ' },
-    { id: 'JULIO',   nombre: 'Julio',        papel: 'J',          tope: 12, minimo: 0,  momento: 'PM', planta: 'Z2CZ' },
+    /* Byron y Julio se turnan la mañana y la tarde una semana cada uno; el
+       `momento` de fábrica es sólo el punto de partida, lo que manda es
+       `momentoDeTurno`. */
+    { id: 'BYRON',   nombre: 'Byron',        papel: 'B',          tope: 12, minimo: 0,  momento: 'AM', planta: 'Z2CZ', rota: true },
+    { id: 'JULIO',   nombre: 'Julio',        papel: 'J',          tope: 12, minimo: 0,  momento: 'PM', planta: 'Z2CZ', rota: true },
     /* Planta Zona 2. Los topes son un punto de partida: la hoja a mano trae
        entre 11 y 17 qq por persona. Se ajustan en Parámetros. */
     { id: 'LUCAS',   nombre: 'Lucas',        papel: 'L',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
@@ -289,6 +292,10 @@
       diferenciados: JSON.parse(JSON.stringify(DIFERENCIADOS)),
       pedidos: { anticipacion: ANTICIPACION },
       calendario: CALENDARIO_INICIAL.map((c) => ({ ...c })),
+      /* Byron y Julio cambian de mañana a tarde todos los domingos. Basta
+         con una semana de referencia y quién estuvo en la mañana: de ahí sale
+         cualquier otra semana, para atrás y para adelante. */
+      rotacion: { desde: '2026-10-18', amPrimero: 'BYRON' },
       /* [{ fecha, nombre, dias: { 'AAAA-MM-DD': { 'Z18|AM': 'SI', ... } } }] */
       feriados: [],
       empaque: EMPAQUE.map((e) => ({ ...e })),
@@ -380,6 +387,11 @@
     /* Los feriados eran una lista de fechas sueltas que apagaban el día
        entero, que es justo al revés de como trabaja la panadería. Las que
        haya guardadas se convierten en feriados de verdad al abrir. */
+    const rot = guardado.rotacion || {};
+    out.rotacion = {
+      desde: /^\d{4}-\d{2}-\d{2}$/.test(rot.desde || '') ? rot.desde : base.rotacion.desde,
+      amPrimero: rot.amPrimero === 'JULIO' ? 'JULIO' : base.rotacion.amPrimero,
+    };
     out.feriados = (Array.isArray(guardado.feriados) ? guardado.feriados : [])
       .map((f) => (typeof f === 'string'
         ? { fecha: f, nombre: 'Feriado', antes: FERIADO_ANTES, despues: FERIADO_DESPUES, dias: null }
@@ -499,6 +511,47 @@
     return c.planta || (t && t.planta) || 'Z18';
   };
   const turnosDePlanta = (planta) => TURNOS.filter((t) => plantaDeTurno(t.id) === planta);
+
+  // ---------- rotación de turnos ----------
+  /** El domingo que abre la semana de esa fecha. */
+  function domingoDe(iso) {
+    const d = desdeISO(iso);
+    return sumarDias(iso, -d.getDay());   // 0 = domingo
+  }
+
+  /**
+   * En qué momento trabaja un turno esa fecha. Byron y Julio se cambian la
+   * mañana por la tarde cada domingo; los demás turnos no se mueven.
+   *
+   * Sirve para tres cosas: verlo escrito al lado del nombre, que un feriado
+   * que apaga sólo la mañana apague al que de verdad esté en la mañana, y
+   * saber de cuál de los dos sacar la producción de la tarde.
+   */
+  function momentoDeTurno(id, iso) {
+    const t = TURNOS.find((x) => x.id === id) || {};
+    const base = (estado.params.turnos[id] || {}).momento || t.momento || 'AM';
+    if (!t.rota || !iso) return base;
+    const r = estado.params.rotacion || {};
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.desde || '')) return base;
+    const d0 = desdeISO(domingoDe(r.desde)), d1 = desdeISO(domingoDe(iso));
+    const semanas = Math.round((d1 - d0) / (7 * 86400000));
+    /* Semana par: el de referencia en la mañana. Impar: al revés.
+       El resto con signo evita que una fecha anterior salga al revés. */
+    const par = ((semanas % 2) + 2) % 2 === 0;
+    const amEs = r.amPrimero || 'BYRON';
+    const rotan = TURNOS.filter((x) => x.rota).map((x) => x.id);
+    const otro = rotan.find((x) => x !== amEs) || amEs;
+    const enAM = par ? amEs : otro;
+    return id === enAM ? 'AM' : 'PM';
+  }
+
+  /** Los turnos que rotan, con el momento que les toca esa fecha. */
+  const rotacionDe = (iso) => TURNOS.filter((t) => t.rota)
+    .map((t) => ({ id: t.id, nombre: t.nombre, momento: momentoDeTurno(t.id, iso) }));
+
+  /** El turno que rota y está en ese momento esa fecha. */
+  const turnoRotandoEn = (momento, iso) =>
+    (rotacionDe(iso).find((t) => t.momento === momento) || {}).id || null;
 
   // ---------- feriados ----------
   /** Los días que entran en la tabla de un feriado, en orden. */
@@ -892,6 +945,7 @@
     productos, activos, claves, fichaPorClave, plantaDeTurno, turnosDePlanta,
     clavesDeArea, turnosDeArea, areasUsadas, enPlanta, puedeEnTurno,
     EMPAQUE, ESTADOS, MOMENTOS, filaPlanta, filaEmpaque,
+    momentoDeTurno, rotacionDe, turnoRotandoEn, domingoDe,
     diasFeriado, feriadoNuevo, feriadoDe, plantaTrabaja, normalDe,
     paramsPorDefecto, fusionarParams,
     estado, guardarParams, guardarProm, guardarDias, guardarPedidos, guardarBolsa, leer, grabar,

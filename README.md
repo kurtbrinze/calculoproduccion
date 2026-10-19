@@ -7,7 +7,7 @@ como historial para comparar temporadas.
 Todo se procesa en el dispositivo. Lo único que sale es la foto del inventario, y sólo hacia
 el lector que tú conectes (ver [LECTOR.md](LECTOR.md)).
 
-## Las siete pestañas
+## Las ocho pestañas
 
 **Producción** es el tablero. Arriba, los totales y cómo va cada turno contra su tope. Abajo,
 una tabla por **área de producción** —Sándwich, Redondo y Magdalenas de Zona 18, Dulce y
@@ -139,6 +139,9 @@ mínima real es de un día, porque lo que se produce hoy está disponible desde 
 **Impresión bolsa** arma las bolsas a imprimir con su lote y vencimiento, a partir del reparto
 del día. Tiene su propia sección [más abajo](#impresión-bolsa).
 
+**Cálculos** son las conversiones sueltas de parrillas y perchas, para decidir en el momento.
+Tiene su propia sección [más abajo](#cálculos-secundarios).
+
 **Historial** guarda cada día cerrado, con cuatro vistas —por turno, por planta, por clave e
 inventario INV PM— y las exporta a Excel, cada tabla por separado o todas en un libro:
 `Hx Prod`, `Hx Prod_x_Planta`, `Hx Prod_x_Turno`, `Hx Prod_Clave_Planta`, `Hx Inv` y un
@@ -221,8 +224,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.15';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.15';`
+1. `js/ui.js` → `const VERSION = 'V.2026.17';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.17';`
 
 ## Plantas, claves y productos nuevos
 
@@ -231,7 +234,7 @@ Hay **tres plantas**:
 | Planta | Turnos |
 |---|---|
 | Zona 18 | Magdalenas, Redondo AM, Sándwich AM, Panaderos PM, Redondo PM |
-| Zona 2 CZ | Byron, Julio |
+| Zona 2 CZ | Byron, Julio (se turnan la mañana y la tarde cada semana) |
 | Zona 2 | Lucas, Gilo, Armando, Rodrigo, Victor, Máquina |
 
 En Parámetros cada producto dice en qué plantas se puede hacer, y el reparto sólo usa turnos de
@@ -245,6 +248,18 @@ allá al llenarse Redondo.
 Los topes de los seis turnos de Zona 2 vienen en 20 qq y el de la Máquina en 40: son un punto de
 partida tomado de la hoja, conviene ajustarlos. Las claves nuevas de Zona 2 entran sin promedios
 de venta, así que su sugerido es cero hasta que se carguen — la foto diaria sí las llena.
+
+### Byron y Julio rotan de turno
+
+Los dos se cambian la mañana por la tarde **cada domingo**. En Parámetros, junto a los topes,
+se pone una **semana de referencia** —cualquier día de esa semana, se guarda en su domingo— y
+quién estuvo esa semana en la mañana. De ahí sale cualquier otra semana, hacia atrás y hacia
+adelante.
+
+El turno que le toca sale escrito junto al nombre en el tablero y en la columna de producción.
+Importa en dos lugares más: un feriado que apaga sólo la mañana apaga al que de verdad esté en
+la mañana, y la fila **Producción PM** de los cálculos secundarios sabe de cuál de los dos
+sacar los quintales de CZ3.
 
 ### Cada planta tiene su calendario
 
@@ -324,6 +339,38 @@ un toque en la tablet.
 **PDF para imprimir** saca la tabla entera en carta vertical, con el mismo recorte que el área
 de impresión del Excel. Se guarda en la carpeta elegida, igual que los demás archivos.
 
+## Cálculos secundarios
+
+La pestaña **Cálculos** trae las tablas sueltas de la pestaña `INV_PM` del libro. Son
+conversiones que se hacen una vez, se apuntan a mano en otro reporte y no vuelven a usarse.
+
+**No tocan nada**: ni el inventario, ni la producción, ni el historial, y **no se sincronizan**.
+Se guardan sólo en el equipo donde se escriben, para que una recarga a media captura no borre
+el trabajo; **Limpiar todo** los deja en cero.
+
+| Tabla | Qué convierte |
+|---|---|
+| Especiales y dulces | S19M, S16, SR16, S25M, 5HD2 y 5HD2 Emp PM: parrillas × lo que lleva cada una, más sueltos. Suma aparte las dos presentaciones de 5HD2 |
+| S16 total | S16 y SR16 sumados. Las dos marcas se escriben arriba y acá se ven y se suman, a 12 por parrilla |
+| PL1 (0034) | Las cinco presentaciones llevadas a equivalente de 15PL1 |
+| Magdalenas (0414) | MG4D a 5 por parrilla y MGND a 8 |
+| BELCA | Lo preparado contra el pedido, y qué falta bajar de bodega |
+| CZ3 / CZ5 (0134) | Perchas de CZ3, cuánto queda tras CZ5 y cuánto mandar a empacar |
+
+**BELCA usa dos parrillas distintas y es a propósito.** Lo que ya está preparado se cuenta en
+parrillas del cliente —el 10HM5 le lleva 9 bolsas—, y lo que falta se convierte a parrillas de
+bodega —8 bolsas—, que son las que hay que bajar al día siguiente para terminar el pedido. En
+el 10PM3 las dos coinciden en 6.
+
+**En CZ3 / CZ5**, las perchas de CZ3 y de CZ5 se escriben en bolsas y la parrilla sale de
+`bolsas × 12`. La fila de **Producción PM** va en quintales y se llena sola con lo que ese día
+produjo de CZ3 el turno que esté en la tarde —Byron o Julio, según la semana—; se puede
+escribir encima.
+
+Quedaron fuera del libro las tablas que sólo servían para completar el conteo —«CZ3 FREDY»,
+«Massella Granda» y las filas de `Esp_Dulce` que salían de `Toma_Inv`—, porque eso ahora lo
+hace la lectura de la foto del INV PM.
+
 ## Feriados
 
 En panadería el feriado no se toma como un día libre: se **descansa el día anterior** y se
@@ -386,6 +433,7 @@ equipo. La sincronización mantiene a los dos iguales, así que un borrado por e
 | `js/sync.js` | Mezcla y sincronización entre equipos |
 | `js/resumen.js` | Imágenes y PDF del resumen del día |
 | `js/bolsa.js` | Impresión de bolsa: la tabla y su PDF |
+| `js/secundarios.js` | Cálculos secundarios de inventario |
 | `js/ui.js` | Pantallas |
 | `api/extract.js` | El lector de inventario, para desplegar en Vercel |
 | `api/leer.js` | El lector que acepta instrucciones, para las dos hojas |

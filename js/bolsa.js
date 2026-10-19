@@ -76,7 +76,7 @@
   }
 
   /** Los quintales decididos de una clave, por planta y momento. */
-  function qqDe(reg, clave) {
+  function qqDe(reg, clave, fecha) {
     const asign = (reg.turnos || {})[clave] || {};
     const out = {};
     D.PLANTAS.forEach((p) => { out[p.id] = { AM: 0, PM: 0 }; });
@@ -84,7 +84,7 @@
       const n = Number(v) || 0;
       if (!n) return;
       const pl = D.plantaDeTurno(t);
-      const mo = (D.turnoPorId[t] || {}).momento || 'AM';
+      const mo = D.momentoDeTurno(t, fecha);
       if (out[pl]) out[pl][mo] = r2(out[pl][mo] + n);
     });
     return out;
@@ -106,7 +106,7 @@
     const P = D.estado.params;
     const lista = filas(P);
     const porClave = {};
-    D.claves().forEach((c) => { porClave[c] = qqDe(reg, c); });
+    D.claves().forEach((c) => { porClave[c] = qqDe(reg, c, fecha); });
 
     /* Primera pasada: los quintales de cada fila. */
     const filas1 = lista.map((f) => {
@@ -126,12 +126,16 @@
           qq.pmZ2 = r2(qq.pmZ2 + ((q.Z2 || {}).PM || 0) + ((q.Z2CZ || {}).PM || 0));
         });
       }
-      /* La mañana de Zona 2 se escribe a mano y nada más.
-         Es lo producido HOY en esa planta, y ese dato todavía no existe en el
-         app cuando se arma la hoja: la foto de Zona 2 que se lee hoy trae la
-         producción de AYER. Lo que el reparto haya puesto en esos turnos es un
-         plan, no un hecho, así que se ofrece como sugerencia —se toca y se
-         copia— pero nunca entra solo. */
+      /* La mañana de la planta Zona 2 se escribe a mano y nada más.
+         Es lo producido HOY ahí, y ese dato todavía no existe en el app cuando
+         se arma la hoja: la foto de Zona 2 que se lee hoy trae la producción de
+         AYER. Lo que el reparto haya puesto en esos turnos es un plan, no un
+         hecho, así que se ofrece como sugerencia —se toca y se copia— pero
+         nunca entra solo.
+         Las filas de Zona 2 CZ no llevan esa casilla: lo de Byron y Julio sí
+         sale del reparto del día, y además rotan de mañana a tarde. */
+      const aMano = f.tipo === 'suma' || (f.tipo === 'clave' && f.planta === 'Z2');
+      if (!aMano) return { ...f, qq, plan: 0, amZ2Manual: false, sinMano: true };
       const plan = qq.amZ2;
       const man = puesto(b, 'qqAmZ2', f.id);
       const hay = man != null && !Number.isNaN(man);

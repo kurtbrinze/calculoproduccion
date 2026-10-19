@@ -79,8 +79,8 @@ queda en unos 110 KB en vez de crecer sin freno.
 
 ## Qué no viaja
 
-**Impresión bolsa** no se sincroniza: es una hoja de trabajo del equipo donde se imprime y se
-guarda aparte de los días. Tampoco viajan el PDF ni las imágenes del resumen, que se generan
+**Impresión bolsa** y **Cálculos** no se sincronizan: son hojas de trabajo del equipo donde se
+escriben y se guardan aparte de los días. Tampoco viajan el PDF ni las imágenes del resumen, que se generan
 en el momento. Todo lo demás —ajustes, promedios, días, pedidos— sí.
 
 ## Cuándo sincroniza

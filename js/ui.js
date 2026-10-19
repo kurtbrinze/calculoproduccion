@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.15';
+  const VERSION = 'V.2026.17';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -110,7 +110,8 @@
       const pct = Math.min(100, Math.round(x.pct * 100));
       const cls = [!x.activo && 'apagado', x.excedido && 'excedido', !x.excedido && x.pct >= 0.999 && 'lleno', x.bajoMinimo && 'bajo'].filter(Boolean).join(' ');
       return `<div class="turno ${cls}">
-        <b>${esc(x.nombre)}</b><span class="papel">${esc(x.papel)}${x.trabaja ? '' : ' · no trabaja hoy'}</span>
+        <b>${esc(x.nombre)}${x.rota ? ` <span class="chip mom">${esc(x.momento)}</span>` : ''}</b>
+        <span class="papel">${esc(x.papel)}${x.trabaja ? '' : ' · no trabaja hoy'}</span>
         <div class="qq"><strong>${n2(x.usado)}</strong><span>de ${n2(x.tope)} qq</span></div>
         <div class="barra"><i style="width:${pct}%"></i></div>
         ${x.excedido ? '<span class="chip falta" style="margin-top:7px">Pasa el tope</span>'
@@ -178,7 +179,7 @@
       const th = `<tr>
         ${th2('Clave', '', 'l')}
         ${th2('Stock + prod', dAyer)}${th2('Teórico PM hoy', dHoy)}${th2('Sugerido qq', dHoy)}
-        ${turnos.map((x) => th2(x.nombre, dHoy)).join('')}
+        ${turnos.map((x) => th2(x.nombre + (x.rota ? ` · ${D.momentoDeTurno(x.id, ui.fecha)}` : ''), dHoy)).join('')}
         ${th2('Decidido qq', dHoy)}${th2('= Bolsas', dHoy)}
         ${th2('Teórico PM mañana', dMan)}${th2('Cobertura', '')}${th2('Alerta', '', 'l')}</tr>`;
       const tb = filas.map((f) => filaProd(f, turnos, ids)).join('');
@@ -592,13 +593,13 @@
         <td class="l clave">${esc(f.nombre)}${pie ? `<span class="mini">${esc(pie)}</span>` : ''}</td>
         <td class="num dim">${f.rend ? n0(f.rend) : ''}</td>
         ${calc ? celQQ(f, 'amZ18') + celQQ(f, 'pmZ18') + celQQ(f, 'pmZ2') : '<td></td><td></td><td></td>'}
-        <td>${calc ? `<input class="inqq ${f.amZ2Manual ? 'puesto' : ''}" inputmode="decimal"
+        <td>${calc && !f.sinMano ? `<input class="inqq ${f.amZ2Manual ? 'puesto' : ''}" inputmode="decimal"
           enterkeyhint="next" data-bcampo="qqAmZ2" data-bid="${esc(f.id)}"
           value="${f.amZ2Manual ? n2(f.qq.amZ2) : ''}"
           aria-label="QQ AM Z2 de ${esc(f.nombre)}">${f.plan && !f.amZ2Manual
             ? `<button type="button" class="plan" data-bplan="${esc(f.id)}" data-bval="${f.plan}"
                 title="Lo que el reparto puso en Zona 2 ese día. Tócalo para copiarlo.">${n2(f.plan)}</button>`
-            : ''}` : ''}</td>
+            : ''}` : (calc ? `<span class="num dim">${f.qq.amZ2 ? n2(f.qq.amZ2) : ''}</span>` : '')}</td>
         <td class="num">${f.prodAM ? n0(f.prodAM) : ''}</td>
         <td class="num">${f.prodPM ? n0(f.prodPM) : ''}</td>
         <td><input class="inqq" inputmode="decimal" enterkeyhint="next"
@@ -639,6 +640,98 @@
     $('#avisosBolsa').innerHTML = av.map(([c, h, p]) =>
       `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p)}</p></div>`).join('');
   }
+
+  // ================= CÁLCULOS SECUNDARIOS =================
+  function pintarSecundarios() {
+    const S = window.Secundarios;
+    const datos = S.leer();
+    const partes = [];
+
+    S.TABLAS.forEach((t0) => {
+      const t = S.resolver(t0, datos);
+      const th = t.cols.map((c) => `<th class="${c.ancho || ''}">${esc(c.t)}</th>`).join('');
+      const tb = t.filas.map((f) => `<tr>${t.cols.map((c) => {
+        if (c.k === 'clave') {
+          return `<td class="l clave">${esc(f.clave)}${f.espejo
+            ? '<span class="mini">viene de arriba</span>' : ''}</td>`;
+        }
+        if (c.entra) {
+          return `<td><input class="inqq${f.espejo ? ' espejo' : ''}" inputmode="decimal" enterkeyhint="next"
+            data-st="${t.id}" data-sf="${esc(f.id)}" data-sc="${c.k}"
+            value="${esc(f.v[c.k])}" aria-label="${esc(c.t)} de ${esc(f.clave)}"></td>`;
+        }
+        const v = f.calc[c.k];
+        return `<td class="num ${c.fuerte ? '' : 'dim'}">${v ? (c.fuerte ? `<b>${n2(v)}</b>` : n2(v)) : ''}</td>`;
+      }).join('')}</tr>`).join('');
+      const pies = t.pies.map((p) => `<tr><td class="l">${esc(p.t)}</td>
+        ${t.cols.slice(1, -1).map(() => '<td></td>').join('')}
+        <td class="num"><b>${n2(p.valor)}</b></td></tr>`).join('');
+      partes.push(tarjetaSec(t.nombre, t.nota,
+        `<table><thead><tr>${th}</tr></thead><tbody>${tb}</tbody>
+         <tfoot>${pies}</tfoot></table>`));
+    });
+
+    // --- BELCA ---
+    const belca = S.calcBelca(datos.belca || {});
+    const filasB = belca.map((f) => `<tr>
+      <td class="l clave">${esc(f.clave)}<span class="mini">${f.cliente} por parrilla al cliente · ${f.bodega} en bodega</span></td>
+      <td><input class="inqq" inputmode="decimal" enterkeyhint="next" data-sb="${f.id}" data-sc="parr"
+        value="${esc((datos.belca || {})[f.id] ? ((datos.belca[f.id] || {}).parr ?? '') : '')}" aria-label="Parrillas listas ${esc(f.clave)}"></td>
+      <td><input class="inqq" inputmode="decimal" enterkeyhint="next" data-sb="${f.id}" data-sc="bolsas"
+        value="${esc((datos.belca || {})[f.id] ? ((datos.belca[f.id] || {}).bolsas ?? '') : '')}" aria-label="Bolsas sueltas ${esc(f.clave)}"></td>
+      <td class="num dim">${f.listo ? n2(f.listo) : ''}</td>
+      <td><input class="inqq" inputmode="decimal" enterkeyhint="next" data-sb="${f.id}" data-sc="oc"
+        value="${esc((datos.belca || {})[f.id] ? ((datos.belca[f.id] || {}).oc ?? '') : '')}" aria-label="Pedido ${esc(f.clave)}"></td>
+      <td class="num ${f.falta ? 'neg' : ''}"><b>${f.falta ? n2(f.falta) : '—'}</b></td>
+      <td class="num dim">${f.falta ? `${n2(f.parrFalta)} + ${n2(f.sueltasFalta)}` : ''}</td>
+      <td class="num"><b>${f.pedir ? n2(f.pedir) : '—'}</b></td></tr>`).join('');
+    partes.push(tarjetaSec('BELCA', 'Lo preparado se cuenta en parrillas del cliente; lo que falta se'
+      + ' convierte a parrillas de bodega, que son las que hay que bajar.',
+      `<table><thead><tr>
+        <th class="l">Clave</th>${th2('Parrillas', 'listas')}${th2('Bolsas', 'sueltas')}
+        ${th2('Preparado', 'bolsas')}${th2('Pedido', 'bolsas')}${th2('Falta', 'bolsas')}
+        ${th2('Falta', 'parr + sueltas')}${th2('Bajar', 'parrillas')}
+      </tr></thead><tbody>${filasB}</tbody></table>`));
+
+    // --- CZ3 / CZ5 ---
+    const cz = S.calcCz(datos.cz || {}, ui.fecha);
+    const inCz = (k, lbl) => `<input class="inqq" inputmode="decimal" enterkeyhint="next"
+      data-scz="${k}" value="${esc((datos.cz || {})[k] ?? '')}" aria-label="${esc(lbl)}">`;
+    const lineas = [
+      ['20CZ3', inCz('parr20', 'Parrillas de 20CZ3'), 'parrillas', `${n2(cz.b20)} bolsas`, ''],
+      ['CZ3 perchas (OH)', inCz('ohBolsas', 'Bolsas OH'), 'bolsas', `${n2(cz.ohParr)} parrillas`, ''],
+      [`Producción PM${cz.turnoPM ? ` · ${cz.turnoPM}` : ''}`, inCz('prodQQ', 'Quintales producidos PM'), 'qq',
+        `${n2(cz.prodBolsas)} perchas`,
+        cz.manual ? 'escrito a mano' : (cz.prodQQauto ? `del reparto: ${n2(cz.prodQQauto)} qq` : 'sin reparto ese día')],
+      ['CZ5', inCz('cz5Bolsas', 'Bolsas de CZ5'), 'bolsas', `${n2(cz.cz5Parr)} parrillas`, ''],
+      ['Empacar', inCz('empacar', 'A empacar'), 'perchas', '', ''],
+    ];
+    partes.push(tarjetaSec('CZ3 / CZ5 (0134)',
+      `Una percha son ${S.PERCHA} parrillas; un quintal de CZ3 da ${n0(cz.rend)} bolsas y `
+      + `${S.CZ3_POR_PERCHA} bolsas hacen una percha.`,
+      `<table><thead><tr><th class="l">Fila</th><th>Se escribe</th><th class="l">Unidad</th>
+        <th class="l">Equivale a</th><th class="l">De dónde</th></tr></thead><tbody>
+        ${lineas.map(([n, inp, u, eq, de]) => `<tr>
+          <td class="l clave">${esc(n)}</td><td>${inp}</td><td class="l dim">${esc(u)}</td>
+          <td class="l dim">${esc(eq)}</td><td class="l dim">${esc(de)}</td></tr>`).join('')}
+      </tbody></table>`,
+      `<div class="kpis" style="margin:0;padding:12px 14px 14px">
+        ${kpi('Total perchas CZ3', n2(cz.total))}
+        ${kpi('Quedan tras CZ5', n2(cz.quedan), cz.quedan < 0 ? 'alerta' : '')}
+        ${kpi('Libres tras empacar', n2(cz.libres), cz.libres < 0 ? 'alerta' : 'bien')}
+      </div>`));
+
+    $('#secCont').innerHTML = partes.join('');
+  }
+
+  const tarjetaSec = (titulo, nota, tabla, extra) =>
+    `<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
+      <div style="padding:12px 16px">
+        <h3 style="margin:0 0 3px;font-size:.95rem">${esc(titulo)}</h3>
+        ${nota ? `<p class="sub" style="margin:0">${esc(nota)}</p>` : ''}
+      </div>
+      <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0;max-height:none">
+        ${tabla}</div>${extra || ''}</div>`;
 
   // ================= HISTORIAL =================
   const VISTAS = [
@@ -858,6 +951,18 @@
         <div class="tablabox"><table><thead><tr><th class="l">Turno</th><th class="l">Planta</th><th>Tope qq</th><th>Mínimo qq</th><th class="l">Estado</th></tr></thead><tbody>${turnos}</tbody></table></div>
         <p class="dim" style="font-size:.84rem;margin:10px 2px">
           Capacidad por planta: ${D.PLANTAS.map((x) => `<b>${esc(x.nombre)}</b> ${n2(topePlanta[x.id])} qq`).join(' · ')}.</p>
+        <div class="fila" style="margin-top:12px;align-items:flex-end">
+          <div class="campo"><label for="inRotDesde">Semana de referencia (un domingo)</label>
+            <input type="date" id="inRotDesde" value="${esc(P.rotacion.desde)}" style="min-width:160px"></div>
+          <div class="campo"><label for="inRotAm">Esa semana trabajó de mañana</label>
+            <select id="inRotAm" style="min-width:130px">
+              ${D.rotacionDe(P.rotacion.desde).map((t) =>
+                `<option value="${t.id}" ${P.rotacion.amPrimero === t.id ? 'selected' : ''}>${esc(t.nombre)}</option>`).join('')}
+            </select></div>
+          <p class="dim" style="font-size:.84rem;margin:0 0 6px">
+            Byron y Julio se cambian la mañana por la tarde cada domingo. Esta semana:
+            ${D.rotacionDe(ui.fecha).map((t) => `<b>${esc(t.nombre)}</b> ${t.momento}`).join(' · ')}.</p>
+        </div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -1404,9 +1509,9 @@
   function enlazar() {
     // pestañas
     const paneles = { prod: '#pProd', inv: '#pInv', ped: '#pPed', bolsa: '#pBolsa',
-      hist: '#pHist', prom: '#pProm', param: '#pParam' };
+      sec: '#pSec', hist: '#pHist', prom: '#pProm', param: '#pParam' };
     const tabs = { prod: '#tabProd', inv: '#tabInv', ped: '#tabPed', bolsa: '#tabBolsa',
-      hist: '#tabHist', prom: '#tabProm', param: '#tabParam' };
+      sec: '#tabSec', hist: '#tabHist', prom: '#tabProm', param: '#tabParam' };
     window.irA = (k) => {
       ui.tab = k;
       Object.keys(paneles).forEach((x) => {
@@ -1418,6 +1523,7 @@
       if (k === 'inv') pintarInventario();
       if (k === 'ped') pintarPedidos();
       if (k === 'bolsa') pintarBolsa();
+      if (k === 'sec') pintarSecundarios();
       if (k === 'hist') pintarHistorial();
       if (k === 'prom') pintarPromedios();
       if (k === 'param') pintarParametros();
@@ -1496,6 +1602,16 @@
         else if (id === 'inFijo') P.horizonteFijo = Math.max(1, Number(e.target.value) || 1);
         else if (id === 'inFactor2') P.factorTemporada = Math.max(0, Number(e.target.value) || 1);
         else if (id === 'inAnt') P.pedidos.anticipacion = Math.max(0, Math.round(Number(e.target.value) || 0));
+        /* La referencia se guarda en el domingo de esa semana, así da igual
+           qué día del rango se elija. */
+        else if (id === 'inRotDesde') {
+          const v = e.target.value;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(v)) P.rotacion.desde = D.domingoDe(v);
+          D.guardarParams(); pintarParametros(); pintarProduccion(); return;
+        } else if (id === 'inRotAm') {
+          P.rotacion.amPrimero = e.target.value;
+          D.guardarParams(); pintarParametros(); pintarProduccion(); return;
+        }
         else return;
         D.guardarParams();
       }
@@ -1702,6 +1818,53 @@
         if (r.modo === 'cancelado') return;
         aviso(`PDF guardado${donde(r)}.`);
       } catch (err) { aviso('No se pudo armar el PDF: ' + err.message, 'err'); }
+    };
+
+    // cálculos secundarios
+    $('#secCont').addEventListener('change', (e) => {
+      const t = e.target;
+      if (!t.matches('input.inqq')) return;
+      const S = window.Secundarios, d = t.dataset;
+      const datos = S.leer();
+      if (d.st) S.escribir(datos, d.st, d.sf, d.sc, t.value);
+      else if (d.sb) {
+        if (!datos.belca) datos.belca = {};
+        if (!datos.belca[d.sb]) datos.belca[d.sb] = {};
+        const v = String(t.value).trim();
+        if (v === '') delete datos.belca[d.sb][d.sc]; else datos.belca[d.sb][d.sc] = v;
+        S.grabar(datos);
+      } else if (d.scz) {
+        if (!datos.cz) datos.cz = {};
+        const v = String(t.value).trim();
+        if (v === '') delete datos.cz[d.scz]; else datos.cz[d.scz] = v;
+        S.grabar(datos);
+      }
+      pintarSecundarios();
+    });
+    /* Enter baja por la misma columna, igual que en impresión de bolsa. */
+    $('#secCont').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter' || !e.target.matches('input.inqq')) return;
+      e.preventDefault();
+      const tabla = e.target.closest('table');
+      const i = [...tabla.querySelectorAll('input.inqq')].indexOf(e.target);
+      const col = [...e.target.closest('tr').children].indexOf(e.target.closest('td'));
+      const sig = [...tabla.querySelectorAll('tbody tr')]
+        .map((r) => r.children[col] && r.children[col].querySelector('input.inqq'))
+        .filter(Boolean);
+      const act = sig.indexOf(e.target);
+      const n = sig[act + 1];
+      e.target.blur();
+      if (n) setTimeout(() => { n.focus(); n.select(); }, 0);
+      else if (i < 0) { /* sin tabla, nada que hacer */ }
+    });
+    $('#secCont').addEventListener('focusin', (e) => {
+      if (e.target.matches('input.inqq')) e.target.select();
+    });
+    $('#btnSecLimpiar').onclick = async () => {
+      if (!await preguntar('Limpiar los cálculos',
+        '<p>Se borra todo lo escrito en esta pestaña. No afecta inventario, producción ni historial.</p>',
+        'Limpiar')) return;
+      window.Secundarios.limpiar(); pintarSecundarios(); aviso('Cálculos en cero.');
     };
 
     $('#btnImportInv').onclick = () => $('#fileInv').click();
