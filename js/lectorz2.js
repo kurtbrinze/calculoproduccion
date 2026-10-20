@@ -159,7 +159,7 @@ Incluye TODAS las claves de la lista, en el mismo orden, y dentro de cada una TO
           <span class="dim" style="font-size:.84rem;margin-left:auto">${conDato} celdas con dato</span></div>
         <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0;max-height:none">
           <table><thead><tr><th class="l">Clave</th>
-            ${turnos.map((t) => `<th>${esc(t.nombre)}</th>`).join('')}<th>Total qq</th></tr></thead>
+            ${turnos.map((t) => `<th>${esc(t.nombre)}</th>`).join('')}<th>Total QQ</th></tr></thead>
             <tbody>${filas}</tbody>
             <tfoot><tr><td class="l">TOTAL</td>${pie}
               <td class="num"><b>${fmt(Math.round(total * 100) / 100)}</b></td></tr></tfoot>

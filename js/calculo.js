@@ -447,10 +447,44 @@
         if (f.sugeridoQQ > 0) sinTurnoHoy.push({ clave: f.clave, qq: f.sugeridoQQ });
         return;
       }
-      falta[f.clave] = f.sugeridoQQ;
+      /* El tope del día del producto manda sobre el sugerido: por muchos
+         quintales que haga falta, no hay más moldes ni más vueltas. */
+      const tope = Number(cfg.maxDia) > 0 ? Number(cfg.maxDia) : Infinity;
+      falta[f.clave] = Math.min(f.sugeridoQQ, tope);
       mult[f.clave] = Number(cfg.mult) || 0;
       pref[f.clave] = hoy;
       dado[f.clave] = {};
+    });
+
+    /* Productos que se reparten por porcentaje, antes que la cascada: su regla
+       es propia y el reparto general les pasaría por encima. Cada turno recibe
+       su parte redondeada hacia arriba al múltiplo, sin pasar del cupo que le
+       queda; lo que no entre en uno se le ofrece al otro. */
+    Object.keys(falta).forEach((c) => {
+      const cfg = estado.params.prod[c] || {};
+      if (cfg.reparto !== 'porcentaje') return;
+      const hoy = pref[c];
+      const pesos = cfg.pesos || {};
+      const suma = hoy.reduce((a, t) => a + (Number(pesos[t]) || 0), 0);
+      if (!suma || falta[c] <= 1e-9) return;
+      const m = mult[c] || 0;
+      const total = falta[c];
+      let dadoYa = 0;
+      hoy.forEach((t, i) => {
+        const queda = redondea(total - dadoYa, 2);
+        if (queda <= 1e-9) return;
+        /* Al último turno le toca lo que quede, para no perder nada por el
+           redondeo de los de antes. */
+        const ideal = i === hoy.length - 1 ? queda
+          : Math.min(queda, m > 0 ? alMultiploArriba(total * ((Number(pesos[t]) || 0) / suma), m)
+                                  : total * ((Number(pesos[t]) || 0) / suma));
+        const dar = redondea(Math.min(ideal, libre[t] || 0), 2);
+        if (dar <= 1e-9) return;
+        dado[c][t] = redondea((dado[c][t] || 0) + dar, 2);
+        libre[t] = redondea(libre[t] - dar, 2);
+        dadoYa = redondea(dadoYa + dar, 2);
+      });
+      falta[c] = redondea(total - dadoYa, 2);
     });
 
     const conCupo = (c) => pref[c].find((t) => (libre[t] || 0) > 1e-9);

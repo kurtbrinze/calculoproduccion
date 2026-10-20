@@ -32,7 +32,7 @@
     { id: 'BYRON',   nombre: 'Byron',        papel: 'B',          tope: 12, minimo: 0,  momento: 'AM', planta: 'Z2CZ', rota: true },
     { id: 'JULIO',   nombre: 'Julio',        papel: 'J',          tope: 12, minimo: 0,  momento: 'PM', planta: 'Z2CZ', rota: true },
     /* Planta Zona 2. Los topes son un punto de partida: la hoja a mano trae
-       entre 11 y 17 qq por persona. Se ajustan en Parámetros. */
+       entre 11 y 17 QQ por persona. Se ajustan en Parámetros. */
     { id: 'LUCAS',   nombre: 'Lucas',        papel: 'L',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
     { id: 'GILO',    nombre: 'Gilo',         papel: 'G',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
     { id: 'ARMANDO', nombre: 'Armando',      papel: 'A',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
@@ -83,7 +83,10 @@
     { clave: 'S11',   codigo: 28,  familia: 'SANDWICH',  rend: 210,  mult: 2,    turnos: ['SAND_AM'], plantas: ['Z18'] },
     { clave: '10PM3', codigo: 32,  familia: 'REDONDO',   rend: 120,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], plantas: ['Z18'] },
     { clave: '10HD7', codigo: 5,   familia: 'REDONDO',   rend: 110,  mult: 1,    turnos: ['PAN_PM', 'MAQ_Z2', 'RED_AM', 'RED_PM'], plantas: ['Z18', 'Z2'] },
-    { clave: '10HR3', codigo: 1,   familia: 'REDONDO',   rend: 150,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], plantas: ['Z18', 'Z2'], alias: 'HR3' },
+    /* El 10HR3 no se decide por cascada: lleva 40 % de mañana y 60 % de tarde,
+       con un tope de 54 QQ al día. */
+    { clave: '10HR3', codigo: 1,   familia: 'REDONDO',   rend: 150,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], plantas: ['Z18', 'Z2'], alias: 'HR3',
+      maxDia: 54, reparto: 'porcentaje', pesos: { RED_AM: 40, RED_PM: 60 } },
     { clave: '12BLL', codigo: 436, familia: 'REDONDO',   rend: 200,  mult: 0.5,  turnos: ['RED_AM', 'RED_PM'], plantas: ['Z18'] },
     { clave: '15PL1', codigo: 34,  familia: 'REDONDO',   rend: 144,  mult: 1,    turnos: ['RED_AM', 'RED_PM'], plantas: ['Z18'] },
     { clave: '5HM4',  codigo: 9,   familia: 'REDONDO',   rend: 220,  mult: 1,    turnos: T_Z2.slice(), plantas: ['Z2'], alias: 'HM4' },
@@ -224,8 +227,9 @@
        2 = llegó el turno Máquina Z2.
        3 = el calendario de producción pasó a ser por planta.
        4 = el catálogo se ordenó como la hoja de papel.
-       5 = se separó la planta Zona 2 de la de dulces (Zona 2 CZ). */
-  const ESQUEMA = 5;
+       5 = se separó la planta Zona 2 de la de dulces (Zona 2 CZ).
+       6 = tope de quintales por producto y reparto por porcentaje. */
+  const ESQUEMA = 6;
 
   /**
    * Mapa de plantas de un producto. Acepta la forma nueva (`plantas` como
@@ -259,6 +263,14 @@
       unidad: p.unidad || 'bolsas',
       turnos: (p.turnos || []).slice(),
       plantas: mapaPlantas(p),
+      /* Tope de quintales del producto en todo el día: sale de los moldes y
+         las vueltas que se les alcanza a dar. null = sin tope propio. */
+      maxDia: p.maxDia ?? null,
+      /* Cómo se parte entre sus turnos:
+           'cascada'    llena el primero de la lista y pasa al siguiente
+           'porcentaje' reparte por el peso de cada turno */
+      reparto: p.reparto === 'porcentaje' ? 'porcentaje' : 'cascada',
+      pesos: { ...(p.pesos || {}) },
       prodEnConteo: !!p.prodEnConteo,
       alias: p.alias || '',
       // null = hereda de la familia
@@ -355,6 +367,10 @@
          antes era la planta de dulces, que ahora se llama Z2 CZ. */
       out.prod[c].plantas = mapaPlantas(g.plantas !== undefined ? g : (('z18' in g || 'z2' in g) ? g : b));
       delete out.prod[c].z18; delete out.prod[c].z2;
+      const md = out.prod[c].maxDia;
+      out.prod[c].maxDia = md === '' || md == null || !(Number(md) > 0) ? null : Number(md);
+      out.prod[c].reparto = out.prod[c].reparto === 'porcentaje' ? 'porcentaje' : 'cascada';
+      out.prod[c].pesos = { ...(out.prod[c].pesos || {}) };
     });
 
     out.turnos = { ...base.turnos };

@@ -245,6 +245,18 @@ tr.detalle td{background:#0E1621;padding:0;border-bottom:2px solid var(--line-2)
 .planta .qq span{color:var(--muted);font-size:.85rem}
 .planta.ambas{border-style:dashed}
 
+/* Un botón escondido es un botón escondido: sin esto, la regla de display
+   de .btn gana y queda un botón vacío en medio del cuadro de diálogo. */
+[hidden]{display:none !important}
+
+/* Los títulos de columna van centrados: se leen mejor sobre números. */
+th{text-align:center}
+th.l{text-align:left}
+
+/* fila de totales de cada área de producción */
+tfoot tr.totales td{border-top:2px solid var(--line);padding-top:9px;font-size:.95rem}
+tfoot tr.totales .mini{display:block;font-weight:400;font-size:.7rem;color:var(--muted)}
+
 /* ---------- impresión de bolsa ---------- */
 /* Las filas que suman dos plantas y las que se cuentan a mano se separan de
    las de catálogo, que es como están en la hoja de papel. */

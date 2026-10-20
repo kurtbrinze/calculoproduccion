@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.19';
+  const VERSION = 'V.2026.20';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -92,8 +92,8 @@
     const faltan = t.filas.filter((f) => f.alerta === 'FALTANTE').length;
     const tope = Object.values(t.turnos).filter((x) => x.activo && x.pct >= 0.999).length;
     $('#kpis').innerHTML =
-      kpi('Sugerido total', n1(sug) + ' qq') +
-      kpi('Decidido', n1(dec) + ' qq', dec > 0 ? 'bien' : '') +
+      kpi('Sugerido total', n1(sug) + ' QQ') +
+      kpi('Decidido', n1(dec) + ' QQ', dec > 0 ? 'bien' : '') +
       kpi('Claves con faltante', faltan, faltan ? 'alerta' : 'bien') +
       kpi('Turnos al tope', `${tope} de ${Object.values(t.turnos).filter((x) => x.activo).length}`);
 
@@ -104,15 +104,15 @@
       const pct = v.tope > 0 ? Math.min(100, Math.round((v.decidido / v.tope) * 100)) : 0;
       return `<div class="planta ${v.trabaja ? '' : 'apagado'}">
         <b>${esc(v.nombre)}${v.trabaja ? '' : ' <span class="dim" style="font-weight:400;font-size:.8rem">no trabaja hoy</span>'}</b>
-        <div class="qq"><strong>${n1(v.sugerido)}</strong><span>qq sugeridos</span></div>
+        <div class="qq"><strong>${n1(v.sugerido)}</strong><span>QQ sugeridos</span></div>
         <div class="barra"><i style="width:${pct}%"></i></div>
-        <span class="dim" style="font-size:.82rem">${n2(v.decidido)} decididos de ${n2(v.tope)} qq de capacidad</span>
+        <span class="dim" style="font-size:.82rem">${n2(v.decidido)} decididos de ${n2(v.tope)} QQ de capacidad</span>
       </div>`;
     }).join('');
     const amb = pl.AMBAS;
     const extra = amb.sugerido > 0 ? `<div class="planta ambas">
         <b>Más de una planta</b>
-        <div class="qq"><strong>${n1(amb.sugerido)}</strong><span>qq sugeridos</span></div>
+        <div class="qq"><strong>${n1(amb.sugerido)}</strong><span>QQ sugeridos</span></div>
         <span class="dim" style="font-size:.82rem">${esc(amb.claves.join(', '))} — la planta la define el turno donde se reparta</span>
       </div>` : '';
     $('#plantas').innerHTML = tarjetas + extra;
@@ -124,7 +124,7 @@
       return `<div class="turno ${cls}">
         <b>${esc(x.nombre)}${x.rota ? ` <span class="chip mom">${esc(x.momento)}</span>` : ''}</b>
         <span class="papel">${esc(x.papel)}${x.trabaja ? '' : ' · no trabaja hoy'}</span>
-        <div class="qq"><strong>${n2(x.usado)}</strong><span>de ${n2(x.tope)} qq</span></div>
+        <div class="qq"><strong>${n2(x.usado)}</strong><span>de ${n2(x.tope)} QQ</span></div>
         <div class="barra"><i style="width:${pct}%"></i></div>
         ${x.excedido ? '<span class="chip falta" style="margin-top:7px">Pasa el tope</span>'
           : x.bajoMinimo ? `<span class="chip exceso" style="margin-top:7px">Mínimo ${n2(x.minimo)}</span>` : ''}
@@ -164,7 +164,7 @@
       + '. Se siguen repartiendo en sus turnos de siempre, así que el sugerido por planta no cuadra con lo decidido. '
       + 'Se arregla en Parámetros: o marcas la otra planta, o le das un turno de la planta marcada.']);
     const exc = Object.values(t.turnos).filter((x) => x.excedido);
-    if (exc.length) av.push(['err', 'Hay turnos pasados de tope', exc.map((x) => `${x.nombre}: ${n2(x.usado)} de ${n2(x.tope)} qq`).join(' · ')]);
+    if (exc.length) av.push(['err', 'Hay turnos pasados de tope', exc.map((x) => `${x.nombre}: ${n2(x.usado)} de ${n2(x.tope)} QQ`).join(' · ')]);
     if (ui.sinTurnoHoy && ui.sinTurnoHoy.length) {
       av.push(['', `${ui.sinTurnoHoy.length} claves no se pueden producir este día`,
         ui.sinTurnoHoy.map((x) => `${x.clave} ${n2(x.qq)} qq`).join(' · ')
@@ -190,13 +190,29 @@
       const ids = turnos.map((x) => x.id);
       const th = `<tr>
         ${th2('Clave', '', 'l')}
-        ${th2('Stock + prod', dAyer)}${th2('Teórico PM hoy', dHoy)}${th2('Sugerido qq', dHoy)}
+        ${th2('Stock + prod', dAyer)}${th2('Teórico PM hoy', dHoy)}${th2('Sugerido QQ', dHoy)}
         ${turnos.map((x) => th2(x.nombre + (x.rota ? ` · ${D.momentoDeTurno(x.id, ui.fecha)}` : ''), dHoy)).join('')}
-        ${th2('Decidido qq', dHoy)}${th2('= Bolsas', dHoy)}
+        ${th2('Decidido QQ', dHoy)}${th2('= Bolsas', dHoy)}
         ${th2('Teórico PM mañana', dMan)}${th2('Cobertura', '')}${th2('Alerta', '', 'l')}</tr>`;
       const tb = filas.map((f) => filaProd(f, turnos, ids)).join('');
       const sumArea = filas.reduce((a, f) => a + decididoEn(f, ids), 0);
       const bolsasArea = filas.reduce((a, f) => a + decididoEn(f, ids) * f.rend, 0);
+      /* Fila de totales: el sugerido del área y lo que lleva cada turno. Es lo
+         que se mira para saber si la jornada cabe antes de guardar. */
+      const sugArea = filas.reduce((a, f) => a + f.sugeridoQQ, 0);
+      const porTurno = turnos.map((x) =>
+        C.redondea(filas.reduce((a, f) => a + (Number(f.asign[x.id]) || 0), 0), 2));
+      const pie = `<tr class="totales">
+        <td class="l">TOTAL</td><td></td><td></td>
+        <td class="num"><b>${sugArea ? n2(C.redondea(sugArea, 2)) : '—'}</b></td>
+        ${porTurno.map((v, i) => {
+          const cupo = t.turnos[turnos[i].id] || {};
+          return `<td class="num"><b>${v ? n2(v) : '—'}</b>${cupo.tope
+            ? `<span class="mini">de ${n2(cupo.tope)}</span>` : ''}</td>`;
+        }).join('')}
+        <td class="num"><b>${sumArea ? n2(C.redondea(sumArea, 2)) : '—'}</b></td>
+        <td class="num"><b>${bolsasArea ? n0(bolsasArea) : '—'}</b></td>
+        <td></td><td></td><td></td></tr>`;
       const cubre = rotuloCubre(filas);
       const planta = (D.PLANTAS.find((x) => x.id === area.planta) || {}).nombre || area.planta;
       const trabaja = t.plantas[area.planta] ? t.plantas[area.planta].trabaja : true;
@@ -204,17 +220,23 @@
         <div style="display:flex;align-items:baseline;gap:12px;padding:12px 16px;flex-wrap:wrap">
           <h3 style="margin:0">${esc(area.nombre)}</h3>
           <span class="chip nada">${esc(planta)}</span>
-          <span class="dim" style="font-size:.86rem">${filas.length} claves · ${n2(sumArea)} qq · ${n0(bolsasArea)} bolsas</span>
+          <span class="dim" style="font-size:.86rem">${filas.length} claves · ${n2(sumArea)} QQ · ${n0(bolsasArea)} bolsas</span>
           <span class="dim" style="font-size:.86rem;margin-left:auto">${trabaja ? 'Cubre: ' + cubre : 'Esta planta no trabaja hoy'}</span>
         </div>
         <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0">
-          <table><thead>${th}</thead><tbody>${tb}</tbody></table>
+          <table><thead>${th}</thead><tbody>${tb}</tbody><tfoot>${pie}</tfoot></table>
         </div></div>`;
     }).join('');
     $('#famCont').innerHTML = cuerpo;
 
+    /* El botón de sincronizar de la barra se muestra según esté encendida.
+       Antes se quedaba escondido hasta entrar a Parámetros y sólo se veía
+       porque el `hidden` no estaba surtiendo efecto. */
+    const bSync = $('#btnSync');
+    if (bSync) bSync.hidden = !window.Sync.activo();
+
     const nd2 = Object.keys(D.estado.dias).filter((f) => D.estado.dias[f].cerrado).length;
-    $('#barInfo').innerHTML = `<b>${D.fechaCorta(ui.fecha)}</b> · ${n1(dec)} qq decididos · `
+    $('#barInfo').innerHTML = `<b>${D.fechaCorta(ui.fecha)}</b> · ${n1(dec)} QQ decididos · `
       + (nd2 === 1 ? '1 día guardado' : `${nd2} días guardados`);
   }
 
@@ -292,7 +314,7 @@
       <td class="l clave"><button type="button" class="verDet" data-clave="${esc(f.clave)}"
           style="background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:0;text-align:left">
           ${esc(f.clave)} <span style="color:var(--muted);font-weight:400">${abierta ? '▾' : '▸'}</span>
-          <span class="mini">${n0(f.rend)} bolsas/qq</span></button></td>
+          <span class="mini">${n0(f.rend)} bolsas/QQ</span></button></td>
       <td class="num">${n0(f.disponible)}</td>
       <td class="num">${n0(f.teoricoHoy)}</td>
       <td class="num sug ${f.sugeridoQQ ? '' : 'cero'}">${f.sugeridoQQ ? n2(f.sugeridoQQ) : '—'}</td>
@@ -316,13 +338,13 @@
         <h4>POR QUÉ ESTE SUGERIDO</h4>
         <p>Hoy cierras con <b>${n0(f.teoricoHoy)}</b> bolsas: ${n0(f.stockAyer)} del cierre
         ${f.fechaStock ? 'del ' + esc(D.fechaCorta(f.fechaStock)) : 'anterior'} más
-        ${n2(f.prodAyerQQ)} qq producidos ese día (${n0(f.prodAyerB)} bolsas)${f.yaContado ? ', que no se suman porque ese conteo ya los trae' : ''},
+        ${n2(f.prodAyerQQ)} QQ producidos ese día (${n0(f.prodAyerB)} bolsas)${f.yaContado ? ', que no se suman porque ese conteo ya los trae' : ''},
         menos ${n0(f.ventaHoy)} que se venden hoy.</p>
         <p>Hay que llegar hasta la próxima corrida, o sea <b>${f.nDias} día${f.nDias > 1 ? 's' : ''}</b> de venta
         (${dias}), más <b>${p.colchon}</b> de colchón. En total el objetivo es cubrir
         <b>${f.objetivoDias} días</b>.</p>
         <p>${f.sugeridoQQ > 0
-            ? `Faltan ${n0(Math.max(0, Math.min(f.necesidad, f.topeVida)))} bolsas, que a ${n0(f.rend)} bolsas por quintal y en múltiplos de ${n2(f.mult)} qq dan <b>${n2(f.sugeridoQQ)} qq</b>.`
+            ? `Faltan ${n0(Math.max(0, Math.min(f.necesidad, f.topeVida)))} bolsas, que a ${n0(f.rend)} bolsas por quintal y en múltiplos de ${n2(f.mult)} QQ dan <b>${n2(f.sugeridoQQ)} QQ</b>.`
             : (f.bajoLote
                 ? `Faltan ${n0(f.necesidad)} bolsas, pero el lote más chico es ${n2(f.mult)} qq (${n0(f.mult * f.rend)} bolsas) y se pasaría de largo. Si aun así quieres hacerlo, escríbelo a mano.`
                 : (f.necesidad <= 0 ? 'Con lo que ya hay alcanza, por eso no sugiere producir.'
@@ -345,8 +367,8 @@
           ${li(`Stock de seguridad (${p.colchon} d)`, n0(f.seguridad) + ' b')}
           ${li('Necesidad', n0(f.necesidad) + ' b')}
           ${li(`Tope por vida útil (${p.cobMax} d)`, n0(f.topeVida) + ' b')}
-          ${li('<b>Sugerido</b>', '<b>' + n2(f.sugeridoQQ) + ' qq</b>', '')}
-          ${li('Decidido', n2(f.decididoQQ) + ' qq', '')}
+          ${li('<b>Sugerido</b>', '<b>' + n2(f.sugeridoQQ) + ' QQ</b>', '')}
+          ${li('Decidido', n2(f.decididoQQ) + ' QQ', '')}
           ${li('<b>Teórico PM mañana</b>', `<b class="${f.teoricoManana < 0 ? 'neg' : ''}">${n0(f.teoricoManana)} b</b>`)}
           ${li('Cobertura resultante', f.cobertura == null ? '—' : n1(f.cobertura) + ' días')}
         </ul>
@@ -369,8 +391,8 @@
     $('#theadInv').innerHTML = `<tr>
       <th class="l">Clave</th>
       <th>STOCK AYER<span class="sub2">${esc(dStock)}</span></th>
-      <th>PROD AYER qq<span class="sub2">${esc(dProd)}</span></th>
-      <th>BOLSAS<span class="sub2">qq × rendimiento</span></th>
+      <th>PROD AYER QQ<span class="sub2">${esc(dProd)}</span></th>
+      <th>BOLSAS<span class="sub2">QQ × rendimiento</span></th>
       <th>CONSUMO HOY<span class="sub2">promedio ${esc(D.nombreDia(ui.fecha).toLowerCase())}</span></th>
       <th>TEÓRICO PM<span class="sub2">stock + bolsas − consumo</span></th>
       <th>INV PM<span class="sub2">${esc(dHoy)}</span></th>
@@ -537,7 +559,7 @@
 
     $('#theadPed').innerHTML = `<tr>
       <th class="l">Día entrega</th><th class="l">Cliente</th><th class="l">Clave</th>
-      <th>Bolsas</th><th>qq</th><th class="l">Producir antes de</th><th class="l">Estado</th><th class="l"></th></tr>`;
+      <th>Bolsas</th><th>QQ</th><th class="l">Producir antes de</th><th class="l">Estado</th><th class="l"></th></tr>`;
 
     if (!visibles.length) {
       $('#tbodyPed').innerHTML = `<tr><td colspan="8" class="l dim" style="padding:18px">`
@@ -589,7 +611,7 @@
     const dPM = D.fechaCorta(D.sumarDias(fecha, 1));
 
     $('#theadBolsa').innerHTML = `<tr>
-      ${th2('P PROD', '')}${th2('ITEM', '', 'l')}${th2('RENDIM', 'bolsas/qq')}
+      ${th2('P PROD', '')}${th2('ITEM', '', 'l')}${th2('RENDIM', 'bolsas/QQ')}
       ${th2('QQ AM Z18', dAM)}${th2('QQ PM Z18', dAM)}${th2('QQ PM Z2', dAM)}${th2('QQ AM Z2', dAM)}
       ${th2('PROD AM', dAM)}${th2('PROD PM', dAM)}${th2('OH', 'ya impreso')}
       ${th2('EMPAQUE AM', dPM)}${th2('EMPAQUE PM', dAM)}${th2('TOTAL PROD', '')}</tr>`;
@@ -711,17 +733,17 @@
       data-scz="${k}" value="${esc((datos.cz || {})[k] ?? '')}" aria-label="${esc(lbl)}">`;
     const lineas = [
       ['20CZ3', inCz('parr20', 'Parrillas de 20CZ3'), 'parrillas', `${n2(cz.b20)} bolsas`, ''],
-      ['CZ3 perchas (OH)', inCz('ohBolsas', 'Bolsas OH'), 'bolsas', `${n2(cz.ohParr)} parrillas`, ''],
-      [`Producción PM${cz.turnoPM ? ` · ${cz.turnoPM}` : ''}`, inCz('prodQQ', 'Quintales producidos PM'), 'qq',
+      ['CZ3 perchas (OH)', inCz('ohBolsas', 'Perchas OH'), 'perchas', `${n2(cz.ohParr)} parrillas`, ''],
+      [`Producción PM${cz.turnoPM ? ` · ${cz.turnoPM}` : ''}`, inCz('prodQQ', 'Quintales producidos PM'), 'QQ',
         `${n2(cz.prodBolsas)} perchas`,
-        cz.manual ? 'escrito a mano' : (cz.prodQQauto ? `del reparto: ${n2(cz.prodQQauto)} qq` : 'sin reparto ese día')],
+        cz.manual ? 'escrito a mano' : (cz.prodQQauto ? `del reparto: ${n2(cz.prodQQauto)} QQ` : 'sin reparto ese día')],
       ['CZ5', inCz('cz5Bolsas', 'Perchas de CZ5'), 'perchas', `${n2(cz.cz5Parr)} parrillas`, ''],
       ['Empacar', inCz('empacar', 'A empacar'), 'perchas', '', ''],
     ];
     partes.push(tarjetaSec('CZ3 / CZ5 (0134)',
       `Una percha son ${S.PERCHA} parrillas; un quintal de CZ3 da ${n0(cz.rend)} bolsas y `
       + `${S.CZ3_POR_PERCHA} bolsas hacen una percha.`,
-      `<table><thead><tr><th class="l">Fila</th><th>Se escribe</th><th class="l">Unidad</th>
+      `<table><thead><tr><th class="l">Fila</th><th>OH</th><th class="l">Unidad</th>
         <th class="l">Equivale a</th><th class="l">De dónde</th></tr></thead><tbody>
         ${lineas.map(([n, inp, u, eq, de]) => `<tr>
           <td class="l clave">${esc(n)}</td><td>${inp}</td><td class="l dim">${esc(u)}</td>
@@ -777,7 +799,7 @@
     const claves = D.claves();
     let th = '', tb = '';
     if (ui.vistaHist === 'turno') {
-      th = `<tr><th class="l">Fecha</th><th class="l">Día</th>${D.TURNOS.map((t) => `<th>${esc(t.nombre)}</th>`).join('')}<th>Total qq</th><th class="l"></th></tr>`;
+      th = `<tr><th class="l">Fecha</th><th class="l">Día</th>${D.TURNOS.map((t) => `<th>${esc(t.nombre)}</th>`).join('')}<th>Total QQ</th><th class="l"></th></tr>`;
       tb = fechas.map((f) => {
         const pt = D.porTurnoDe(f);
         const tot = D.TURNOS.reduce((a, t) => a + (Number(pt[t.id]) || 0), 0);
@@ -786,7 +808,7 @@
           <td class="num"><b>${n2(tot)}</b></td>${acciones(f)}</tr>`;
       }).join('');
     } else if (ui.vistaHist === 'planta') {
-      th = `<tr><th class="l">Fecha</th><th class="l">Día</th>${D.PLANTAS.map((p) => `<th>${esc(p.nombre)}</th>`).join('')}<th>Total qq</th><th class="l"></th></tr>`;
+      th = `<tr><th class="l">Fecha</th><th class="l">Día</th>${D.PLANTAS.map((p) => `<th>${esc(p.nombre)}</th>`).join('')}<th>Total QQ</th><th class="l"></th></tr>`;
       tb = fechas.map((f) => {
         const pp = D.porPlantaDe(f);
         const tot = D.PLANTAS.reduce((a, p) => a + (Number(pp[p.id]) || 0), 0);
@@ -795,7 +817,7 @@
           <td class="num"><b>${n2(tot)}</b></td>${acciones(f)}</tr>`;
       }).join('');
     } else if (ui.vistaHist === 'clave') {
-      th = `<tr><th class="l">Fecha</th><th class="l">Día</th>${claves.map((c) => `<th>${esc(c)}</th>`).join('')}<th>Total qq</th><th class="l"></th></tr>`;
+      th = `<tr><th class="l">Fecha</th><th class="l">Día</th>${claves.map((c) => `<th>${esc(c)}</th>`).join('')}<th>Total QQ</th><th class="l"></th></tr>`;
       tb = fechas.map((f) => {
         const pc = D.produccionDe(f);
         const tot = claves.reduce((a, c) => a + (Number(pc[c]) || 0), 0);
@@ -892,6 +914,13 @@
         <td><input class="inqq" inputmode="decimal" step="0.01" data-pmult="${p.clave}" value="${c.mult}" aria-label="Múltiplo ${p.clave}"></td>
         <td><input class="inqq" inputmode="decimal" data-pcol="${p.clave}" value="${c.colchon ?? ''}" placeholder="${pol.colchon}" aria-label="Colchón ${p.clave}"></td>
         <td><input class="inqq" inputmode="numeric" data-pvu="${p.clave}" value="${c.vidaUtil ?? ''}" placeholder="${pol.vidaUtil}" aria-label="Vida útil ${p.clave}"></td>
+        <td><input class="inqq" inputmode="decimal" data-pmax="${p.clave}" value="${c.maxDia ?? ''}" placeholder="sin tope" aria-label="Máximo diario ${p.clave}"></td>
+        <td><select data-prep="${p.clave}" aria-label="Reparto ${p.clave}" style="min-width:118px">
+          <option value="cascada" ${c.reparto !== 'porcentaje' ? 'selected' : ''}>Por orden</option>
+          <option value="porcentaje" ${c.reparto === 'porcentaje' ? 'selected' : ''}>Por porcentaje</option>
+        </select>${c.reparto === 'porcentaje' ? `<span class="mini">${esc((c.turnos || [])
+            .map((t) => `${(D.turnoPorId[t] || {}).nombre || t} ${Number((c.pesos || {})[t]) || 0}%`)
+            .join(' · '))}</span>` : ''}</td>
         <td class="l chips">${chips}</td>
         <td><label class="sw"><input type="checkbox" data-pcon="${p.clave}" ${c.prodEnConteo ? 'checked' : ''}></label></td>
         <td><label class="sw"><input type="checkbox" data-pact="${p.clave}" ${c.activo !== false ? 'checked' : ''}></label></td>
@@ -960,9 +989,9 @@
       <div class="card" style="margin-bottom:14px">
         <h3>Turnos y topes</h3>
         <p class="sub">El tope son los quintales que el turno alcanza a hacer. El mínimo obliga a dejarlo trabajando aunque el sugerido sea cero.</p>
-        <div class="tablabox"><table><thead><tr><th class="l">Turno</th><th class="l">Planta</th><th>Tope qq</th><th>Mínimo qq</th><th class="l">Estado</th></tr></thead><tbody>${turnos}</tbody></table></div>
+        <div class="tablabox"><table><thead><tr><th class="l">Turno</th><th class="l">Planta</th><th>Tope QQ</th><th>Mínimo QQ</th><th class="l">Estado</th></tr></thead><tbody>${turnos}</tbody></table></div>
         <p class="dim" style="font-size:.84rem;margin:10px 2px">
-          Capacidad por planta: ${D.PLANTAS.map((x) => `<b>${esc(x.nombre)}</b> ${n2(topePlanta[x.id])} qq`).join(' · ')}.</p>
+          Capacidad por planta: ${D.PLANTAS.map((x) => `<b>${esc(x.nombre)}</b> ${n2(topePlanta[x.id])} QQ`).join(' · ')}.</p>
         <div class="fila" style="margin-top:12px;align-items:flex-end">
           <div class="campo"><label for="inRotDesde">Semana de referencia (un domingo)</label>
             <input type="date" id="inRotDesde" value="${esc(P.rotacion.desde)}" style="min-width:160px"></div>
@@ -1024,12 +1053,22 @@
           <span class="dim" style="font-size:.84rem">«Editar» sirve para cambiar la clave, por ejemplo IN16 a LS19B, sin perder el historial.</span>
         </div>
         <div class="tablabox"><table><thead><tr>
-          <th class="l">Clave</th><th class="l">Planta</th><th>Bolsas/qq</th><th>Múltiplo qq</th><th>Colchón</th><th>Vida útil</th>
-          <th class="l">Turnos que la pueden hacer</th><th>Prod. ya<br>en el conteo</th><th>Activo</th><th class="l"></th></tr></thead>
+          ${th2('Clave', '', 'l')}${th2('Planta', '', 'l')}${th2('Bolsas/QQ', '')}${th2('Múltiplo QQ', '')}
+          ${th2('Colchón', 'vacío = familia')}${th2('Vida útil', 'vacío = familia')}
+          ${th2('Máx QQ/día', 'moldes × vueltas')}${th2('Reparto', 'entre sus turnos')}
+          ${th2('Turnos que la pueden hacer', '', 'l')}${th2('Prod. ya en el conteo', '')}
+          ${th2('Activo', '')}<th class="l"></th></tr></thead>
           <tbody>${prods}</tbody></table></div>
         <p class="dim" style="font-size:.84rem;margin:10px 2px">
           «Prod. ya en el conteo» es para el producto que se hace de mañana y que el INV PM de ese día ya trae adentro:
-          su producción no se vuelve a sumar en el teórico PM.</p>
+          su producción no se vuelve a sumar en el teórico PM.
+          <br><b>Máx QQ/día</b> corta el sugerido: por mucho que haga falta, no hay más moldes ni más vueltas.
+          Se junta con el tope del turno, y manda el que sea menor.
+          <br><b>Reparto</b> dice cómo se parte entre sus turnos: <b>por orden</b> llena el primero de la lista
+          y pasa al siguiente; <b>por porcentaje</b> le da a cada uno su parte, redondeando hacia arriba.
+          Los porcentajes se ponen en «Editar».
+          <br><b>Colchón</b> y <b>vida útil</b> vacíos heredan los de la familia; con un número puesto,
+          ese producto manda sobre su familia.</p>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -1498,6 +1537,11 @@
     else if (d.pmult) P.prod[d.pmult].mult = Math.max(0, Math.round(num(v, 0) * 100) / 100);
     else if (d.pcol) P.prod[d.pcol].colchon = v === '' ? null : Math.max(0, num(v, 0));
     else if (d.pvu) P.prod[d.pvu].vidaUtil = v === '' ? null : Math.max(1, num(v, 21));
+    else if (d.pmax) P.prod[d.pmax].maxDia = v === '' ? null : Math.max(0, num(v, 0)) || null;
+    else if (d.prep) {
+      P.prod[d.prep].reparto = t.value === 'porcentaje' ? 'porcentaje' : 'cascada';
+      D.guardarParams(); pintarParametros(); pintarProduccion(); return true;
+    }
     else if (d.pact) P.prod[d.pact].activo = v;
     else if (d.ppl) {
       const f = P.prod[d.ppl];
@@ -1524,6 +1568,15 @@
   }
 
   function enlazar() {
+    /* Un solo toque deja la casilla lista para escribir encima, en toda la
+       app: se selecciona lo que haya en vez de dejar el cursor en medio del
+       número. El Tab sigue el orden de la tabla, que es el natural. */
+    document.addEventListener('focusin', (e) => {
+      const t = e.target;
+      if (t.matches && t.matches('input.inqq') && !t.disabled) {
+        try { t.select(); } catch (_) { /* algunos tipos no se seleccionan */ }
+      }
+    });
     // pestañas
     const paneles = { prod: '#pProd', inv: '#pInv', ped: '#pPed', bolsa: '#pBolsa',
       sec: '#pSec', hist: '#pHist', prom: '#pProm', param: '#pParam' };
@@ -1825,9 +1878,6 @@
     });
     /* Un toque en la celda del teléfono o la tablet selecciona lo que hay,
        para escribir encima sin tener que borrar. */
-    $('#tbodyBolsa').addEventListener('focusin', (e) => {
-      if (e.target.matches('input.inqq')) e.target.select();
-    });
     $('#btnBolsaPdf').onclick = async () => {
       try {
         const { blob, nombre } = window.Bolsa.pdf(ui.fechaBolsa);
@@ -1873,9 +1923,6 @@
       e.target.blur();
       if (n) setTimeout(() => { n.focus(); n.select(); }, 0);
       else if (i < 0) { /* sin tabla, nada que hacer */ }
-    });
-    $('#secCont').addEventListener('focusin', (e) => {
-      if (e.target.matches('input.inqq')) e.target.select();
     });
     $('#btnSecLimpiar').onclick = async () => {
       if (!await preguntar('Limpiar los cálculos',
@@ -2153,14 +2200,31 @@
         ${campo('fpUni', 'Unidad de medida', c.unidad || 'bolsas')}
       </div>
       <div class="fila" style="margin-top:10px">
-        ${campo('fpRend', 'Rendimiento (por qq)', c.rend, 'number', 'min="1" step="1"')}
-        ${campo('fpMult', 'Múltiplo de producción (qq)', c.mult, 'number', 'min="0" step="0.01"')}
+        ${campo('fpRend', 'Rendimiento (por QQ)', c.rend, 'number', 'min="1" step="1"')}
+        ${campo('fpMult', 'Múltiplo de producción (QQ)', c.mult, 'number', 'min="0" step="0.01"')}
         ${campo('fpCod', 'Código', c.codigo ?? '')}
       </div>
       <div class="fila" style="margin-top:10px">
         ${D.PLANTAS.map((x) => `<label class="sw"><input type="checkbox" data-fppl="${x.id}"
           ${(c.plantas || {})[x.id] ? 'checked' : ''}> Se produce en ${esc(x.nombre)}</label>`).join('')}
       </div>
+      <div class="fila" style="margin-top:10px">
+        ${campo('fpMax', 'Máximo QQ al día', c.maxDia ?? '', 'number', 'min="0" step="0.5"')}
+        <div class="campo"><label for="fpRep">Reparto entre sus turnos</label>
+          <select id="fpRep" style="min-width:150px">
+            <option value="cascada" ${c.reparto !== 'porcentaje' ? 'selected' : ''}>Por orden</option>
+            <option value="porcentaje" ${c.reparto === 'porcentaje' ? 'selected' : ''}>Por porcentaje</option>
+          </select></div>
+      </div>
+      ${(c.turnos || []).length ? `<div class="fila" style="margin-top:10px">
+        ${(c.turnos || []).map((t) => `<div class="campo">
+          <label for="fpPeso_${t}">% en ${esc((D.turnoPorId[t] || {}).nombre || t)}</label>
+          <input type="number" id="fpPeso_${t}" data-fppeso="${t}" min="0" step="1"
+            value="${Number((c.pesos || {})[t]) || ''}" style="width:104px"></div>`).join('')}
+      </div>
+      <p class="dim" style="font-size:.84rem;margin:8px 2px 0">
+        Los porcentajes sólo se usan con el reparto «por porcentaje». No hace falta que sumen
+        100: lo que importa es la proporción entre ellos.</p>` : ''}
       <p class="dim" style="font-size:.84rem;margin:12px 2px 0">
         Los topes de producción salen de los turnos: marca abajo, en la tabla de productos, cuáles turnos pueden hacerla.
         ${clave ? 'Al cambiar la clave se renombra también en los promedios y en todo el historial.' : ''}</p>`,
@@ -2180,6 +2244,11 @@
           codigo: ($('#fpCod').value || '').trim() || null,
           plantas: Object.fromEntries(D.PLANTAS.map((x) =>
             [x.id, $(`[data-fppl="${x.id}"]`).checked])),
+          maxDia: Number($('#fpMax').value) > 0 ? Number($('#fpMax').value) : null,
+          reparto: $('#fpRep').value === 'porcentaje' ? 'porcentaje' : 'cascada',
+          pesos: Object.fromEntries([...document.querySelectorAll('[data-fppeso]')]
+            .map((i) => [i.dataset.fppeso, Number(i.value) || 0])
+            .filter(([, v]) => v > 0)),
         };
         if (!Object.values(ficha.plantas).some(Boolean)) ficha.plantas.Z18 = true;
         if (clave && nueva !== clave) renombrar(clave, nueva);

@@ -224,8 +224,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.19';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.19';`
+1. `js/ui.js` → `const VERSION = 'V.2026.20';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.20';`
 
 ## Plantas, claves y productos nuevos
 
@@ -281,6 +281,24 @@ Si una clave está marcada para una planta donde ninguno de sus turnos trabaja, 
 en el tablero y la marca en Parámetros en vez de dejarla sin producir: se sigue repartiendo en
 sus turnos de siempre, pero el sugerido por planta no cuadra con lo decidido hasta que se
 corrija.
+
+### Tope y reparto por producto
+
+Cada producto puede llevar un **máximo de QQ al día** —los moldes y las vueltas que se les
+alcanza a dar— que corta el sugerido por mucho que haga falta. Se junta con el tope del turno:
+manda el que sea menor.
+
+El **reparto** dice cómo se parte entre sus turnos:
+
+- **Por orden** (lo de siempre): llena el primer turno de su lista y pasa al siguiente.
+- **Por porcentaje**: a cada turno su parte, redondeando hacia arriba al múltiplo del producto
+  y sin pasarse del cupo del turno; lo que sobre por el redondeo va al último.
+
+El **10HR3** viene así de fábrica: tope de 54 QQ al día, 40 % en Redondo AM y 60 % en Redondo
+PM. Con 54 QQ eso da 22 y 32. Los porcentajes se cambian en **Editar**.
+
+**Colchón** y **vida útil** vacíos heredan los de la familia; con un número puesto, ese
+producto manda sobre su familia.
 
 En la tabla de productos, **Editar** cambia la clave y arrastra promedios e historial — es lo
 que hace falta cuando IN16 pase a ser LS19B — y **Agregar producto** da de alta uno nuevo con

@@ -118,7 +118,7 @@
       });
       y += FILA;
     });
-    celda(g, 0, y, cClave, FILA, { fondo: COL.naranjaSuave, texto: 'TOTAL qq', color: COL.tinta, fuente: 'bold 12px system-ui, sans-serif', alinear: 'right', borde: COL.naranjaSuave });
+    celda(g, 0, y, cClave, FILA, { fondo: COL.naranjaSuave, texto: 'TOTAL QQ', color: COL.tinta, fuente: 'bold 12px system-ui, sans-serif', alinear: 'right', borde: COL.naranjaSuave });
     celda(g, cClave, y, cProd, FILA, { fondo: COL.naranjaSuave, texto: n2(d.total), color: COL.tinta, fuente: 'bold 13px system-ui, sans-serif', borde: COL.naranjaSuave });
     return cv;
   }
@@ -135,7 +135,7 @@
 
     // fila de totales por turno, como la del libro
     celda(g, 0, y, cClave + cProd, SUB, {
-      fondo: COL.naranjaSuave, texto: `TOTAL ${n2(d.total)} qq`, color: COL.tinta,
+      fondo: COL.naranjaSuave, texto: `TOTAL ${n2(d.total)} QQ`, color: COL.tinta,
       fuente: 'bold 12px system-ui, sans-serif', borde: COL.naranjaSuave,
     });
     d.turnos.forEach((x, i) => {
@@ -171,7 +171,7 @@
       });
       y += FILA;
     });
-    celda(g, 0, y, cClave + cProd, FILA, { fondo: COL.naranjaSuave, texto: `TOTAL ${n2(d.total)} qq`, color: COL.tinta, fuente: 'bold 12px system-ui, sans-serif', alinear: 'right', borde: COL.naranjaSuave });
+    celda(g, 0, y, cClave + cProd, FILA, { fondo: COL.naranjaSuave, texto: `TOTAL ${n2(d.total)} QQ`, color: COL.tinta, fuente: 'bold 12px system-ui, sans-serif', alinear: 'right', borde: COL.naranjaSuave });
     d.turnos.forEach((x, i) => {
       celda(g, cClave + cProd + i * cTurno, y, cTurno, FILA, { fondo: COL.naranjaSuave, texto: n2(d.porTurnoTotal[x.id]), color: COL.tinta, fuente: 'bold 12px system-ui, sans-serif', borde: COL.naranjaSuave });
     });
@@ -466,7 +466,7 @@
                 <option value="TODAS">Todas juntas</option>
               </select></div>
             <div class="campo"><label>&nbsp;</label>
-              <button class="btn" type="button" id="rImgSimple">Imagen clave y qq</button></div>
+              <button class="btn" type="button" id="rImgSimple">Imagen clave y QQ</button></div>
             <div class="campo"><label>&nbsp;</label>
               <button class="btn" type="button" id="rImgCompleta">Imagen completa</button></div>
             <div class="campo"><label>&nbsp;</label>
@@ -495,8 +495,8 @@
       d.totalTodos = Math.round(d.filas.reduce((a, f) => a + f.todosTurnosTotal, 0) * 100) / 100;
 
       q('#rFecha').textContent = `${d.dia} ${d.fechaLarga}`;
-      q('#rNota').innerHTML = `Lleva <b>${n2(d.total)} qq</b> en ${esc2(d.nombrePlanta.toLowerCase())}`
-        + (d.totalTodos !== d.total ? ` · <b>${n2(d.totalTodos)} qq</b> en total ese día` : '')
+      q('#rNota').innerHTML = `Lleva <b>${n2(d.total)} QQ</b> en ${esc2(d.nombrePlanta.toLowerCase())}`
+        + (d.totalTodos !== d.total ? ` · <b>${n2(d.totalTodos)} QQ</b> en total ese día` : '')
         + '. El PDF sale en media carta con la hoja de trabajo completa, y no se guarda en ningún lado.';
       const cv = imagenCompleta(d);
       cv.style.cssText = 'max-width:100%;height:auto;border-radius:9px;display:block';
