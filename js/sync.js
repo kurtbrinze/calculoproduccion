@@ -364,16 +364,26 @@
       if (!igual) {
         const pronto = !manual && Date.now() - ultimaSubida < 60000;
         if (!pronto) {
-          let r = await pedir('PUT', { estado: m.estado, etag });
-          if (r.estado === 409) {
-            /* El otro equipo escribió mientras tanto: se vuelve a mezclar
-               contra lo que acaba de dejar y se intenta una vez más. */
+          /* Tres intentos, y el último sin condición.
+             Los dos primeros exigen que nadie haya escrito desde la lectura;
+             si los dos chocan, se vuelve a mezclar contra lo último que haya y
+             se guarda sin condición. No se pierde nada: la mezcla acaba de
+             incorporar lo que el otro equipo dejó, y si justo en ese instante
+             escribió otra vez, su propio equipo lo vuelve a subir en la
+             siguiente pasada. Quedarse trabado sin poder guardar es peor. */
+          let r = null;
+          for (let intento = 0; intento < 3; intento++) {
+            const condicionado = intento < 2 ? etag : null;
+            r = await pedir('PUT', { estado: m.estado, etag: condicionado });
+            if (r.estado !== 409) break;
             remoto = r.datos.estado || null;
             etag = r.datos.etag || null;
             m = mezclar(estadoLocal(), remoto, base(), eleccion || 'local');
             if (m.traidos.length || m.borrados.length) aplicar(m.estado);
-            r = await pedir('PUT', { estado: m.estado, etag });
-            if (r.estado === 409) throw new Error('Los dos equipos están guardando a la vez. Intenta de nuevo en un momento.');
+          }
+          if (r.estado === 409) {
+            throw new Error('El servidor no deja guardar: sigue diciendo que alguien más escribió. '
+              + 'Vuelve a intentar en un momento; si sigue igual, avísame.');
           }
           etag = r.datos.etag || etag;
           ultimaSubida = Date.now();

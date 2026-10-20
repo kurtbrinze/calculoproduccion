@@ -32,6 +32,28 @@ function mismaClave(a, b) {
   return dif === 0;
 }
 
+/**
+ * Sello del contenido guardado.
+ *
+ * Antes se usaba el etag del blob y eso resultó frágil: es un dato opaco del
+ * almacén, y si lo que devuelve al leer no es exactamente lo que `ifMatch`
+ * espera al escribir, la condición falla SIEMPRE. El efecto era un 409 eterno
+ * —«los dos equipos están guardando a la vez» sin que nadie más estuviera
+ * guardando— que sólo se arreglaba borrando el archivo a mano.
+ *
+ * El sello se calcula aquí sobre el texto guardado, así que leer y escribir
+ * hablan el mismo idioma por construcción.
+ */
+function sello(texto) {
+  let a = 0x811c9dc5, b = 0x01000193;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto.charCodeAt(i);
+    a = Math.imul(a ^ c, 16777619) >>> 0;
+    b = Math.imul(b + c, 2246822519) >>> 0;
+  }
+  return `${texto.length.toString(36)}-${a.toString(36)}-${b.toString(36)}`;
+}
+
 async function leer() {
   const r = await get(RUTA, { access: 'private', useCache: false });
   if (!r || !r.stream) return { estado: null, etag: null, actualizado: null };
@@ -40,7 +62,7 @@ async function leer() {
   try { estado = JSON.parse(texto); } catch (_) { estado = null; }
   return {
     estado,
-    etag: r.blob && r.blob.etag ? r.blob.etag : null,
+    etag: sello(texto),
     actualizado: r.blob && r.blob.uploadedAt ? r.blob.uploadedAt : null,
   };
 }
@@ -82,31 +104,29 @@ export default async function handler(req, res) {
         return res.status(413).json({ error: 'El historial pesa demasiado para subirlo de una. Exporta y borra días viejos.' });
       }
 
-      const opciones = {
+      /* La condición se comprueba acá, comparando el sello de lo guardado con
+         el que trae la app. Si entre su lectura y este guardado escribió el
+         otro equipo, el sello ya no es el mismo y se responde 409 con lo que
+         hay, para que vuelva a mezclar.
+         Sin etag se asume que es la primera vez de ese equipo. */
+      if (cuerpo.etag) {
+        const actual = await leer();
+        if (actual.etag && actual.etag !== cuerpo.etag) {
+          return res.status(409).json({
+            error: 'El otro equipo guardó primero.',
+            estado: actual.estado, etag: actual.etag, actualizado: actual.actualizado,
+          });
+        }
+      }
+
+      await put(RUTA, texto, {
         access: 'private',
         addRandomSuffix: false,
         allowOverwrite: true,
         contentType: 'application/json',
         cacheControlMaxAge: 60,
-      };
-      /* Sin etag se asume que es la primera vez; con etag se exige que nadie
-         haya escrito en medio. */
-      if (cuerpo.etag) opciones.ifMatch = cuerpo.etag;
-
-      let blob;
-      try {
-        blob = await put(RUTA, texto, opciones);
-      } catch (err) {
-        const conflicto = err && (err.name === 'BlobPreconditionFailedError'
-          || /precondition|ifmatch|412/i.test(String(err.message || '')));
-        if (!conflicto) throw err;
-        const actual = await leer();
-        return res.status(409).json({
-          error: 'El otro equipo guardó primero.',
-          estado: actual.estado, etag: actual.etag, actualizado: actual.actualizado,
-        });
-      }
-      return res.status(200).json({ ok: true, etag: blob.etag || null, actualizado: new Date().toISOString() });
+      });
+      return res.status(200).json({ ok: true, etag: sello(texto), actualizado: new Date().toISOString() });
     }
 
     return res.status(405).json({ error: 'Método no permitido.' });

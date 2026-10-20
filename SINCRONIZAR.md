@@ -67,6 +67,21 @@ caso de todos los días funciona: si capturaste el INV PM del miércoles en la
 tablet mientras repartías la producción de ese mismo miércoles en la laptop,
 al sincronizar quedan las dos cosas.
 
+## Cuando los dos equipos nunca se habían comparado
+
+Pasa la primera vez, y también después de reiniciar la sincronización o de borrar el archivo
+del servidor. Sin memoria de comparación no hay manera de saber quién cambió qué, así que todo
+lo que esté distinto se pregunta de una sola vez, con tres caminos:
+
+| Botón | Qué hace |
+|---|---|
+| **Cancelar** | Nada. No sube ni baja. |
+| **Lo de este equipo** | Para lo que está en duda manda lo de aquí, y se sube |
+| **Lo del otro equipo** | Para lo que está en duda manda lo que está guardado en el servidor |
+
+La decisión es **sólo para lo que aparece en la lista**: lo que existe en un solo lado se
+conserva de las dos maneras.
+
 Cuando sí hay un choque de verdad — la misma clave del mismo día cambiada en
 los dos equipos — gana el equipo donde tocaste **Sincronizar** y el aviso dice
 cuál casilla, no sólo el día: `MIE 14/10 (INV PM S19)`. Si lo bueno era lo del
@@ -108,6 +123,9 @@ se conectó a otro proyecto.
 **«Este despliegue no trae el módulo»** — estás abriendo la versión de GitHub
 Pages, que no tiene servidor. La sincronización sólo funciona en la dirección
 de Vercel.
+
+**«El servidor no deja guardar»** — se intentó tres veces, la última sin condición, y aun así
+no entró. Vuelve a intentar en un momento; si sigue igual, es algo del almacén de Vercel.
 
 **Quedó revuelto** — en Parámetros, **Empezar de cero** borra lo que este
 equipo recuerda de la comparación, sin tocar los datos. La próxima vez vuelve a

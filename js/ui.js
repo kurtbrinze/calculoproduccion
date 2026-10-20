@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.18';
+  const VERSION = 'V.2026.19';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -30,22 +30,34 @@
 
   /* La pantalla de espera se baja mientras hay una pregunta: si no, tapa los
      botones del cuadro y en la tablet no hay manera de contestar. */
-  function preguntar(titulo, cuerpo, textoSi = 'Aceptar') {
+  /**
+   * Pregunta de dos botones: devuelve true o false.
+   * Con `textoOtro` aparece un tercer botón en medio y devuelve 'otro'.
+   * Cancelar —y tocar fuera del cuadro— siempre devuelve false, que siempre
+   * quiere decir no hacer nada.
+   */
+  function preguntar(titulo, cuerpo, textoSi = 'Aceptar', textoOtro = null) {
     const ocupado = $('#espera').className === 'show';
     if (ocupado) $('#espera').className = '';
     return new Promise((res) => {
       $('#modalTit').textContent = titulo;
       $('#modalCuerpo').innerHTML = cuerpo;
       $('#modalSi').textContent = textoSi;
+      $('#modalNo').textContent = 'Cancelar';
+      const otro = $('#modalOtro');
+      otro.hidden = !textoOtro;
+      if (textoOtro) otro.textContent = textoOtro;
       const m = $('#modal'); m.classList.add('show');
       const cerrar = (v) => {
         m.classList.remove('show');
-        $('#modalSi').onclick = null; $('#modalNo').onclick = null;
+        $('#modalSi').onclick = null; $('#modalNo').onclick = null; otro.onclick = null;
+        otro.hidden = true;
         if (ocupado) $('#espera').className = 'show';
         res(v);
       };
       $('#modalSi').onclick = () => cerrar(true);
       $('#modalNo').onclick = () => cerrar(false);
+      otro.onclick = () => cerrar('otro');
       m.onclick = (e) => { if (e.target === m) cerrar(false); };
     });
   }
@@ -1330,14 +1342,19 @@
           return;
         }
         espera(false);
-        const si = await preguntar('Estos dos equipos nunca se habían comparado',
+        /* Tres caminos de verdad: no hacer nada, mandar lo de aquí, o traer lo
+           del servidor. Antes «Cancelar» no cancelaba: traía lo del otro
+           equipo sin decirlo, que es lo contrario de lo que dice el botón. */
+        const q = await preguntar('Estos dos equipos nunca se habían comparado',
           `<p>Hay <b>${r.total}</b> ${r.total === 1 ? 'cosa que está distinta' : 'cosas que están distintas'} aquí y allá,
              y no hay manera de saber cuál es la buena.</p>
            <p class="dim">${esc(r.indecisos.slice(0, 14).join(' · '))}${r.indecisos.length > 14 ? ' …' : ''}</p>
-           <p>Lo demás ya quedó igual en los dos. ¿Con cuál me quedo para esto?</p>`,
-          'Lo de este equipo');
-        $('#modalNo').textContent = 'Cancelar';
-        return sincronizar(manual, si ? 'local' : 'remoto');
+           <p>Lo demás ya quedó igual en los dos. La decisión es sólo para lo de arriba:
+             lo que está en un solo lado se conserva de cualquier manera.</p>`,
+          'Lo de este equipo', 'Lo del otro equipo');
+        /* Cancelar es cancelar: no sube, no baja, no toca nada. */
+        if (q === false) { if (manual) aviso('Sin cambios: no se sincronizó.'); return; }
+        return sincronizar(manual, q === 'otro' ? 'remoto' : 'local');
       }
 
       if (r.baseOk === false) {
