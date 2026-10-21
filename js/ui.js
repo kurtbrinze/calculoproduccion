@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.20';
+  const VERSION = 'V.2026.21';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -202,16 +202,23 @@
       const sugArea = filas.reduce((a, f) => a + f.sugeridoQQ, 0);
       const porTurno = turnos.map((x) =>
         C.redondea(filas.reduce((a, f) => a + (Number(f.asign[x.id]) || 0), 0), 2));
+      /* La capacidad del área es la suma de los topes de sus turnos activos. */
+      const topeArea = turnos.reduce((a, x) => a + ((t.turnos[x.id] || {}).tope || 0), 0);
+      /* Todas las casillas del total llevan las mismas dos líneas —el número
+         arriba y el tope abajo— aunque la de abajo vaya vacía. Si no, la
+         columna que sí tiene tope empuja su número hacia arriba y la fila
+         queda despareja. */
+      const celTot = (valor, abajo) => `<td><b>${valor}</b>`
+        + `<span class="mini">${abajo || '&nbsp;'}</span></td>`;
       const pie = `<tr class="totales">
         <td class="l">TOTAL</td><td></td><td></td>
-        <td class="num"><b>${sugArea ? n2(C.redondea(sugArea, 2)) : '—'}</b></td>
+        ${celTot(sugArea ? n2(C.redondea(sugArea, 2)) : '—')}
         ${porTurno.map((v, i) => {
           const cupo = t.turnos[turnos[i].id] || {};
-          return `<td class="num"><b>${v ? n2(v) : '—'}</b>${cupo.tope
-            ? `<span class="mini">de ${n2(cupo.tope)}</span>` : ''}</td>`;
+          return celTot(v ? n2(v) : '—', cupo.tope ? `de ${n2(cupo.tope)}` : '');
         }).join('')}
-        <td class="num"><b>${sumArea ? n2(C.redondea(sumArea, 2)) : '—'}</b></td>
-        <td class="num"><b>${bolsasArea ? n0(bolsasArea) : '—'}</b></td>
+        ${celTot(sumArea ? n2(C.redondea(sumArea, 2)) : '—', `de ${n2(C.redondea(topeArea, 2))}`)}
+        ${celTot(bolsasArea ? n0(bolsasArea) : '—')}
         <td></td><td></td><td></td></tr>`;
       const cubre = rotuloCubre(filas);
       const planta = (D.PLANTAS.find((x) => x.id === area.planta) || {}).nombre || area.planta;
@@ -1146,6 +1153,20 @@
       </div>
 
       <div class="card" style="margin-bottom:14px">
+        <h3>Impresión de bolsa</h3>
+        <p class="sub">
+          Qué claves salen en esa hoja. Lo que no se imprime sólo estorba a la hora de decidir,
+          así que acá se quitan. Una clave nueva entra sola; si no la querés, la desmarcás.
+        </p>
+        <div class="fila" style="margin-bottom:10px">
+          <button class="btn ghost mini" type="button" id="btnBolsaTodas">Marcar todas</button>
+          <button class="btn sec mini" type="button" id="btnBolsaNinguna">Quitar todas</button>
+          <span class="dim" style="font-size:.84rem" id="bolsaCuenta"></span>
+        </div>
+        <div class="l chips" id="bolsaClaves"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
         <h3>Datos desde el libro de cálculo</h3>
         <p class="sub">Trae rendimientos e inventario de <b>Calculo_Produccion_IA.xlsx</b> sin tener que escribirlos.</p>
         <div class="fila">
@@ -1169,6 +1190,31 @@
     pintarMatriz();
     pintarLector();
     pintarFeriados();
+    pintarBolsaClaves();
+  }
+
+  /* Las claves de Impresión de bolsa, en el mismo orden de la hoja. Las filas
+     de más —las sumas, MU1 y las que se cuentan a mano— también se pueden
+     quitar: también estorban. */
+  function pintarBolsaClaves() {
+    const cont = $('#bolsaClaves');
+    if (!cont) return;
+    const P = D.estado.params;
+    const B = window.Bolsa;
+    const vistos = new Set();
+    const items = [];
+    B.filas(P, true).forEach((f) => {
+      const id = f.tipo === 'clave' ? f.clave : f.id;
+      if (vistos.has(id)) return;
+      vistos.add(id);
+      items.push({ id, nombre: f.nombre, extra: f.tipo !== 'clave' });
+    });
+    cont.innerHTML = items.map((x) => `<label class="sw turnochip${x.extra ? ' extra' : ''}"
+      title="${x.extra ? 'Fila de más de la hoja' : 'Clave del catálogo'}">
+      <input type="checkbox" data-bfuera="${esc(x.id)}" ${B.dentro(P, x.id) ? 'checked' : ''}>
+      ${esc(x.nombre)}</label>`).join('');
+    const dentro = items.filter((x) => B.dentro(P, x.id)).length;
+    $('#bolsaCuenta').textContent = `${dentro} de ${items.length} en la hoja.`;
   }
 
   // ---------- feriados ----------
@@ -1537,6 +1583,12 @@
     else if (d.pmult) P.prod[d.pmult].mult = Math.max(0, Math.round(num(v, 0) * 100) / 100);
     else if (d.pcol) P.prod[d.pcol].colchon = v === '' ? null : Math.max(0, num(v, 0));
     else if (d.pvu) P.prod[d.pvu].vidaUtil = v === '' ? null : Math.max(1, num(v, 21));
+    else if (d.bfuera) {
+      const fuera = new Set(P.bolsaFuera || []);
+      if (v) fuera.delete(d.bfuera); else fuera.add(d.bfuera);
+      P.bolsaFuera = [...fuera];
+      D.guardarParams(); pintarBolsaClaves(); return true;
+    }
     else if (d.pmax) P.prod[d.pmax].maxDia = v === '' ? null : Math.max(0, num(v, 0)) || null;
     else if (d.prep) {
       P.prod[d.prep].reparto = t.value === 'porcentaje' ? 'porcentaje' : 'cascada';
@@ -2015,6 +2067,18 @@
       const ed = e.target.closest('[data-editar]');
       if (ed) { fichaProducto(ed.dataset.editar); return; }
       if (e.target.closest('#btnNuevoProd')) { fichaProducto(null); return; }
+
+      if (e.target.closest('#btnBolsaTodas')) {
+        P.bolsaFuera = []; D.guardarParams(); pintarBolsaClaves();
+        aviso('Todas las claves entran en la hoja de bolsa.'); return;
+      }
+      if (e.target.closest('#btnBolsaNinguna')) {
+        P.bolsaFuera = window.Bolsa.filas(P, true)
+          .map((f) => (f.tipo === 'clave' ? f.clave : f.id));
+        P.bolsaFuera = [...new Set(P.bolsaFuera)];
+        D.guardarParams(); pintarBolsaClaves();
+        aviso('Hoja de bolsa vacía: marca las que sí uses.'); return;
+      }
 
       // --- feriados ---
       if (e.target.closest('#btnAddFeriado')) {

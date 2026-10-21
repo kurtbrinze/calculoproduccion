@@ -253,9 +253,16 @@ tr.detalle td{background:#0E1621;padding:0;border-bottom:2px solid var(--line-2)
 th{text-align:center}
 th.l{text-align:left}
 
-/* fila de totales de cada área de producción */
-tfoot tr.totales td{border-top:2px solid var(--line);padding-top:9px;font-size:.95rem}
-tfoot tr.totales .mini{display:block;font-weight:400;font-size:.7rem;color:var(--muted)}
+/* Fila de totales de cada área de producción. Va centrada y con las dos
+   líneas siempre, para que los números queden uno debajo del otro. */
+tfoot tr.totales td{border-top:2px solid var(--line);padding-top:9px;font-size:.95rem;
+  text-align:center;vertical-align:top}
+tfoot tr.totales td.l{text-align:left}
+tfoot tr.totales .mini{display:block;font-weight:400;font-size:.7rem;color:var(--muted);
+  margin-top:2px;min-height:1em}
+
+/* las filas de más de la hoja de bolsa, para distinguirlas de las claves */
+.turnochip.extra{border-style:dashed}
 
 /* ---------- impresión de bolsa ---------- */
 /* Las filas que suman dos plantas y las que se cuentan a mano se separan de

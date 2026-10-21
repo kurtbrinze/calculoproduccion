@@ -311,6 +311,9 @@
       /* [{ fecha, nombre, dias: { 'AAAA-MM-DD': { 'Z18|AM': 'SI', ... } } }] */
       feriados: [],
       empaque: EMPAQUE.map((e) => ({ ...e })),
+      /* Claves y filas que NO salen en Impresión de bolsa. Se guarda lo que
+         queda fuera para que lo nuevo entre solo. */
+      bolsaFuera: [],
     };
   }
 
@@ -420,6 +423,8 @@
         despues: Number(f.despues) >= 0 ? Number(f.despues) : FERIADO_DESPUES,
         dias: f.dias && typeof f.dias === 'object' ? f.dias : null,
       }));
+    out.bolsaFuera = (Array.isArray(guardado.bolsaFuera) ? guardado.bolsaFuera : [])
+      .filter((x) => typeof x === 'string');
     out.empaque = (Array.isArray(guardado.empaque) && guardado.empaque.length
       ? guardado.empaque : EMPAQUE)
       .filter((e) => e && e.id)

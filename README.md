@@ -26,6 +26,9 @@ dice de qué día habla. De cada clave se ve:
 | Cobertura | Días de venta que quedan cubiertos |
 | Alerta | OK, FALTANTE, EXCESO, TOPE VIDA ÚTIL o MENOS DE UN LOTE |
 
+Cada área cierra con una fila de **TOTAL**: el sugerido del área, lo que lleva cada turno con
+su tope debajo, el decidido con la capacidad del área, y las bolsas.
+
 Al tocar una clave se abre la explicación de dónde salió su sugerido, paso a paso.
 El sugerido total también aparece partido por planta.
 
@@ -224,8 +227,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.20';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.20';`
+1. `js/ui.js` → `const VERSION = 'V.2026.21';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.21';`
 
 ## Plantas, claves y productos nuevos
 
@@ -353,6 +356,12 @@ Tres casos aparte, como en la hoja:
 **Enter y Tab bajan por la misma columna**, no por la fila: una hoja así se llena una columna
 entera de arriba abajo. Al entrar a una celda se selecciona lo que hay, para escribir encima de
 un toque en la tablet.
+
+**Qué claves salen** se elige en Parámetros, en la sección «Impresión de bolsa». La hoja con
+todo el catálogo estorba a la hora de decidir, así que ahí se quitan las que no se imprimen —y
+también las filas de más: las sumas, MU1 y las que se cuentan a mano. Se guarda lo que queda
+**fuera**, así que una clave nueva entra sola; si no la querés, la desmarcás. «Quitar todas»
+deja la hoja en blanco para marcar sólo el puñado que de verdad usás.
 
 **PDF para imprimir** saca la tabla entera en carta vertical, con el mismo recorte que el área
 de impresión del Excel. Se guarda en la carpeta elegida, igual que los demás archivos.

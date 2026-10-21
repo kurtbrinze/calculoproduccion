@@ -44,7 +44,14 @@
   const corto = { Z18: '18', Z2CZ: '2 CZ', Z2: '2' };
 
   /** Las filas de la tabla: una por clave y planta, más las de arriba. */
-  function filas(params) {
+  /**
+   * Si esa fila entra en la hoja. Se guarda la lista de las que NO entran, no
+   * la de las que sí: así una clave nueva aparece sola, como en el resto de
+   * la app, en vez de quedarse afuera sin que nadie se entere.
+   */
+  const dentro = (P, id) => !(P.bolsaFuera || []).includes(id);
+
+  function filas(params, todas) {
     const P = params || D.estado.params;
     const out = [];
     /* El orden es el de las áreas de producción, para que la hoja se lea en
@@ -55,6 +62,7 @@
         const id = `${c}|${a.planta}`;
         if (vistas.has(id)) return;
         vistas.add(id);
+        if (!todas && !dentro(P, c)) return;
         const f = P.prod[c] || {};
         out.push({
           id, tipo: 'clave', clave: c, planta: a.planta,
@@ -64,6 +72,7 @@
       });
     });
     (P.bolsaExtras || EXTRAS).forEach((e) => {
+      if (!todas && !dentro(P, e.id)) return;
       if (e.tipo !== 'suma') { out.push({ ...e, rend: Number(e.rend) || 0, pprod: e.pprod || '' }); return; }
       const base = P.prod[e.partes[0].clave] || {};
       /* Una suma de una sola clave se llama como la clave —con su alias, para
@@ -328,5 +337,5 @@
     };
   }
 
-  window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf, EXTRAS, alDiez };
+  window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf, dentro, EXTRAS, alDiez };
 })();
