@@ -457,28 +457,25 @@
         <span class="dim" id="rFecha"></span>
         <button class="btn sec mini" type="button" id="rCerrar" style="margin-left:auto">Cerrar</button>
       </div>
-      <div class="lcuerpo">
-        <div class="card" style="margin-bottom:12px">
-          <div class="fila">
-            <div class="campo"><label for="rPlanta">Planta</label>
-              <select id="rPlanta" style="min-width:190px">
-                ${D.PLANTAS.map((p) => `<option value="${p.id}">${esc2(p.nombre)}</option>`).join('')}
-                <option value="TODAS">Todas juntas</option>
-              </select></div>
-            <div class="campo"><label>&nbsp;</label>
-              <button class="btn" type="button" id="rImgSimple">Imagen clave y QQ</button></div>
-            <div class="campo"><label>&nbsp;</label>
-              <button class="btn" type="button" id="rImgCompleta">Imagen completa</button></div>
-            <div class="campo"><label>&nbsp;</label>
-              <button class="btn ghost" type="button" id="rPdf">Descargar PDF</button></div>
-            <div class="campo"><label>&nbsp;</label>
-              <button class="btn sec" type="button" id="rImprimir">Imprimir</button></div>
+      <div class="lcuerpo rescuerpo">
+        <div class="card rescard">
+          <div class="fila" style="align-items:center">
+            <label for="rPlanta" class="dim" style="font-size:.84rem">Planta</label>
+            <select id="rPlanta" style="min-width:170px">
+              ${D.PLANTAS.map((p) => `<option value="${p.id}">${esc2(p.nombre)}</option>`).join('')}
+              <option value="TODAS">Todas juntas</option>
+            </select>
+            <button class="btn mini" type="button" id="rImgSimple">Imagen clave y QQ</button>
+            <button class="btn mini" type="button" id="rImgCompleta">Imagen completa</button>
+            <button class="btn ghost mini" type="button" id="rPdf">Descargar PDF</button>
+            <button class="btn sec mini" type="button" id="rImprimir">Imprimir</button>
           </div>
-          <p class="sub" style="margin:11px 0 0" id="rNota"></p>
-          <p class="dim" style="font-size:.84rem;margin:9px 0 0" id="rCarpeta"></p>
+          <p class="sub" style="margin:9px 0 0" id="rNota"></p>
+          <p class="dim" style="font-size:.84rem;margin:7px 0 0" id="rCarpeta"></p>
         </div>
         <div id="rVista"></div>
       </div>
+      <div class="lvisor" id="rVisor"><img id="rVisorImg" alt="Resumen de producción"></div>
     </div>`;
     document.body.appendChild(m);
     document.body.style.overflow = 'hidden';
@@ -498,8 +495,15 @@
       q('#rNota').innerHTML = `Lleva <b>${n2(d.total)} QQ</b> en ${esc2(d.nombrePlanta.toLowerCase())}`
         + (d.totalTodos !== d.total ? ` · <b>${n2(d.totalTodos)} QQ</b> en total ese día` : '')
         + '. El PDF sale en media carta con la hoja de trabajo completa, y no se guarda en ningún lado.';
+      /* La hoja completa es alta: se encoge para que quepa entera y se abre a
+         pantalla llena al tocarla, que es lo que uno quiere para leerla. */
       const cv = imagenCompleta(d);
-      cv.style.cssText = 'max-width:100%;height:auto;border-radius:9px;display:block';
+      cv.className = 'resvista';
+      cv.title = 'Tocá la imagen para verla grande';
+      cv.onclick = () => {
+        q('#rVisorImg').src = cv.toDataURL('image/png');
+        q('#rVisor').classList.add('show');
+      };
       q('#rVista').innerHTML = '';
       q('#rVista').appendChild(cv);
     }
@@ -510,15 +514,33 @@
 
     q('#rCerrar').onclick = cerrar;
     m.onclick = (e) => { if (e.target === m) cerrar(); };
+    q('#rVisor').onclick = () => q('#rVisor').classList.remove('show');
     q('#rPlanta').onchange = (e) => { planta = e.target.value; pintar(); };
-    q('#rImgSimple').onclick = async () => {
+
+    /**
+     * Un botón que falla sin decir nada parece un botón roto. Cualquier error
+     * —el archivo, la carpeta, el dibujo— sale en el aviso con su mensaje, que
+     * es lo único con lo que se puede averiguar qué pasó.
+     */
+    const conAviso = (boton, trabajo) => {
+      boton.onclick = async () => {
+        boton.disabled = true;
+        try { await trabajo(); }
+        catch (err) { avisar('No se pudo: ' + ((err && err.message) || err), 'err'); }
+        finally { boton.disabled = false; }
+      };
+    };
+
+    conAviso(q('#rImgSimple'), async () => {
       const r = await compartir(await aBlob(imagenSimple(d)), nombreImg(''), 'Producción');
-      avisar(r === 'descargado' ? 'Imagen descargada.' : (r === 'compartido' ? 'Imagen compartida.' : 'Cancelado.'));
-    };
-    q('#rImgCompleta').onclick = async () => {
+      avisar(r === 'cancelado' ? 'Cancelado.'
+        : (r === 'compartido' ? 'Imagen compartida.' : 'Imagen guardada' + r.replace('descargado', '') + '.'));
+    });
+    conAviso(q('#rImgCompleta'), async () => {
       const r = await compartir(await aBlob(imagenCompleta(d)), nombreImg(' detalle'), 'Producción por turno');
-      avisar(r === 'descargado' ? 'Imagen descargada.' : (r === 'compartido' ? 'Imagen compartida.' : 'Cancelado.'));
-    };
+      avisar(r === 'cancelado' ? 'Cancelado.'
+        : (r === 'compartido' ? 'Imagen compartida.' : 'Imagen guardada' + r.replace('descargado', '') + '.'));
+    });
     async function pintarCarpeta() {
       const c = await A().carpeta();
       const puede = A().haySoporte();
@@ -543,18 +565,34 @@
       };
     }
 
-    q('#rPdf').onclick = async () => {
-      const r = await guardarArchivo(pdf(d), nombrePdf(), A().TIPO_PDF);
-      if (r.modo === 'cancelado') return;
+    conAviso(q('#rPdf'), async () => {
+      /* El PDF se arma primero: si el dibujo falla, se sabe que fue el dibujo
+         y no la carpeta. Y si guardar en la carpeta se cae, se baja igual a
+         Descargas en vez de quedarse sin nada. */
+      const blob = pdf(d);
+      let r;
+      try {
+        r = await guardarArchivo(blob, nombrePdf(), A().TIPO_PDF);
+      } catch (err) {
+        A().descargaNormal(blob, nombrePdf());
+        avisar('No se pudo guardar en la carpeta (' + ((err && err.message) || err)
+          + '); el PDF se bajó a Descargas.', 'err');
+        return;
+      }
+      if (r.modo === 'cancelado') { avisar('Cancelado.'); return; }
       avisar('PDF guardado' + dondeDice(r) + '.');
       pintarCarpeta();
-    };
-    q('#rImprimir').onclick = () => {
-      const u = URL.createObjectURL(pdf(d));
+    });
+    conAviso(q('#rImprimir'), async () => {
+      const blob = pdf(d);
+      const u = URL.createObjectURL(blob);
       const w = window.open(u, '_blank');
-      if (!w) { A().descargaNormal(pdf(d), nombrePdf()); avisar('El navegador bloqueó la ventana; el PDF se descargó.', 'err'); }
+      if (!w) {
+        A().descargaNormal(blob, nombrePdf());
+        avisar('El navegador bloqueó la ventana; el PDF se descargó.', 'err');
+      }
       setTimeout(() => URL.revokeObjectURL(u), 60000);
-    };
+    });
 
     pintar();
     pintarCarpeta();

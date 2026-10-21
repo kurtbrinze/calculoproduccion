@@ -371,6 +371,15 @@ tr.ojo td{background:rgba(235,183,95,.05)}
 .lpie .dim{margin-right:auto;font-size:.85rem}
 .lcols{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px;margin-top:12px}
 #lPrev img{max-width:100%;max-height:30vh;border-radius:var(--r-sm);margin-top:12px;cursor:zoom-in;display:block}
+/* Resumen del día: la barra de botones arriba y la hoja abajo, encogida para
+   que quepa entera. El detalle se lee abriéndola a pantalla llena. */
+.rescuerpo{display:flex;flex-direction:column;gap:12px;overflow:hidden}
+.rescard{margin:0;flex:0 0 auto}
+#rVista{flex:1;min-height:120px;display:flex;align-items:flex-start;
+  justify-content:center;overflow:auto}
+canvas.resvista{max-width:100%;max-height:100%;width:auto;height:auto;
+  border-radius:9px;display:block;cursor:zoom-in}
+
 .lvisor{position:fixed;inset:0;z-index:80;background:rgba(6,10,15,.96);overflow:auto;padding:16px;display:none;cursor:zoom-out}
 .lvisor.show{display:block}
 .lvisor img{width:100%;max-width:1400px;margin:0 auto;display:block}

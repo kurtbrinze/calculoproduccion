@@ -227,8 +227,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.26';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.26';`
+1. `js/ui.js` → `const VERSION = 'V.2026.27';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.27';`
 
 ## Plantas, claves y productos nuevos
 
