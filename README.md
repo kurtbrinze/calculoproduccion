@@ -227,8 +227,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.25';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.25';`
+1. `js/ui.js` → `const VERSION = 'V.2026.26';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.26';`
 
 ## Plantas, claves y productos nuevos
 
@@ -350,8 +350,19 @@ producción. En Parámetros → Impresión de bolsa, cada fila es una ficha: se 
 arrastra a donde vaya. Lo que no esté en ese orden guardado va después, así que **una clave
 nueva aparece al final** en vez de perderse. «Orden de siempre» devuelve el de fábrica.
 
+**Se quita o se pone fila por fila.** La ficha de cada fila lleva su casilla, así que una clave
+que tiene fila en una planta donde no se produce nada —el 10HD7 en Zona 2 CZ, por ejemplo— se
+saca sin tocar sus otras filas. La lista guardada (`bolsaFuera`) acepta las dos formas: la clave
+entera, como se guardaba antes, o el id de una fila, `CLAVE|PLANTA`.
+
 **Esta hoja no se sincroniza.** Se guarda aparte de los días, en el equipo donde se imprime.
 Sí entra en el respaldo.
+
+Las filas **2 + 18** de la hoja son `10HD7`, `10HR3`, `5HM4` y `12WY1 + K`. La del 10HD7 es la
+que suma PANADEROS PM de Zona 18 con Máquina de Zona 2; con ella puesta, la casilla suelta de
+«HD7 Z2» —que servía para meter eso a mano cuando no había fila— queda sin efecto. En una fila
+2 + 18 el QQ AM Z2 se puede escribir ahí mismo o en la fila de Zona 2 de esa clave: la suma toma
+lo que haya en la fila de la planta si en ella misma no se escribió nada, y lo propio manda.
 
 Una clave que se hace en dos plantas lleva una fila por planta y, más abajo, una fila **2 + 18**
 que las suma, porque la bolsa es la misma. Esa suma es la que se imprime: las filas de arriba

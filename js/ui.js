@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.25';
+  const VERSION = 'V.2026.26';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1128,10 +1128,11 @@
       <div class="card" style="margin-bottom:14px">
         <h3>Impresión de bolsa</h3>
         <p class="sub">
-          Qué filas salen en esa hoja y en qué orden. Lo que no se imprime sólo estorba a la hora
-          de decidir, así que acá se quita. Una clave nueva entra sola, al final; si no la querés,
-          la desmarcás. Para moverla, agarrá la ficha del asa <span class="agarre">⠿</span> y
-          arrastrala a donde la querés.
+          Qué filas salen en esa hoja y en qué orden. Cada ficha es una fila de la hoja: una clave
+          que se hace en dos plantas lleva una por planta, y se puede quitar una sin tocar la otra.
+          Lo que no se imprime sólo estorba a la hora de decidir, así que acá se quita; una clave
+          nueva entra sola, al final. Para mover una fila, agarrá la ficha del asa
+          <span class="agarre">⠿</span> y arrastrala a donde la querés.
         </p>
         <div class="fila" style="margin-bottom:10px">
           <button class="btn ghost mini" type="button" id="btnBolsaTodas">Marcar todas</button>
@@ -1242,23 +1243,21 @@
        casilla es la misma para las dos, porque entra o sale como clave. */
     const items = B.filas(P, true).map((f) => ({
       fila: f.id,
-      marca: f.tipo === 'clave' ? f.clave : f.id,
       nombre: f.nombre,
       pprod: f.pprod || '',
       extra: f.tipo !== 'clave',
+      dentro: B.filaDentro(P, f),
     }));
     const ficha = (x) => `<div class="sw rejilla" data-fila="${esc(x.fila)}">
       <span class="agarre" title="Arrastra para mover esta fila" aria-hidden="true">⠿</span>
-      <input type="checkbox" data-bfuera="${esc(x.marca)}" ${B.dentro(P, x.marca) ? 'checked' : ''}
+      <input type="checkbox" data-bfila="${esc(x.fila)}" ${x.dentro ? 'checked' : ''}
         aria-label="${esc(x.nombre)} en la hoja">
       <span class="nom" title="${esc(x.nombre)}">${esc(x.nombre)}</span>
       ${x.pprod ? `<span class="pl">${esc(x.pprod)}</span>` : ''}
       ${x.extra ? '<span class="pl man">manual</span>' : ''}</div>`;
     cont.innerHTML = `<div class="rej" id="bolsaRej">${items.map(ficha).join('')}</div>`;
-    const marcas = [...new Set(items.map((x) => x.marca))];
-    const dentro = marcas.filter((m) => B.dentro(P, m)).length;
-    $('#bolsaCuenta').textContent =
-      `${dentro} de ${marcas.length} en la hoja · ${items.length} filas.`;
+    const dentro = items.filter((x) => x.dentro).length;
+    $('#bolsaCuenta').textContent = `${dentro} de ${items.length} filas en la hoja.`;
     arrastrarFilas($('#bolsaRej'));
   }
 
@@ -1674,11 +1673,23 @@
     else if (d.pmult) P.prod[d.pmult].mult = Math.max(0, Math.round(num(v, 0) * 100) / 100);
     else if (d.pcol) P.prod[d.pcol].colchon = v === '' ? null : Math.max(0, num(v, 0));
     else if (d.pvu) P.prod[d.pvu].vidaUtil = v === '' ? null : Math.max(1, num(v, 21));
-    else if (d.bfuera) {
+    else if (d.bfila) {
+      /* La lista guarda lo que NO entra. Puede traer la clave entera, de
+         versiones anteriores, así que al volver a marcar una fila se cambia esa
+         entrada por las de sus hermanas: lo que se ve marcado es lo que queda. */
       const fuera = new Set(P.bolsaFuera || []);
-      if (v) fuera.delete(d.bfuera); else fuera.add(d.bfuera);
+      const clave = d.bfila.includes('|') ? d.bfila.split('|')[0] : null;
+      if (v) {
+        fuera.delete(d.bfila);
+        if (clave && fuera.has(clave)) {
+          fuera.delete(clave);
+          window.Bolsa.filas(P, true).forEach((f) => {
+            if (f.tipo === 'clave' && f.clave === clave && f.id !== d.bfila) fuera.add(f.id);
+          });
+        }
+      } else fuera.add(d.bfila);
       P.bolsaFuera = [...fuera];
-      D.guardarParams(); pintarBolsaClaves(); return true;
+      D.guardarParams(); pintarBolsaClaves(); pintarBolsa(); return true;
     }
     else if (d.pmax) P.prod[d.pmax].maxDia = v === '' ? null : Math.max(0, num(v, 0)) || null;
     else if (d.prep) {
@@ -2185,14 +2196,12 @@
       if (e.target.closest('#btnNuevoProd')) { fichaProducto(null); return; }
 
       if (e.target.closest('#btnBolsaTodas')) {
-        P.bolsaFuera = []; D.guardarParams(); pintarBolsaClaves();
-        aviso('Todas las claves entran en la hoja de bolsa.'); return;
+        P.bolsaFuera = []; D.guardarParams(); pintarBolsaClaves(); pintarBolsa();
+        aviso('Todas las filas entran en la hoja de bolsa.'); return;
       }
       if (e.target.closest('#btnBolsaNinguna')) {
-        P.bolsaFuera = window.Bolsa.filas(P, true)
-          .map((f) => (f.tipo === 'clave' ? f.clave : f.id));
-        P.bolsaFuera = [...new Set(P.bolsaFuera)];
-        D.guardarParams(); pintarBolsaClaves();
+        P.bolsaFuera = [...new Set(window.Bolsa.filas(P, true).map((f) => f.id))];
+        D.guardarParams(); pintarBolsaClaves(); pintarBolsa();
         aviso('Hoja de bolsa vacía: marca las que sí uses.'); return;
       }
       if (e.target.closest('#btnBolsaOrden')) {

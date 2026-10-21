@@ -28,6 +28,7 @@
      claves, las de MU1 y las presentaciones que se cuentan a mano. Son las de
      la hoja de Kurt; se cambian en Parámetros. */
   const EXTRAS = [
+    { id: 'sum:HD7',  tipo: 'suma',   nombre: '10HD7',      partes: [{ clave: '10HD7' }] },
     { id: 'sum:HR3',  tipo: 'suma',   nombre: '10HR3',      partes: [{ clave: '10HR3' }] },
     { id: 'sum:HM4',  tipo: 'suma',   nombre: '5HM4',       partes: [{ clave: '5HM4' }] },
     { id: 'sum:WY1K', tipo: 'suma',   nombre: '12WY1 + K',  partes: [{ clave: '12WY1' }, { clave: '12WYK' }] },
@@ -50,8 +51,16 @@
    * Si esa fila entra en la hoja. Se guarda la lista de las que NO entran, no
    * la de las que sí: así una clave nueva aparece sola, como en el resto de
    * la app, en vez de quedarse afuera sin que nadie se entere.
+   *
+   * La lista acepta dos cosas: la clave —quita todas sus filas, que es como
+   * se guardaba antes— o el id de una fila suelta, `CLAVE|PLANTA`, para sacar
+   * sólo esa. Hace falta porque una clave puede tener fila en una planta donde
+   * no se produce nada.
    */
   const dentro = (P, id) => !(P.bolsaFuera || []).includes(id);
+  const filaDentro = (P, f) => (f.tipo === 'clave'
+    ? dentro(P, f.clave) && dentro(P, f.id)
+    : dentro(P, f.id));
 
   function filas(params, todas) {
     const P = params || D.estado.params;
@@ -64,13 +73,14 @@
         const id = `${c}|${a.planta}`;
         if (vistas.has(id)) return;
         vistas.add(id);
-        if (!todas && !dentro(P, c)) return;
         const f = P.prod[c] || {};
-        out.push({
+        const fila = {
           id, tipo: 'clave', clave: c, planta: a.planta,
           nombre: f.alias || c, rend: Number(f.rend) || 0,
           pprod: corto[a.planta] || a.planta,
-        });
+        };
+        if (!todas && !filaDentro(P, fila)) return;
+        out.push(fila);
       });
     });
     (P.bolsaExtras || EXTRAS).forEach((e) => {
@@ -180,13 +190,28 @@
       const aMano = f.tipo === 'suma' || (f.tipo === 'clave' && f.planta === 'Z2');
       if (!aMano) return { ...f, qq, plan: 0, amZ2Manual: false, sinMano: true };
       const plan = qq.amZ2;
-      const man = puesto(b, 'qqAmZ2', f.id);
+      let man = puesto(b, 'qqAmZ2', f.id);
+      /* Una fila 2 + 18 toma lo escrito en la fila de Zona 2 de su clave si en
+         ella misma no se escribió nada: da igual en cuál de las dos se anote,
+         y lo propio manda si está. */
+      if (man == null && f.tipo === 'suma') {
+        const partes = (f.partes || [])
+          .map((x) => puesto(b, 'qqAmZ2', `${x.clave}|Z2`))
+          .filter((v) => v != null && !Number.isNaN(v));
+        if (partes.length) man = r2(partes.reduce((a, v) => a + v, 0));
+      }
       const hay = man != null && !Number.isNaN(man);
       return { ...f, qq: { ...qq, amZ2: hay ? man : 0 }, plan, amZ2Manual: hay };
     });
 
     /* Segunda pasada: bolsas. */
-    const hd7z2 = Number(b.hd7z2) || 0;
+    /* La casilla suelta de «HD7 Z2» es de cuando la hoja no tenía fila 2 + 18
+       para el 10HD7: servía para meter a mano lo de Máquina. Con la fila suma
+       puesta eso ya sale del reparto, así que la casilla deja de pisar el
+       empaque y queda sin efecto; sin la fila suma sigue funcionando igual. */
+    const haySumaHD7 = filas1.some((f) => f.tipo === 'suma'
+      && (f.partes || []).some((x) => x.clave === '10HD7'));
+    const hd7z2 = haySumaHD7 ? 0 : Number(b.hd7z2) || 0;
     const mu1 = Number(b.mu1) || 0;
     const mu112 = Number(((b.manual || {})['mu1:12'])) || 0;
 
@@ -374,5 +399,6 @@
   /** El día del que salen las columnas PM: la tarde anterior. */
   const fechaPrevia = (fecha) => D.sumarDias(fecha, -1);
 
-  window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf, dentro, fechaPrevia, EXTRAS, alDiez };
+  window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf,
+    dentro, filaDentro, fechaPrevia, EXTRAS, alDiez };
 })();
