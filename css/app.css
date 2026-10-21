@@ -256,13 +256,21 @@ th.l{text-align:left}
 /* Fila de totales de cada área de producción. Va centrada y con las dos
    líneas siempre, para que los números queden uno debajo del otro. */
 tfoot tr.totales td{border-top:2px solid var(--line);padding-top:9px;font-size:.95rem;
-  text-align:center;vertical-align:top}
+  text-align:right;vertical-align:top}
 tfoot tr.totales td.l{text-align:left}
 tfoot tr.totales .mini{display:block;font-weight:400;font-size:.7rem;color:var(--muted);
   margin-top:2px;min-height:1em}
 
-/* las filas de más de la hoja de bolsa, para distinguirlas de las claves */
-.turnochip.extra{border-style:dashed}
+/* Rejilla de casillas: en filas y columnas parejas, no en flujo. Con tantas
+   claves, una lista que se va acomodando sola cuesta de leer. */
+.rej{display:grid;gap:6px 10px;
+  grid-template-columns:repeat(auto-fill,minmax(132px,1fr))}
+.sw.rejilla{min-height:32px;font-size:.82rem;margin:0;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.sw.rejilla span{overflow:hidden;text-overflow:ellipsis}
+/* rótulo de un grupo dentro de una tarjeta */
+h4.subrot{margin:16px 2px 4px;font-size:.82rem;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.04em}
 
 /* ---------- impresión de bolsa ---------- */
 /* Las filas que suman dos plantas y las que se cuentan a mano se separan de

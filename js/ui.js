@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.21';
+  const VERSION = 'V.2026.22';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1093,6 +1093,20 @@
       </div>
 
       <div class="card" style="margin-bottom:14px">
+        <h3>Impresión de bolsa</h3>
+        <p class="sub">
+          Qué claves salen en esa hoja. Lo que no se imprime sólo estorba a la hora de decidir,
+          así que acá se quitan. Una clave nueva entra sola; si no la querés, la desmarcás.
+        </p>
+        <div class="fila" style="margin-bottom:10px">
+          <button class="btn ghost mini" type="button" id="btnBolsaTodas">Marcar todas</button>
+          <button class="btn sec mini" type="button" id="btnBolsaNinguna">Quitar todas</button>
+          <span class="dim" style="font-size:.84rem" id="bolsaCuenta"></span>
+        </div>
+        <div id="bolsaClaves"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
         <h3>Lector de fotos</h3>
         <p class="sub">Leer letra manuscrita necesita una llave de la API de Anthropic. Elige dónde guardarla; los pasos están en LECTOR.md.</p>
         <div class="fila" style="gap:16px">
@@ -1153,20 +1167,6 @@
       </div>
 
       <div class="card" style="margin-bottom:14px">
-        <h3>Impresión de bolsa</h3>
-        <p class="sub">
-          Qué claves salen en esa hoja. Lo que no se imprime sólo estorba a la hora de decidir,
-          así que acá se quitan. Una clave nueva entra sola; si no la querés, la desmarcás.
-        </p>
-        <div class="fila" style="margin-bottom:10px">
-          <button class="btn ghost mini" type="button" id="btnBolsaTodas">Marcar todas</button>
-          <button class="btn sec mini" type="button" id="btnBolsaNinguna">Quitar todas</button>
-          <span class="dim" style="font-size:.84rem" id="bolsaCuenta"></span>
-        </div>
-        <div class="l chips" id="bolsaClaves"></div>
-      </div>
-
-      <div class="card" style="margin-bottom:14px">
         <h3>Datos desde el libro de cálculo</h3>
         <p class="sub">Trae rendimientos e inventario de <b>Calculo_Produccion_IA.xlsx</b> sin tener que escribirlos.</p>
         <div class="fila">
@@ -1209,10 +1209,19 @@
       vistos.add(id);
       items.push({ id, nombre: f.nombre, extra: f.tipo !== 'clave' });
     });
-    cont.innerHTML = items.map((x) => `<label class="sw turnochip${x.extra ? ' extra' : ''}"
-      title="${x.extra ? 'Fila de más de la hoja' : 'Clave del catálogo'}">
+    /* Las claves del catálogo y las filas de más van en dos rejillas aparte,
+       con su rótulo. Separarlas así se lee mejor que marcarlas con un borde
+       distinto dentro de una sola lista. */
+    const casilla = (x) => `<label class="sw rejilla">
       <input type="checkbox" data-bfuera="${esc(x.id)}" ${B.dentro(P, x.id) ? 'checked' : ''}>
-      ${esc(x.nombre)}</label>`).join('');
+      <span>${esc(x.nombre)}</span></label>`;
+    const claves = items.filter((x) => !x.extra), extras = items.filter((x) => x.extra);
+    cont.innerHTML =
+      `<div class="rej">${claves.map(casilla).join('')}</div>`
+      + (extras.length ? `<h4 class="subrot">Filas de más de la hoja</h4>
+        <p class="dim" style="font-size:.82rem;margin:0 2px 8px">
+          Las sumas de dos plantas, MU1 y las presentaciones que se cuentan a mano.</p>
+        <div class="rej">${extras.map(casilla).join('')}</div>` : '');
     const dentro = items.filter((x) => B.dentro(P, x.id)).length;
     $('#bolsaCuenta').textContent = `${dentro} de ${items.length} en la hoja.`;
   }
