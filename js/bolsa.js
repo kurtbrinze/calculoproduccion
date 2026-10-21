@@ -83,6 +83,24 @@
       const nombre = e.partes.length === 1 ? (base.alias || e.partes[0].clave) : e.nombre;
       out.push({ ...e, nombre, rend: Number(base.rend) || 0, pprod: '2 + 18' });
     });
+    return ordenar(P, out);
+  }
+
+  /**
+   * El orden de las filas. De fábrica es el de las áreas de producción, para
+   * que la hoja se lea como se decidió la producción; si se cambió a mano en
+   * Parámetros, manda esa lista. Lo que no esté en ella va después en el orden
+   * de siempre, así una clave nueva aparece al final en vez de perderse.
+   */
+  function ordenar(P, lista) {
+    const orden = P.bolsaOrden || [];
+    if (!orden.length) return lista;
+    const porId = new Map(lista.map((f) => [f.id, f]));
+    const out = [];
+    orden.forEach((id) => {
+      if (porId.has(id)) { out.push(porId.get(id)); porId.delete(id); }
+    });
+    lista.forEach((f) => { if (porId.has(f.id)) out.push(f); });
     return out;
   }
 

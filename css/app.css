@@ -264,13 +264,33 @@ tfoot tr.totales .mini{display:block;font-weight:400;font-size:.7rem;color:var(-
 /* Rejilla de casillas: en filas y columnas parejas, no en flujo. Con tantas
    claves, una lista que se va acomodando sola cuesta de leer. */
 .rej{display:grid;gap:6px 10px;
-  grid-template-columns:repeat(auto-fill,minmax(132px,1fr))}
-.sw.rejilla{min-height:32px;font-size:.82rem;margin:0;white-space:nowrap;
-  overflow:hidden;text-overflow:ellipsis}
-.sw.rejilla span{overflow:hidden;text-overflow:ellipsis}
+  grid-template-columns:repeat(auto-fill,minmax(178px,1fr))}
+.sw.rejilla{min-height:34px;font-size:.82rem;margin:0;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;gap:5px}
+.sw.rejilla .nom{overflow:hidden;text-overflow:ellipsis}
+/* El asa de arrastre. touch-action none para que el dedo mueva la ficha en
+   vez de hacer rodar la página. */
+.agarre{cursor:grab;touch-action:none;color:var(--muted);font-size:1rem;
+  line-height:1;letter-spacing:-1px;padding:2px 1px;flex:0 0 auto;
+  -webkit-user-select:none;user-select:none}
+.agarre:active{cursor:grabbing}
+.sw.rejilla.arrastrando{opacity:.55;outline:2px dashed var(--ok);outline-offset:-2px}
+/* La planta de esa fila y la marca de fila manual, en chiquito al final. */
+.sw.rejilla .pl{margin-left:auto;flex:0 0 auto;font-size:.7rem;color:var(--muted);
+  border:1px solid var(--line);border-radius:5px;padding:0 4px}
+.sw.rejilla .pl.man{margin-left:4px}
 /* rótulo de un grupo dentro de una tarjeta */
 h4.subrot{margin:16px 2px 4px;font-size:.82rem;font-weight:600;color:var(--muted);
   text-transform:uppercase;letter-spacing:.04em}
+
+/* La producción de ayer de Zona 2, que llegó por foto y si no, no se vería. */
+.ayerz2{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline;
+  padding:7px 16px;font-size:.8rem;color:var(--muted);
+  border-top:1px solid var(--line);background:rgba(255,255,255,.03)}
+.ayerz2>span:first-child{font-weight:600;text-transform:uppercase;
+  letter-spacing:.03em;font-size:.72rem}
+.ayerz2 b{color:var(--txt);font-weight:600}
+.ayerz2.nada b{color:var(--muted);font-weight:400}
 
 /* ---------- impresión de bolsa ---------- */
 /* Las filas que suman dos plantas y las que se cuentan a mano se separan de

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.24';
+  const VERSION = 'V.2026.25';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -183,6 +183,22 @@
     const dMan = D.fechaCorta(D.sumarDias(ui.fecha, 1));
     const porClave = Object.fromEntries(t.filas.map((f) => [f.clave, f]));
 
+    /* Lo que la foto de Zona 2 dejó en el día anterior, por persona. Sin esto
+       la lectura se guarda y no se ve desde el día a producir, que es donde
+       uno la busca. */
+    function lineaAyerZ2(turnos) {
+      const fA = D.sumarDias(ui.fecha, -1);
+      const porT = D.porTurnoDe(fA);
+      const hay = turnos.some((x) => Number(porT[x.id]) > 0);
+      const total = turnos.reduce((a, x) => a + (Number(porT[x.id]) || 0), 0);
+      const det = turnos.map((x) => `${esc(x.nombre)} <b>${porT[x.id] ? n2(porT[x.id]) : '—'}</b>`).join(' · ');
+      return `<div class="ayerz2${hay ? '' : ' nada'}">
+        <span>Producido el ${esc(D.fechaCorta(fA))}</span>
+        ${hay ? `${det} · <b>${n2(C.redondea(total, 2))} QQ</b>`
+          : 'Todavía no se ha leído la foto de ese día. Se lee con «Leer foto Z2» y queda guardada en el día de la hoja.'}
+      </div>`;
+    }
+
     const cuerpo = D.areasUsadas().map((area) => {
       const turnos = D.turnosDeArea(area.id);
       const filas = D.clavesDeArea(area.id).map((c) => porClave[c]).filter(Boolean);
@@ -223,6 +239,11 @@
       const cubre = rotuloCubre(filas);
       const planta = (D.PLANTAS.find((x) => x.id === area.planta) || {}).nombre || area.planta;
       const trabaja = t.plantas[area.planta] ? t.plantas[area.planta].trabaja : true;
+      /* Zona 2 entrega su producción al día siguiente, en la foto. Ese dato se
+         guarda en el día de la hoja —el anterior— y desde acá no se vería,
+         así que se muestra: es la forma de comprobar que la lectura entró, y
+         es lo que alimenta la columna QQ PM Z2 de la hoja de bolsa. */
+      const ayer = area.id === 'Z2' ? lineaAyerZ2(turnos) : '';
       return `<div class="card ${trabaja ? '' : 'apagado'}" style="margin-bottom:14px;padding:0;overflow:hidden">
         <div style="display:flex;align-items:baseline;gap:12px;padding:12px 16px;flex-wrap:wrap">
           <h3 style="margin:0">${esc(area.nombre)}</h3>
@@ -230,6 +251,7 @@
           <span class="dim" style="font-size:.86rem">${filas.length} claves · ${n2(sumArea)} QQ · ${n0(bolsasArea)} bolsas</span>
           <span class="dim" style="font-size:.86rem;margin-left:auto">${trabaja ? 'Cubre: ' + cubre : 'Esta planta no trabaja hoy'}</span>
         </div>
+        ${ayer}
         <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0">
           <table><thead>${th}</thead><tbody>${tb}</tbody><tfoot>${pie}</tfoot></table>
         </div></div>`;
@@ -1106,12 +1128,15 @@
       <div class="card" style="margin-bottom:14px">
         <h3>Impresión de bolsa</h3>
         <p class="sub">
-          Qué claves salen en esa hoja. Lo que no se imprime sólo estorba a la hora de decidir,
-          así que acá se quitan. Una clave nueva entra sola; si no la querés, la desmarcás.
+          Qué filas salen en esa hoja y en qué orden. Lo que no se imprime sólo estorba a la hora
+          de decidir, así que acá se quita. Una clave nueva entra sola, al final; si no la querés,
+          la desmarcás. Para moverla, agarrá la ficha del asa <span class="agarre">⠿</span> y
+          arrastrala a donde la querés.
         </p>
         <div class="fila" style="margin-bottom:10px">
           <button class="btn ghost mini" type="button" id="btnBolsaTodas">Marcar todas</button>
           <button class="btn sec mini" type="button" id="btnBolsaNinguna">Quitar todas</button>
+          <button class="btn sec mini" type="button" id="btnBolsaOrden">Orden de siempre</button>
           <span class="dim" style="font-size:.84rem" id="bolsaCuenta"></span>
         </div>
         <div id="bolsaClaves"></div>
@@ -1212,29 +1237,75 @@
     if (!cont) return;
     const P = D.estado.params;
     const B = window.Bolsa;
-    const vistos = new Set();
-    const items = [];
-    B.filas(P, true).forEach((f) => {
-      const id = f.tipo === 'clave' ? f.clave : f.id;
-      if (vistos.has(id)) return;
-      vistos.add(id);
-      items.push({ id, nombre: f.nombre, extra: f.tipo !== 'clave' });
+    /* Una ficha por fila de la hoja, en el orden en que salen. Una clave que
+       se hace en dos plantas lleva dos fichas, porque son dos filas; la
+       casilla es la misma para las dos, porque entra o sale como clave. */
+    const items = B.filas(P, true).map((f) => ({
+      fila: f.id,
+      marca: f.tipo === 'clave' ? f.clave : f.id,
+      nombre: f.nombre,
+      pprod: f.pprod || '',
+      extra: f.tipo !== 'clave',
+    }));
+    const ficha = (x) => `<div class="sw rejilla" data-fila="${esc(x.fila)}">
+      <span class="agarre" title="Arrastra para mover esta fila" aria-hidden="true">⠿</span>
+      <input type="checkbox" data-bfuera="${esc(x.marca)}" ${B.dentro(P, x.marca) ? 'checked' : ''}
+        aria-label="${esc(x.nombre)} en la hoja">
+      <span class="nom" title="${esc(x.nombre)}">${esc(x.nombre)}</span>
+      ${x.pprod ? `<span class="pl">${esc(x.pprod)}</span>` : ''}
+      ${x.extra ? '<span class="pl man">manual</span>' : ''}</div>`;
+    cont.innerHTML = `<div class="rej" id="bolsaRej">${items.map(ficha).join('')}</div>`;
+    const marcas = [...new Set(items.map((x) => x.marca))];
+    const dentro = marcas.filter((m) => B.dentro(P, m)).length;
+    $('#bolsaCuenta').textContent =
+      `${dentro} de ${marcas.length} en la hoja · ${items.length} filas.`;
+    arrastrarFilas($('#bolsaRej'));
+  }
+
+  /**
+   * Mover las filas de la hoja de bolsa arrastrándolas. Va con eventos de
+   * puntero y no con el arrastre del navegador, que en la tablet no dispara
+   * con el dedo. Se agarra del asa para que la casilla siga siendo una
+   * casilla; mientras se arrastra, la ficha se mete en el hueco por donde va
+   * pasando, así se ve dónde va a quedar antes de soltar.
+   */
+  function arrastrarFilas(rej) {
+    if (!rej) return;
+    let ficha = null, movio = false;
+    rej.querySelectorAll('.agarre').forEach((asa) => {
+      asa.addEventListener('pointerdown', (e) => {
+        ficha = asa.closest('.sw');
+        movio = false;
+        asa.setPointerCapture(e.pointerId);
+        e.preventDefault();
+      });
+      asa.addEventListener('pointermove', (e) => {
+        if (!ficha) return;
+        if (!movio) { movio = true; ficha.classList.add('arrastrando'); }
+        const bajo = document.elementFromPoint(e.clientX, e.clientY);
+        const otra = bajo && bajo.closest ? bajo.closest('.sw.rejilla') : null;
+        if (!otra || otra === ficha || otra.parentNode !== rej) return;
+        const c = otra.getBoundingClientRect();
+        /* Antes o después según de qué lado del centro vaya el dedo. */
+        const antes = e.clientX < c.left + c.width / 2;
+        rej.insertBefore(ficha, antes ? otra : otra.nextSibling);
+      });
+      const soltar = () => {
+        if (!ficha) return;
+        const movida = movio;
+        ficha.classList.remove('arrastrando');
+        ficha = null; movio = false;
+        if (!movida) return;
+        D.estado.params.bolsaOrden = [...rej.querySelectorAll('.sw.rejilla')]
+          .map((x) => x.dataset.fila);
+        D.guardarParams();
+        pintarBolsaClaves();
+        pintarBolsa();
+        aviso('Orden guardado.');
+      };
+      asa.addEventListener('pointerup', soltar);
+      asa.addEventListener('pointercancel', soltar);
     });
-    /* Las claves del catálogo y las filas de más van en dos rejillas aparte,
-       con su rótulo. Separarlas así se lee mejor que marcarlas con un borde
-       distinto dentro de una sola lista. */
-    const casilla = (x) => `<label class="sw rejilla">
-      <input type="checkbox" data-bfuera="${esc(x.id)}" ${B.dentro(P, x.id) ? 'checked' : ''}>
-      <span>${esc(x.nombre)}</span></label>`;
-    const claves = items.filter((x) => !x.extra), extras = items.filter((x) => x.extra);
-    cont.innerHTML =
-      `<div class="rej">${claves.map(casilla).join('')}</div>`
-      + (extras.length ? `<h4 class="subrot">Filas de más de la hoja</h4>
-        <p class="dim" style="font-size:.82rem;margin:0 2px 8px">
-          Las sumas de dos plantas, MU1 y las presentaciones que se cuentan a mano.</p>
-        <div class="rej">${extras.map(casilla).join('')}</div>` : '');
-    const dentro = items.filter((x) => B.dentro(P, x.id)).length;
-    $('#bolsaCuenta').textContent = `${dentro} de ${items.length} en la hoja.`;
   }
 
   // ---------- feriados ----------
@@ -1903,10 +1974,31 @@
       pintarInventario(); pintarProduccion();
       const qq = Object.values(res.matriz).reduce((a, f) =>
         a + Object.values(f).reduce((x, v) => x + v, 0), 0);
-      aviso(`Producción de Zona 2 guardada en el ${D.fechaCorta(destino)}`
-        + `${destino !== ui.fecha ? ', que es el día de la hoja' : ''}: `
-        + `${n} claves, ${n2(C.redondea(qq, 2))} qq.`
-        + (res.dudosas && res.dudosas.length ? ` Revisa ${res.dudosas.length} celda${res.dudosas.length > 1 ? 's' : ''}.` : ''));
+      const dudo = res.dudosas && res.dudosas.length
+        ? ` Revisa ${res.dudosas.length} celda${res.dudosas.length > 1 ? 's' : ''}.` : '';
+      if (!n) {
+        aviso('La hoja no trajo ninguna clave de Zona 2. No se guardó nada.', 'err');
+        return;
+      }
+      aviso(`Producción de Zona 2 guardada en el ${D.fechaCorta(destino)}: `
+        + `${n} claves, ${n2(C.redondea(qq, 2))} qq.${dudo}`);
+      /* La hoja casi siempre es del día anterior, así que lo leído no aparece
+         en la tabla que se está viendo. Se dice dónde quedó y se ofrece ir,
+         porque si no parece que no se guardó. */
+      if (destino !== ui.fecha) {
+        const ir = await preguntar('La hoja es de otro día',
+          `Lo leído quedó guardado en el <b>${esc(D.fechaCorta(destino))}</b>, que es la fecha de `
+          + `la hoja, y el día a producir es el <b>${esc(D.fechaCorta(ui.fecha))}</b>. `
+          + `Desde acá lo ves en la línea «Producido el ${esc(D.fechaCorta(destino))}» de la `
+          + `tarjeta de Zona 2, y alimenta la columna QQ PM Z2 de la hoja de bolsa.`,
+          'Ir a ese día');
+        if (ir === true) {
+          ui.fecha = destino;
+          ui.abierta = null; ui.sinCupo = null; ui.sinTurnoHoy = null;
+          $('#inFecha').value = destino;
+          recordarFecha(); pintarProduccion(); pintarInventario();
+        }
+      }
     });
 
     // impresión bolsa
@@ -2102,6 +2194,10 @@
         P.bolsaFuera = [...new Set(P.bolsaFuera)];
         D.guardarParams(); pintarBolsaClaves();
         aviso('Hoja de bolsa vacía: marca las que sí uses.'); return;
+      }
+      if (e.target.closest('#btnBolsaOrden')) {
+        P.bolsaOrden = []; D.guardarParams(); pintarBolsaClaves(); pintarBolsa();
+        aviso('La hoja vuelve al orden de las áreas de producción.'); return;
       }
 
       // --- feriados ---

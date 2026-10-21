@@ -314,6 +314,10 @@
       /* Claves y filas que NO salen en Impresión de bolsa. Se guarda lo que
          queda fuera para que lo nuevo entre solo. */
       bolsaFuera: [],
+      /* El orden de las filas de la hoja de bolsa, si se cambió a mano. Lo que
+         no está en la lista va después, en el orden de siempre: una clave
+         nueva aparece sola en vez de perderse. */
+      bolsaOrden: [],
     };
   }
 
@@ -424,6 +428,8 @@
         dias: f.dias && typeof f.dias === 'object' ? f.dias : null,
       }));
     out.bolsaFuera = (Array.isArray(guardado.bolsaFuera) ? guardado.bolsaFuera : [])
+      .filter((x) => typeof x === 'string');
+    out.bolsaOrden = (Array.isArray(guardado.bolsaOrden) ? guardado.bolsaOrden : [])
       .filter((x) => typeof x === 'string');
     out.empaque = (Array.isArray(guardado.empaque) && guardado.empaque.length
       ? guardado.empaque : EMPAQUE)

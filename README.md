@@ -227,8 +227,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.24';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.24';`
+1. `js/ui.js` → `const VERSION = 'V.2026.25';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.25';`
 
 ## Plantas, claves y productos nuevos
 
@@ -344,6 +344,11 @@ y ese dato todavía no está en el app cuando se arma la hoja: la foto de Zona 2
 trae la producción de **ayer**. Lo que el reparto haya puesto en esos turnos sale debajo de la
 casilla como sugerencia —se toca y se copia— pero nunca entra solo, porque un plan no es un
 hecho.
+
+**El orden de las filas se cambia a mano.** De fábrica salen en el orden de las áreas de
+producción. En Parámetros → Impresión de bolsa, cada fila es una ficha: se agarra del asa y se
+arrastra a donde vaya. Lo que no esté en ese orden guardado va después, así que **una clave
+nueva aparece al final** en vez de perderse. «Orden de siempre» devuelve el de fábrica.
 
 **Esta hoja no se sincroniza.** Se guarda aparte de los días, en el equipo donde se imprime.
 Sí entra en el respaldo.
