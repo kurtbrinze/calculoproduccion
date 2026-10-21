@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.23';
+  const VERSION = 'V.2026.24';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -615,17 +615,15 @@
     const fs = B.enTotal(B.calcular(fecha));
     const t = B.totales(fs);
     const dAM = D.fechaCorta(fecha);
-    const dPM = D.fechaCorta(D.sumarDias(fecha, 1));
-    /* Zona 2 entrega su producción un día después, así que esa columna lleva
-       la fecha del día anterior: es la que trae la foto que se leyó hoy. */
-    const fPrev = B.fechaPrevia(fecha);
-    const dZ2 = fPrev ? D.fechaCorta(fPrev) : 'sin día anterior';
+    /* Las columnas PM son de la tarde anterior: ese pan se empaca hoy en la
+       mañana. Las AM son de hoy y se empacan hoy en la tarde. */
+    const dPM = D.fechaCorta(B.fechaPrevia(fecha));
 
     $('#theadBolsa').innerHTML = `<tr>
       ${th2('P PROD', '')}${th2('ITEM', '', 'l')}${th2('RENDIM', 'bolsas/QQ')}
-      ${th2('QQ AM Z18', dAM)}${th2('QQ PM Z18', dAM)}${th2('QQ PM Z2', dZ2)}${th2('QQ AM Z2', dAM)}
-      ${th2('PROD AM', dAM)}${th2('PROD PM', dAM)}${th2('OH', 'ya impreso')}
-      ${th2('EMPAQUE AM', dPM)}${th2('EMPAQUE PM', dAM)}${th2('TOTAL PROD', '')}</tr>`;
+      ${th2('QQ AM Z18', dAM)}${th2('QQ PM Z18', dPM)}${th2('QQ PM Z2', dPM)}${th2('QQ AM Z2', dAM)}
+      ${th2('PROD AM', dAM)}${th2('PROD PM', dPM)}${th2('OH', 'ya impreso')}
+      ${th2('EMPAQUE AM', dAM)}${th2('EMPAQUE PM', dAM)}${th2('TOTAL PROD', '')}</tr>`;
 
     const celQQ = (f, k) => `<td class="num dim">${f.qq[k] ? n2(f.qq[k]) : ''}</td>`;
     $('#tbodyBolsa').innerHTML = fs.map((f) => {
@@ -668,7 +666,7 @@
 
     $('#kpisBolsa').innerHTML =
       kpi('Bolsas a imprimir', n0(t.total)) +
-      kpi(`Empaque AM · ${dPM}`, n0(t.empAM)) +
+      kpi(`Empaque AM · ${dAM}`, n0(t.empAM)) +
       kpi(`Empaque PM · ${dAM}`, n0(t.empPM)) +
       kpi('Claves con bolsa', fs.filter((f) => f.total > 0).length);
 
@@ -679,9 +677,10 @@
       av.push(['warn', 'Todavía no hay reparto de ese día',
         'Los quintales salen de la pestaña Producción. Reparte ahí y esta tabla se llena sola.']);
     }
-    av.push(['', 'El empaque va cruzado a propósito',
-      `EMPAQUE AM sale de PROD PM y EMPAQUE PM de PROD AM: la bolsa que se imprime en la `
-      + `mañana del ${dPM} lleva el pan hecho la tarde del ${dAM}.`]);
+    av.push(['', 'La hoja cubre el empaque de un día, con pan de dos tandas',
+      `La mañana del ${dAM} se empaca el pan de la tarde del ${dPM} —de ahí las columnas PM— y `
+      + `la tarde del ${dAM} se empaca el de esa misma mañana. Por eso EMPAQUE AM sale de `
+      + `PROD PM y EMPAQUE PM de PROD AM.`]);
     $('#avisosBolsa').innerHTML = av.map(([c, h, p]) =>
       `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p)}</p></div>`).join('');
   }
