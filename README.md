@@ -227,8 +227,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.22';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.22';`
+1. `js/ui.js` → `const VERSION = 'V.2026.24';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.24';`
 
 ## Plantas, claves y productos nuevos
 
@@ -318,14 +318,26 @@ vencimiento. Es la tabla `Nueva` de `Calc_Bolsa`, con los quintales ya puestos.
 | P PROD | La planta de esa fila: `18`, `2 CZ`, `2` o `2 + 18` |
 | ITEM | La clave, con su alias si tiene |
 | RENDIM | Bolsas por quintal, del catálogo |
-| QQ AM Z18 / QQ PM Z18 | Lo decidido en los turnos de Zona 18, de mañana y de tarde |
-| QQ PM Z2 | Byron y Julio, y lo que caiga de tarde en la planta Zona 2 |
-| QQ AM Z2 | **Se escribe a mano**: los quintales producidos **hoy** en Zona 2 |
+| QQ AM Z18 / QQ AM Z2 | Los turnos de **mañana** del **día a producir** |
+| QQ PM Z18 / QQ PM Z2 | Los turnos de **tarde** del **día anterior** |
 | PROD AM / PROD PM | Rendimiento × quintales de ese momento |
 | OH | Lo que ya hay impreso. Se resta del empaque |
 | EMPAQUE AM | `PROD PM − OH`, redondeado a diez |
 | EMPAQUE PM | `PROD AM − OH`, redondeado a diez |
 | TOTAL PROD | Los dos empaques |
+
+**Una hoja cubre el empaque de un día, con pan de dos tandas.** La mañana del día a producir se
+empaca el pan hecho la tarde anterior, y la tarde de ese mismo día se empaca el de esa mañana.
+De ahí las dos fechas: las columnas AM son del día a producir y las columnas PM del día de
+antes, en las **dos plantas por igual** —lo que manda es el momento del turno, no dónde
+trabaja—. Los dos EMPAQUE son del día a producir. Cada encabezado lleva su fecha escrita, en
+pantalla y en el PDF.
+
+Quién es de mañana y quién de tarde se marca en Parámetros → Turnos y topes, columna
+**Momento**. Si cambia el personal se cambia ahí y la hoja se acomoda sola. Byron y Julio no
+llevan selector: les toca lo que diga la rotación, y cada día se lee con su propia fecha, así
+que en una hoja puede salir uno en la columna AM y el otro en la PM.
+En el Excel la parte de Zona 2 era `=SUMA(CALC_PROD!AI:AK)`, las últimas columnas de la planta.
 
 **`QQ AM Z2` va a mano y es a propósito.** Ahí van los quintales que Zona 2 produce **hoy**,
 y ese dato todavía no está en el app cuando se arma la hoja: la foto de Zona 2 que se lee hoy
@@ -335,10 +347,6 @@ hecho.
 
 **Esta hoja no se sincroniza.** Se guarda aparte de los días, en el equipo donde se imprime.
 Sí entra en el respaldo.
-
-**El cruce es a propósito.** EMPAQUE AM sale de PROD PM y EMPAQUE PM de PROD AM: la bolsa que
-se imprime en la mañana lleva el pan hecho la tarde anterior. Los encabezados traen la fecha de
-cada uno para que se vea.
 
 Una clave que se hace en dos plantas lleva una fila por planta y, más abajo, una fila **2 + 18**
 que las suma, porque la bolsa es la misma. Esa suma es la que se imprime: las filas de arriba

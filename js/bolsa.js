@@ -6,16 +6,18 @@
    EMPAQUE AM sale de PROD PM y EMPAQUE PM de PROD AM: van cruzados a
    propósito, no es un error del Excel.
 
-   Las cuatro columnas de quintales salen solas del reparto del día, partidas
-   por planta y por momento. La de Zona 2 en la mañana se puede escribir
-   encima, que es lo que había que hacer a mano en el Excel.
+   La hoja cubre el empaque de un día, y ese día se empaca pan de dos tandas:
+   la de anoche y la de esta mañana. Por eso las columnas AM traen los turnos
+   de mañana del día del cálculo y las columnas PM los turnos de tarde del día
+   anterior, en las dos plantas por igual. La única que se escribe a mano es
+   QQ AM Z2, igual que en el Excel: esa producción todavía no está en el app
+   cuando se arma la hoja.
 
    Una clave que se hace en dos plantas lleva una fila por planta, y abajo una
    fila que las suma —el "2 + 18" de la hoja— porque la bolsa es la misma. */
 (function () {
   'use strict';
   const D = window.Datos;
-  const C = window.Calculo;
 
   /* El empaque se pide en bolsas de diez en diez. */
   const MULT_EMPAQUE = 10;
@@ -114,35 +116,49 @@
     const b = D.estado.bolsa[fecha] || {};
     const P = D.estado.params;
     const lista = filas(P);
-    const porClave = {};
-    D.claves().forEach((c) => { porClave[c] = qqDe(reg, c, fecha); });
+
+    /* Una hoja de bolsa cubre el empaque de un día, y ese día se empaca pan de
+       dos tandas: la de anoche y la de esta mañana. Así que las columnas AM
+       traen los turnos de mañana del día del cálculo, y las columnas PM los
+       turnos de tarde del día anterior. Vale para las dos plantas por igual:
+       lo que manda es el momento del turno, no dónde trabaja.
+       Quién es de mañana y quién de tarde se marca en Parámetros, y los que
+       rotan se leen con la fecha de su propio día. */
+    const fAyer = D.sumarDias(fecha, -1);
+    const regAyer = D.estado.dias[fAyer] ? D.migrar(D.estado.dias[fAyer]) : { turnos: {} };
+    const hoy = {}, ayer = {};
+    D.claves().forEach((c) => {
+      hoy[c] = qqDe(reg, c, fecha);
+      ayer[c] = qqDe(regAyer, c, fAyer);
+    });
+    /* Los quintales de una fila: de mañana los de hoy, de tarde los de ayer. */
+    const am = (c, planta) => ((hoy[c] || {})[planta] || {}).AM || 0;
+    const pm = (c, planta) => ((ayer[c] || {})[planta] || {}).PM || 0;
 
     /* Primera pasada: los quintales de cada fila. */
     const filas1 = lista.map((f) => {
       const qq = { amZ18: 0, pmZ18: 0, amZ2: 0, pmZ2: 0 };
       if (f.tipo === 'clave') {
-        const q = porClave[f.clave] || {};
-        if (f.planta === 'Z18') { qq.amZ18 = (q.Z18 || {}).AM || 0; qq.pmZ18 = (q.Z18 || {}).PM || 0; }
-        else if (f.planta === 'Z2') { qq.amZ2 = (q.Z2 || {}).AM || 0; qq.pmZ2 = (q.Z2 || {}).PM || 0; }
-        else { qq.amZ2 = r2(qq.amZ2 + ((q.Z2CZ || {}).AM || 0)); qq.pmZ2 = r2(qq.pmZ2 + ((q.Z2CZ || {}).PM || 0)); }
+        if (f.planta === 'Z18') { qq.amZ18 = am(f.clave, 'Z18'); qq.pmZ18 = pm(f.clave, 'Z18'); }
+        else if (f.planta === 'Z2') { qq.amZ2 = am(f.clave, 'Z2'); qq.pmZ2 = pm(f.clave, 'Z2'); }
+        else { qq.amZ2 = am(f.clave, 'Z2CZ'); qq.pmZ2 = pm(f.clave, 'Z2CZ'); }
       } else if (f.tipo === 'suma') {
         /* Suma la clave en todas sus plantas: es la misma bolsa. */
         f.partes.forEach((p) => {
-          const q = porClave[p.clave] || {};
-          qq.amZ18 = r2(qq.amZ18 + ((q.Z18 || {}).AM || 0));
-          qq.pmZ18 = r2(qq.pmZ18 + ((q.Z18 || {}).PM || 0));
-          qq.amZ2 = r2(qq.amZ2 + ((q.Z2 || {}).AM || 0) + ((q.Z2CZ || {}).AM || 0));
-          qq.pmZ2 = r2(qq.pmZ2 + ((q.Z2 || {}).PM || 0) + ((q.Z2CZ || {}).PM || 0));
+          qq.amZ18 = r2(qq.amZ18 + am(p.clave, 'Z18'));
+          qq.pmZ18 = r2(qq.pmZ18 + pm(p.clave, 'Z18'));
+          qq.amZ2 = r2(qq.amZ2 + am(p.clave, 'Z2') + am(p.clave, 'Z2CZ'));
+          qq.pmZ2 = r2(qq.pmZ2 + pm(p.clave, 'Z2') + pm(p.clave, 'Z2CZ'));
         });
       }
       /* La mañana de la planta Zona 2 se escribe a mano y nada más.
-         Es lo producido HOY ahí, y ese dato todavía no existe en el app cuando
-         se arma la hoja: la foto de Zona 2 que se lee hoy trae la producción de
-         AYER. Lo que el reparto haya puesto en esos turnos es un plan, no un
-         hecho, así que se ofrece como sugerencia —se toca y se copia— pero
-         nunca entra solo.
+         Son los quintales producidos HOY ahí, y ese dato todavía no existe en
+         el app cuando se arma la hoja: la foto de Zona 2 que se lee hoy trae la
+         producción de AYER. Lo que el reparto haya puesto en esos turnos es un
+         plan, no un hecho, así que se ofrece como sugerencia —se toca y se
+         copia— pero nunca entra solo.
          Las filas de Zona 2 CZ no llevan esa casilla: lo de Byron y Julio sí
-         sale del reparto del día, y además rotan de mañana a tarde. */
+         sale del reparto, y además rotan de mañana a tarde. */
       const aMano = f.tipo === 'suma' || (f.tipo === 'clave' && f.planta === 'Z2');
       if (!aMano) return { ...f, qq, plan: 0, amZ2Manual: false, sinMano: true };
       const plan = qq.amZ2;
@@ -245,22 +261,22 @@
     const fs = enTotal(calcular(fecha));
     const t = totales(fs);
     const dAM = D.fechaCorta(fecha);
-    const dPM = D.fechaCorta(D.sumarDias(fecha, 1));
+    const dPM = D.fechaCorta(fechaPrevia(fecha));
 
     const cols = [
       { k: 'pprod', t: 'P PROD', w: 34 },
-      { k: 'nombre', t: 'ITEM', w: 62, alinear: 'left' },
-      { k: 'rend', t: 'RENDIM', w: 38 },
-      { k: 'amZ18', lineas: ['QQ AM', 'Z18'], w: 38 },
-      { k: 'pmZ18', lineas: ['QQ PM', 'Z18'], w: 38 },
-      { k: 'pmZ2', lineas: ['QQ PM', 'Z2'], w: 38 },
-      { k: 'amZ2', lineas: ['QQ AM', 'Z2'], w: 38 },
-      { k: 'prodAM', lineas: ['PROD', 'AM'], w: 44 },
-      { k: 'prodPM', lineas: ['PROD', 'PM'], w: 44 },
-      { k: 'oh', t: 'OH', w: 32 },
-      { k: 'empAM', lineas: ['EMPAQUE', 'AM', dPM], w: 56 },
-      { k: 'empPM', lineas: ['EMPAQUE', 'PM', dAM], w: 56 },
-      { k: 'total', lineas: ['TOTAL', 'PROD'], w: 48 },
+      { k: 'nombre', t: 'ITEM', w: 58, alinear: 'left' },
+      { k: 'rend', t: 'RENDIM', w: 36 },
+      { k: 'amZ18', lineas: ['QQ AM', 'Z18', dAM], w: 42 },
+      { k: 'pmZ18', lineas: ['QQ PM', 'Z18', dPM], w: 42 },
+      { k: 'pmZ2', lineas: ['QQ PM', 'Z2', dPM], w: 42 },
+      { k: 'amZ2', lineas: ['QQ AM', 'Z2', dAM], w: 42 },
+      { k: 'prodAM', lineas: ['PROD', 'AM', dAM], w: 44 },
+      { k: 'prodPM', lineas: ['PROD', 'PM', dPM], w: 44 },
+      { k: 'oh', t: 'OH', w: 30 },
+      { k: 'empAM', lineas: ['EMPAQUE', 'AM', dAM], w: 52 },
+      { k: 'empPM', lineas: ['EMPAQUE', 'PM', dAM], w: 52 },
+      { k: 'total', lineas: ['TOTAL', 'PROD'], w: 46 },
     ];
     const disponible = ANCHO - 2 * MX;
     const bruto = cols.reduce((a, c) => a + c.w, 0);
@@ -337,5 +353,8 @@
     };
   }
 
-  window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf, dentro, EXTRAS, alDiez };
+  /** El día del que salen las columnas PM: la tarde anterior. */
+  const fechaPrevia = (fecha) => D.sumarDias(fecha, -1);
+
+  window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf, dentro, fechaPrevia, EXTRAS, alDiez };
 })();

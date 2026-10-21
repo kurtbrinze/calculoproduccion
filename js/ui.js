@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.22';
+  const VERSION = 'V.2026.24';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -615,13 +615,15 @@
     const fs = B.enTotal(B.calcular(fecha));
     const t = B.totales(fs);
     const dAM = D.fechaCorta(fecha);
-    const dPM = D.fechaCorta(D.sumarDias(fecha, 1));
+    /* Las columnas PM son de la tarde anterior: ese pan se empaca hoy en la
+       mañana. Las AM son de hoy y se empacan hoy en la tarde. */
+    const dPM = D.fechaCorta(B.fechaPrevia(fecha));
 
     $('#theadBolsa').innerHTML = `<tr>
       ${th2('P PROD', '')}${th2('ITEM', '', 'l')}${th2('RENDIM', 'bolsas/QQ')}
-      ${th2('QQ AM Z18', dAM)}${th2('QQ PM Z18', dAM)}${th2('QQ PM Z2', dAM)}${th2('QQ AM Z2', dAM)}
-      ${th2('PROD AM', dAM)}${th2('PROD PM', dAM)}${th2('OH', 'ya impreso')}
-      ${th2('EMPAQUE AM', dPM)}${th2('EMPAQUE PM', dAM)}${th2('TOTAL PROD', '')}</tr>`;
+      ${th2('QQ AM Z18', dAM)}${th2('QQ PM Z18', dPM)}${th2('QQ PM Z2', dPM)}${th2('QQ AM Z2', dAM)}
+      ${th2('PROD AM', dAM)}${th2('PROD PM', dPM)}${th2('OH', 'ya impreso')}
+      ${th2('EMPAQUE AM', dAM)}${th2('EMPAQUE PM', dAM)}${th2('TOTAL PROD', '')}</tr>`;
 
     const celQQ = (f, k) => `<td class="num dim">${f.qq[k] ? n2(f.qq[k]) : ''}</td>`;
     $('#tbodyBolsa').innerHTML = fs.map((f) => {
@@ -664,7 +666,7 @@
 
     $('#kpisBolsa').innerHTML =
       kpi('Bolsas a imprimir', n0(t.total)) +
-      kpi(`Empaque AM · ${dPM}`, n0(t.empAM)) +
+      kpi(`Empaque AM · ${dAM}`, n0(t.empAM)) +
       kpi(`Empaque PM · ${dAM}`, n0(t.empPM)) +
       kpi('Claves con bolsa', fs.filter((f) => f.total > 0).length);
 
@@ -675,9 +677,10 @@
       av.push(['warn', 'Todavía no hay reparto de ese día',
         'Los quintales salen de la pestaña Producción. Reparte ahí y esta tabla se llena sola.']);
     }
-    av.push(['', 'El empaque va cruzado a propósito',
-      `EMPAQUE AM sale de PROD PM y EMPAQUE PM de PROD AM: la bolsa que se imprime en la `
-      + `mañana del ${dPM} lleva el pan hecho la tarde del ${dAM}.`]);
+    av.push(['', 'La hoja cubre el empaque de un día, con pan de dos tandas',
+      `La mañana del ${dAM} se empaca el pan de la tarde del ${dPM} —de ahí las columnas PM— y `
+      + `la tarde del ${dAM} se empaca el de esa misma mañana. Por eso EMPAQUE AM sale de `
+      + `PROD PM y EMPAQUE PM de PROD AM.`]);
     $('#avisosBolsa').innerHTML = av.map(([c, h, p]) =>
       `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p)}</p></div>`).join('');
   }
@@ -880,10 +883,17 @@
 
     const turnos = D.TURNOS.map((t) => {
       const c = P.turnos[t.id];
+      /* Los que rotan no llevan selector: el momento se los da la rotación. */
+      const mom = t.rota
+        ? `<span class="chip mom">${esc(D.momentoDeTurno(t.id, ui.fecha))}</span><span class="mini">rota cada domingo</span>`
+        : `<select data-tmom="${t.id}" aria-label="Momento de ${t.nombre}">
+            ${['AM', 'PM'].map((m) => `<option value="${m}" ${D.momentoDeTurno(t.id) === m ? 'selected' : ''}>${m}</option>`).join('')}
+          </select>`;
       return `<tr><td class="l clave">${esc(t.nombre)}<span class="mini">${esc(t.papel)}</span></td>
         <td><select data-tpl="${t.id}" aria-label="Planta de ${t.nombre}">
           ${D.PLANTAS.map((x) => `<option value="${x.id}" ${D.plantaDeTurno(t.id) === x.id ? 'selected' : ''}>${esc(x.nombre)}</option>`).join('')}
         </select></td>
+        <td class="l">${mom}</td>
         <td><input class="inqq" inputmode="decimal" data-tope="${t.id}" value="${c.tope}" aria-label="Tope ${t.nombre}"></td>
         <td><input class="inqq" inputmode="decimal" data-min="${t.id}" value="${c.minimo}" aria-label="Mínimo ${t.nombre}"></td>
         <td><label class="sw"><input type="checkbox" data-tact="${t.id}" ${c.activo !== false ? 'checked' : ''}> activo</label></td></tr>`;
@@ -995,8 +1005,9 @@
 
       <div class="card" style="margin-bottom:14px">
         <h3>Turnos y topes</h3>
-        <p class="sub">El tope son los quintales que el turno alcanza a hacer. El mínimo obliga a dejarlo trabajando aunque el sugerido sea cero.</p>
-        <div class="tablabox"><table><thead><tr><th class="l">Turno</th><th class="l">Planta</th><th>Tope QQ</th><th>Mínimo QQ</th><th class="l">Estado</th></tr></thead><tbody>${turnos}</tbody></table></div>
+        <p class="sub">El tope son los quintales que el turno alcanza a hacer. El mínimo obliga a dejarlo trabajando aunque el sugerido sea cero.
+          El momento dice si el turno es de mañana o de tarde: con eso se sabe a quién apaga un feriado de medio día y de quién sale la columna QQ PM Z2 de la hoja de bolsa.</p>
+        <div class="tablabox"><table><thead><tr><th class="l">Turno</th><th class="l">Planta</th><th class="l">Momento</th><th>Tope QQ</th><th>Mínimo QQ</th><th class="l">Estado</th></tr></thead><tbody>${turnos}</tbody></table></div>
         <p class="dim" style="font-size:.84rem;margin:10px 2px">
           Capacidad por planta: ${D.PLANTAS.map((x) => `<b>${esc(x.nombre)}</b> ${n2(topePlanta[x.id])} QQ`).join(' · ')}.</p>
         <div class="fila" style="margin-top:12px;align-items:flex-end">
@@ -1614,6 +1625,10 @@
     }
     else if (d.pcon) P.prod[d.pcon].prodEnConteo = v;
     else if (d.tpl) { P.turnos[d.tpl].planta = t.value; D.guardarParams(); pintarParametros(); return true; }
+    else if (d.tmom) {
+      P.turnos[d.tmom].momento = t.value === 'PM' ? 'PM' : 'AM';
+      D.guardarParams(); pintarParametros(); pintarProduccion(); return true;
+    }
     else if (d.dact != null) { P.diferenciados[+d.dact].activo = v; D.guardarParams(); return true; }
     else if (d.dpc != null) { P.diferenciados[+d.dpc].partes[+d.j].clave = String(t.value).trim().toUpperCase(); }
     else if (d.dpm != null) { P.diferenciados[+d.dpm].partes[+d.j].mult = num(v, 0); }
