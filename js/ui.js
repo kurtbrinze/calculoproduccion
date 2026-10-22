@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.27';
+  const VERSION = 'V.2026.28';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -631,51 +631,52 @@
     ui.fechaBolsa = fecha;
     const b = D.estado.bolsa[fecha] || {};
     $('#inFechaBolsa').value = fecha;
-    $('#inHd7z2').value = b.hd7z2 || '';
     $('#inMu1').value = b.mu1 || '';
 
     const fs = B.enTotal(B.calcular(fecha));
     const t = B.totales(fs);
-    const dAM = D.fechaCorta(fecha);
-    /* Las columnas PM son de la tarde anterior: ese pan se empaca hoy en la
-       mañana. Las AM son de hoy y se empacan hoy en la tarde. */
-    const dPM = D.fechaCorta(B.fechaPrevia(fecha));
+    const d0 = D.fechaCorta(fecha);
+    const d1 = D.fechaCorta(B.fechaPrevia(fecha));
 
-    $('#theadBolsa').innerHTML = `<tr>
-      ${th2('P PROD', '')}${th2('ITEM', '', 'l')}${th2('RENDIM', 'bolsas/QQ')}
-      ${th2('QQ AM Z18', dAM)}${th2('QQ PM Z18', dPM)}${th2('QQ PM Z2', dPM)}${th2('QQ AM Z2', dAM)}
-      ${th2('PROD AM', dAM)}${th2('PROD PM', dPM)}${th2('OH', 'ya impreso')}
-      ${th2('EMPAQUE AM', dAM)}${th2('EMPAQUE PM', dAM)}${th2('TOTAL PROD', '')}</tr>`;
+    /* Dos pisos de encabezado: arriba el día y abajo su mañana y su tarde,
+       como en la hoja de papel. */
+    $('#theadBolsa').innerHTML = `<tr class="grupo">
+        <th rowspan="2" class="l">P PROD</th><th rowspan="2" class="l">CLAVE</th>
+        <th rowspan="2">RENDIM<br><span class="mini2">bolsas/QQ</span></th>
+        <th colspan="2" class="bloque">${esc(d1.toUpperCase())}</th>
+        <th colspan="2" class="bloque">${esc(d0.toUpperCase())}</th>
+        <th rowspan="2">PROD<br>AM</th><th rowspan="2">PROD<br>PM</th>
+        <th rowspan="2">OH<br><span class="mini2">ya impreso</span></th>
+        <th rowspan="2">EMPAQUE<br>AM</th><th rowspan="2">EMPAQUE<br>PM</th>
+        <th rowspan="2">A<br>IMPRIMIR</th></tr>
+      <tr><th>QQ AM</th><th>QQ PM</th><th>QQ AM</th><th>QQ PM</th></tr>`;
 
-    const celQQ = (f, k) => `<td class="num dim">${f.qq[k] ? n2(f.qq[k]) : ''}</td>`;
+    const cel = (v) => `<td class="num dim">${v ? n2(v) : ''}</td>`;
+    const vacio = '<td></td>';
     $('#tbodyBolsa').innerHTML = fs.map((f) => {
-      const calc = f.tipo === 'clave' || f.tipo === 'suma';
-      const cls = [f.tipo === 'suma' ? 'suma' : (calc ? '' : 'aparte'),
-        f.cuenta === false ? 'nocuenta' : ''].filter(Boolean).join(' ');
-      const pie = f.nota ? f.nota : (f.cuenta === false ? 'va en la fila 2 + 18' : '');
+      const calc = f.tipo === 'planta' || f.tipo === 'union';
+      const cls = [f.tipo === 'union' ? 'suma' : (calc ? '' : 'aparte'),
+        f.final ? '' : 'nocuenta'].filter(Boolean).join(' ');
+      const pie = f.nota ? f.nota : (f.final ? '' : 'el total va en la fila de abajo');
       return `<tr${cls ? ` class="${cls}"` : ''}>
         <td class="num dim">${esc(f.pprod)}</td>
         <td class="l clave">${esc(f.nombre)}${pie ? `<span class="mini">${esc(pie)}</span>` : ''}</td>
         <td class="num dim">${f.rend ? n0(f.rend) : ''}</td>
-        ${calc ? celQQ(f, 'amZ18') + celQQ(f, 'pmZ18') + celQQ(f, 'pmZ2') : '<td></td><td></td><td></td>'}
-        <td>${calc && !f.sinMano ? `<input class="inqq ${f.amZ2Manual ? 'puesto' : ''}" inputmode="decimal"
-          enterkeyhint="next" data-bcampo="qqAmZ2" data-bid="${esc(f.id)}"
-          value="${f.amZ2Manual ? n2(f.qq.amZ2) : ''}"
-          aria-label="QQ AM Z2 de ${esc(f.nombre)}">${f.plan && !f.amZ2Manual
-            ? `<button type="button" class="plan" data-bplan="${esc(f.id)}" data-bval="${f.plan}"
-                title="Lo que el reparto puso en Zona 2 ese día. Tócalo para copiarlo.">${n2(f.plan)}</button>`
-            : ''}` : (calc ? `<span class="num dim">${f.qq.amZ2 ? n2(f.qq.amZ2) : ''}</span>` : '')}</td>
-        <td class="num">${f.prodAM ? n0(f.prodAM) : ''}</td>
-        <td class="num">${f.prodPM ? n0(f.prodPM) : ''}</td>
-        <td><input class="inqq" inputmode="decimal" enterkeyhint="next"
-          data-bcampo="oh" data-bid="${esc(f.id)}" value="${f.oh || ''}"
-          aria-label="OH de ${esc(f.nombre)}"></td>
+        ${calc ? cel(f.qq[1].AM) + cel(f.qq[1].PM) + cel(f.qq[0].AM) + cel(f.qq[0].PM)
+               : vacio + vacio + vacio + vacio}
+        <td class="num${f.final ? '' : ' dim'}">${f.prodAM ? n0(f.prodAM) : ''}</td>
+        <td class="num${f.final ? '' : ' dim'}">${f.prodPM ? n0(f.prodPM) : ''}</td>
+        <td>${f.final && f.tipo !== 'manual'
+          ? `<input class="inqq" inputmode="decimal" enterkeyhint="next"
+              data-bcampo="oh" data-bid="${esc(f.id)}" value="${f.oh || ''}"
+              aria-label="OH de ${esc(f.nombre)}">`
+          : ''}</td>
         <td class="num bolsas">${f.empAM ? n0(f.empAM) : ''}</td>
         <td class="num bolsas">${f.empPM ? n0(f.empPM) : ''}</td>
         <td>${f.manual
           ? `<input class="inqq" inputmode="decimal" enterkeyhint="next"
               data-bcampo="manual" data-bid="${esc(f.id)}" value="${f.total || ''}"
-              aria-label="Total de ${esc(f.nombre)}">`
+              aria-label="A imprimir de ${esc(f.nombre)}">`
           : `<b class="num">${f.total ? n0(f.total) : ''}</b>`}</td>
       </tr>`;
     }).join('');
@@ -688,21 +689,32 @@
 
     $('#kpisBolsa').innerHTML =
       kpi('Bolsas a imprimir', n0(t.total)) +
-      kpi(`Empaque AM · ${dAM}`, n0(t.empAM)) +
-      kpi(`Empaque PM · ${dAM}`, n0(t.empPM)) +
-      kpi('Claves con bolsa', fs.filter((f) => f.total > 0).length);
+      kpi('Empaque AM', n0(t.empAM)) +
+      kpi('Empaque PM', n0(t.empPM)) +
+      kpi('Claves con bolsa', fs.filter((f) => f.cuenta && f.total > 0).length);
 
     const av = [];
-    const sinQQ = fs.filter((f) => (f.tipo === 'clave' || f.tipo === 'suma')
-      && !f.qq.amZ18 && !f.qq.pmZ18 && !f.qq.amZ2 && !f.qq.pmZ2).length;
-    if (sinQQ === fs.filter((f) => f.tipo === 'clave' || f.tipo === 'suma').length) {
-      av.push(['warn', 'Todavía no hay reparto de ese día',
-        'Los quintales salen de la pestaña Producción. Reparte ahí y esta tabla se llena sola.']);
+    const conCalc = fs.filter((f) => f.tipo === 'planta' || f.tipo === 'union');
+    const sinQQ = conCalc.filter((f) => !f.qqAM && !f.qqPM).length;
+    if (conCalc.length && sinQQ === conCalc.length) {
+      av.push(['warn', 'Todavía no hay reparto de esos días',
+        'Los quintales salen de la pestaña Producción, del día a producir o del anterior según '
+        + 'lo que tenga puesto cada clave. Reparte ahí y esta tabla se llena sola.']);
     }
-    av.push(['', 'La hoja cubre el empaque de un día, con pan de dos tandas',
-      `La mañana del ${dAM} se empaca el pan de la tarde del ${dPM} —de ahí las columnas PM— y `
-      + `la tarde del ${dAM} se empaca el de esa misma mañana. Por eso EMPAQUE AM sale de `
-      + `PROD PM y EMPAQUE PM de PROD AM.`]);
+    const fuera = B.ignorados(fecha);
+    if (fuera.length) {
+      av.push(['warn', fuera.length === 1
+        ? 'Hay producción del día que no está entrando en la hoja'
+        : `Hay ${fuera.length} producciones del día que no están entrando en la hoja`,
+        fuera.slice(0, 8).map((x) => `${x.nombre} ${n2(x.qq)} QQ en ${x.turno}`).join(' · ')
+        + (fuera.length > 8 ? ` y ${fuera.length - 8} más` : '')
+        + '. Ese turno está en «—». Se prende en Parámetros → Impresión de bolsa, '
+        + 'en «De dónde salen los quintales».']);
+    }
+    av.push(['', `Los quintales salen del ${d0} y del ${d1}`,
+      'Cada clave dice, turno por turno, si sus quintales cuentan para PROD AM o para PROD PM y '
+      + 'de cuál de los dos días se leen. Eso se cambia en Parámetros → Impresión de bolsa. '
+      + 'EMPAQUE AM = PROD AM − OH, EMPAQUE PM = PROD PM, y A IMPRIMIR los suma.']);
     $('#avisosBolsa').innerHTML = av.map(([c, h, p]) =>
       `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p)}</p></div>`).join('');
   }
@@ -1141,6 +1153,16 @@
           <span class="dim" style="font-size:.84rem" id="bolsaCuenta"></span>
         </div>
         <div id="bolsaClaves"></div>
+        <h4 class="subrot" style="margin-top:18px">De dónde salen los quintales</h4>
+        <p class="dim" style="font-size:.84rem;margin:0 2px 10px">
+          La hoja toma la producción sola, del reparto. Acá se dice, clave por clave y turno por
+          turno, si esos quintales cuentan para <b>PROD AM</b> o para <b>PROD PM</b>, y si se leen
+          del <b>día a producir</b> o del <b>día anterior</b>. Un turno en «—» no entra.
+          Sin tocar nada, cada turno cuenta en su propio momento y en el día a producir.
+          <button class="btn sec mini" type="button" id="btnBolsaFuentesDef"
+            style="margin-left:6px">Volver a lo de siempre</button>
+        </p>
+        <div id="bolsaFuentes"></div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -1228,6 +1250,44 @@
     pintarLector();
     pintarFeriados();
     pintarBolsaClaves();
+    pintarBolsaFuentes();
+  }
+
+  /* De dónde salen los quintales de cada clave en la hoja de bolsa: turno por
+     turno, a qué cubeta van y de cuál de los dos días se leen. */
+  function pintarBolsaFuentes() {
+    const cont = $('#bolsaFuentes');
+    if (!cont) return;
+    const P = D.estado.params;
+    const B = window.Bolsa;
+    const ETIQ = { '': '—', AM: 'AM', PM: 'PM' };
+    const DIA = { hoy: 'día a producir', ayer: 'día anterior' };
+    const filas = D.productos().filter((p) => p.activo !== false).map((p) => {
+      const turnos = B.turnosDeClave(p.clave);
+      if (!turnos.length) {
+        return `<tr><td class="l clave">${esc(p.alias || p.clave)}</td>
+          <td class="l dim">Sin turnos: marcale una planta en Productos.</td></tr>`;
+      }
+      const celdas = turnos.map((t) => {
+        const v = B.fuenteDe(P, p.clave, t.id);
+        const sel = (dia) => `<select data-bfuente="${esc(p.clave)}" data-bturno="${esc(t.id)}"
+            data-bdia="${dia}" title="${esc(t.nombre)}, ${DIA[dia]}"
+            aria-label="${esc(t.nombre)} de ${esc(p.clave)}, ${DIA[dia]}">
+            ${B.DESTINOS.map((o) =>
+              `<option value="${o}" ${o === v[dia] ? 'selected' : ''}>${esc(ETIQ[o])}</option>`).join('')}
+          </select>`;
+        return `<div class="fuente${v.hoy || v.ayer ? '' : ' apagada'}">
+          <span title="${esc(t.nombre)} · ${esc(D.plantaDeTurno(t.id))}">${esc(t.nombre)}</span>
+          <i>hoy</i>${sel('hoy')}<i>ant</i>${sel('ayer')}</div>`;
+      }).join('');
+      return `<tr><td class="l clave">${esc(p.alias || p.clave)}</td>
+        <td class="l"><div class="fuentes">${celdas}</div></td></tr>`;
+    }).join('');
+    cont.innerHTML = `<div class="tablabox"><table>
+      <thead><tr><th class="l">Clave</th>
+        <th class="l">Cada turno, con lo que produjo el día a producir («hoy»)
+          y el día anterior («ant»)</th></tr></thead>
+      <tbody>${filas}</tbody></table></div>`;
   }
 
   /* Las claves de Impresión de bolsa, en el mismo orden de la hoja. Las filas
@@ -1707,6 +1767,15 @@
     }
     else if (d.pcon) P.prod[d.pcon].prodEnConteo = v;
     else if (d.tpl) { P.turnos[d.tpl].planta = t.value; D.guardarParams(); pintarParametros(); return true; }
+    else if (d.bfuente) {
+      const todo = P.bolsaFuentes || (P.bolsaFuentes = {});
+      const fila = todo[d.bfuente] || (todo[d.bfuente] = {});
+      /* Se parte de lo que ese turno tiene hoy —aunque sea lo de fábrica— para
+         no borrar el otro día al tocar uno solo. */
+      const actual = window.Bolsa.fuenteDe(P, d.bfuente, d.bturno);
+      fila[d.bturno] = { ...actual, [d.bdia]: ['AM', 'PM'].includes(t.value) ? t.value : '' };
+      D.guardarParams(); pintarBolsaFuentes(); pintarBolsaClaves(); pintarBolsa(); return true;
+    }
     else if (d.tmom) {
       P.turnos[d.tmom].momento = t.value === 'PM' ? 'PM' : 'AM';
       D.guardarParams(); pintarParametros(); pintarProduccion(); return true;
@@ -2016,24 +2085,14 @@
     $('#inFechaBolsa').onchange = (e) => {
       ui.fechaBolsa = e.target.value || D.hoyISO(); pintarBolsa();
     };
-    ['#inHd7z2', '#inMu1'].forEach((s) => {
-      $(s).onchange = (e) => {
-        window.Bolsa.escribir(ui.fechaBolsa, s === '#inHd7z2' ? 'hd7z2' : 'mu1', null, e.target.value);
-        pintarBolsa();
-      };
-    });
+    $('#inMu1').onchange = (e) => {
+      window.Bolsa.escribir(ui.fechaBolsa, 'mu1', null, e.target.value);
+      pintarBolsa();
+    };
     $('#tbodyBolsa').addEventListener('change', (e) => {
       const t = e.target;
       if (!t.matches('input.inqq')) return;
       window.Bolsa.escribir(ui.fechaBolsa, t.dataset.bcampo, t.dataset.bid, t.value);
-      pintarBolsa();
-    });
-    /* La sugerencia del reparto se copia tocándola, no entra sola: lo que va
-       en esa columna es lo que de verdad se produjo hoy en Zona 2. */
-    $('#tbodyBolsa').addEventListener('click', (e) => {
-      const p = e.target.closest('[data-bplan]');
-      if (!p) return;
-      window.Bolsa.escribir(ui.fechaBolsa, 'qqAmZ2', p.dataset.bplan, p.dataset.bval);
       pintarBolsa();
     });
     /* Enter baja por la misma columna, que es como se llena una hoja así: una
@@ -2203,6 +2262,10 @@
         P.bolsaFuera = [...new Set(window.Bolsa.filas(P, true).map((f) => f.id))];
         D.guardarParams(); pintarBolsaClaves(); pintarBolsa();
         aviso('Hoja de bolsa vacía: marca las que sí uses.'); return;
+      }
+      if (e.target.closest('#btnBolsaFuentesDef')) {
+        P.bolsaFuentes = {}; D.guardarParams(); pintarBolsaFuentes(); pintarBolsaClaves(); pintarBolsa();
+        aviso('Cada turno vuelve a contar en su propio momento y en el día a producir.'); return;
       }
       if (e.target.closest('#btnBolsaOrden')) {
         P.bolsaOrden = []; D.guardarParams(); pintarBolsaClaves(); pintarBolsa();

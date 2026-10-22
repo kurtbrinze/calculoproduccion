@@ -152,8 +152,6 @@
       <div class="fila">
         <div class="campo"><label for="inFechaBolsa">Día de producción</label>
           <input type="date" id="inFechaBolsa" style="min-width:160px"></div>
-        <div class="campo"><label for="inHd7z2">10HD7 en Zona 2 (QQ)</label>
-          <input class="inqq" inputmode="decimal" id="inHd7z2" style="width:120px"></div>
         <div class="campo"><label for="inMu1">MU1 producido (unidades)</label>
           <input class="inqq" inputmode="decimal" id="inMu1" style="width:140px"></div>
         <div class="campo" style="margin-left:auto;align-items:flex-end">
@@ -161,11 +159,12 @@
           <button class="btn" id="btnBolsaPdf" type="button">PDF para imprimir</button></div>
       </div>
       <p class="sub" style="margin-bottom:0">
-        Los quintales de Zona 18 y de Zona 2 CZ salen del reparto del día. <b>QQ AM Z2</b> se
-        escribe a mano: son los quintales producidos <b>hoy</b> en esa planta, y la foto de Z2
-        trae los de ayer. Debajo de cada casilla sale lo que puso el reparto, por si sirve:
-        tócalo para copiarlo. Enter y Tab bajan por la misma columna. <b>OH</b> es lo que ya hay
-        impreso y se resta. Esta hoja <b>no se sincroniza</b>: se queda en este equipo.
+        Los quintales salen solos del reparto. Cada clave dice, turno por turno, si cuentan para
+        <b>PROD AM</b> o para <b>PROD PM</b> y si se leen del día a producir o del anterior; eso
+        se cambia en Parámetros. <b>EMPAQUE AM</b> = PROD AM − OH, <b>EMPAQUE PM</b> = PROD PM, y
+        <b>A IMPRIMIR</b> los suma. Lo único que se escribe acá es el OH, las claves que se
+        cuentan a mano y las unidades de MU1. Enter y Tab bajan por la misma columna. Esta hoja
+        <b>no se sincroniza</b>: se queda en este equipo.
       </p>
     </div>
     <div class="kpis" id="kpisBolsa"></div>

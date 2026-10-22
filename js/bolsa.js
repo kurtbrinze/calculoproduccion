@@ -1,20 +1,27 @@
-/* Impresión de bolsa: qué lote y vencimiento hay que imprimir.
+/* Impresión de bolsa: cuántas bolsas hay que mandar a imprimir.
 
-   Replica la tabla "Nueva" de Calc_Bolsa. La idea de fondo es simple: lo que
-   se produce de noche se empaca a la mañana siguiente y al revés, así que la
-   bolsa que se imprime en la mañana lleva el pan de la tarde anterior. Por eso
-   EMPAQUE AM sale de PROD PM y EMPAQUE PM de PROD AM: van cruzados a
-   propósito, no es un error del Excel.
+   La hoja se arma para un día a producir y toma la producción sola, del
+   reparto. De dónde sale cada quintal no está escrito en piedra: cada clave
+   dice, turno por turno, si esos quintales cuentan para PROD AM o para
+   PROD PM, y si se leen del día a producir o del día anterior. Eso es lo que
+   se parametriza en Parámetros → Impresión de bolsa, y es lo que permite que
+   dos claves que se hacen en la misma máquina lleven cuentas distintas.
 
-   La hoja cubre el empaque de un día, y ese día se empaca pan de dos tandas:
-   la de anoche y la de esta mañana. Por eso las columnas AM traen los turnos
-   de mañana del día del cálculo y las columnas PM los turnos de tarde del día
-   anterior, en las dos plantas por igual. La única que se escribe a mano es
-   QQ AM Z2, igual que en el Excel: esa producción todavía no está en el app
-   cuando se arma la hoja.
+   El cálculo, una vez juntos los quintales:
 
-   Una clave que se hace en dos plantas lleva una fila por planta, y abajo una
-   fila que las suma —el "2 + 18" de la hoja— porque la bolsa es la misma. */
+     PROD AM    = quintales de la cubeta AM × rendimiento
+     PROD PM    = quintales de la cubeta PM × rendimiento
+     EMPAQUE AM = PROD AM − OH
+     EMPAQUE PM = PROD PM
+     A IMPRIMIR = EMPAQUE AM + EMPAQUE PM
+
+   Las cuatro columnas de quintales son una foto de dónde están esos
+   quintales: día anterior o día a producir, mañana o tarde. Son las fuentes
+   elegidas y nada más, así que lo que se ve es lo que entra en la cuenta.
+
+   Una clave que se hace en dos plantas lleva una fila por planta —sólo para
+   ver de dónde sale cada parte— y abajo la fila que las une, que es la que
+   lleva el OH y el total a imprimir, porque la bolsa es una sola. */
 (function () {
   'use strict';
   const D = window.Datos;
@@ -24,15 +31,11 @@
   const alDiez = (n) => (n > 0 ? Math.round(n / MULT_EMPAQUE) * MULT_EMPAQUE : 0);
   const r2 = (n) => Math.round(n * 100) / 100;
 
-  /* Las filas que no salen del catálogo: las sumas de dos plantas o de dos
-     claves, las de MU1 y las presentaciones que se cuentan a mano. Son las de
-     la hoja de Kurt; se cambian en Parámetros. */
+  /* Las filas que no salen del catálogo: la unión de dos claves distintas que
+     comparten bolsa, las de MU1 y las presentaciones que se cuentan a mano. */
   const EXTRAS = [
-    { id: 'sum:HD7',  tipo: 'suma',   nombre: '10HD7',      partes: [{ clave: '10HD7' }] },
-    { id: 'sum:HR3',  tipo: 'suma',   nombre: '10HR3',      partes: [{ clave: '10HR3' }] },
-    { id: 'sum:HM4',  tipo: 'suma',   nombre: '5HM4',       partes: [{ clave: '5HM4' }] },
-    { id: 'sum:WY1K', tipo: 'suma',   nombre: '12WY1 + K',  partes: [{ clave: '12WY1' }, { clave: '12WYK' }] },
-    { id: 'mu1:6',    tipo: 'mu1',    nombre: '6MU1',       unidades: 6 },
+    { id: 'sum:WY1K', tipo: 'union', nombre: '12WY1 + K', claves: ['12WY1', '12WYK'] },
+    { id: 'mu1:6',    tipo: 'mu1',    nombre: '6MU1',   unidades: 6 },
     { id: 'mu1:12',   tipo: 'manual', nombre: '12MU1' },
     { id: 'man:5HD2',   tipo: 'manual', nombre: '5HD2' },
     { id: 'man:15PL1',  tipo: 'manual', nombre: '15PL1' },
@@ -43,64 +46,123 @@
     { id: 'man:10WY1G', tipo: 'manual', nombre: '10WY1 G' },
   ];
 
-  /* Nombres cortos de planta para la primera columna, como en la hoja. */
-  const corto = { Z18: '18', Z2CZ: '2 CZ', Z2: '2' };
+  /* Nombres cortos de planta para la primera columna, como en la hoja. El
+     orden es el de la hoja de papel: Zona 2 primero, de ahí el «2 + 18». */
+  const corto = { Z2: '2', Z2CZ: '2 CZ', Z18: '18' };
+  const ORDEN_PLANTA = ['Z2', 'Z2CZ', 'Z18'];
 
-  /** Las filas de la tabla: una por clave y planta, más las de arriba. */
+  // ---------- de dónde salen los quintales ----------
+  /* Cada turno de una clave lleva dos ajustes, uno por día: qué hace lo que
+     ese turno produjo el día a producir, y qué hace lo del día anterior. Cada
+     uno va a la cubeta AM, a la PM, o a ninguna. Hacen falta los dos porque un
+     mismo turno puede contar de un lado un día y del otro al siguiente. */
+  const DESTINOS = ['', 'AM', 'PM'];
+  const DIAS = ['hoy', 'ayer'];
+  const limpiaDest = (v) => (DESTINOS.includes(v) ? v : '');
+
+  /** Los turnos que una clave puede usar, que son los de sus plantas. */
+  const turnosDeClave = (clave) => D.TURNOS.filter((t) => D.puedeEnTurno(clave, t.id));
+
+  /**
+   * De dónde sale ese turno para esa clave. Sin nada guardado cuenta lo del
+   * día a producir, en el momento propio del turno, y sólo en los turnos donde
+   * esa clave se hace de verdad —los que tiene marcados en Productos—. Así la
+   * hoja sale llena y con una fila por clave desde el primer día, y las que de
+   * veras se reparten entre dos plantas son las que se abren en dos.
+   */
+  function fuenteDe(P, clave, turnoId) {
+    const v = ((P.bolsaFuentes || {})[clave] || {})[turnoId];
+    if (v && typeof v === 'object') {
+      return { hoy: limpiaDest(v.hoy), ayer: limpiaDest(v.ayer) };
+    }
+    const suyos = ((P.prod || {})[clave] || {}).turnos || [];
+    return { hoy: suyos.includes(turnoId) ? D.momentoDeTurno(turnoId) : '', ayer: '' };
+  }
+
+  /** Las fuentes vivas de una clave: turno, cubeta y de qué día se lee. */
+  function fuentesDe(P, clave) {
+    const out = [];
+    turnosDeClave(clave).forEach((t) => {
+      const f = fuenteDe(P, clave, t.id);
+      const planta = D.plantaDeTurno(t.id);
+      if (f.hoy) out.push({ turno: t.id, planta, cubeta: f.hoy, atras: 0 });
+      if (f.ayer) out.push({ turno: t.id, planta, cubeta: f.ayer, atras: 1 });
+    });
+    return out;
+  }
+
+  /** Las plantas donde esa clave trae algo; sin nada elegido, las marcadas. */
+  function plantasDe(P, clave) {
+    const vivas = [...new Set(fuentesDe(P, clave).map((f) => f.planta))];
+    const lista = vivas.length ? vivas : D.PLANTAS.map((p) => p.id).filter((p) => D.enPlanta(clave, p));
+    return ORDEN_PLANTA.filter((p) => lista.includes(p));
+  }
+
+  // ---------- las filas de la hoja ----------
   /**
    * Si esa fila entra en la hoja. Se guarda la lista de las que NO entran, no
-   * la de las que sí: así una clave nueva aparece sola, como en el resto de
-   * la app, en vez de quedarse afuera sin que nadie se entere.
-   *
-   * La lista acepta dos cosas: la clave —quita todas sus filas, que es como
-   * se guardaba antes— o el id de una fila suelta, `CLAVE|PLANTA`, para sacar
-   * sólo esa. Hace falta porque una clave puede tener fila en una planta donde
-   * no se produce nada.
+   * la de las que sí: así una clave nueva aparece sola, en vez de quedarse
+   * afuera sin que nadie se entere. La lista acepta la clave entera o el id de
+   * una fila suelta.
    */
   const dentro = (P, id) => !(P.bolsaFuera || []).includes(id);
-  const filaDentro = (P, f) => (f.tipo === 'clave'
-    ? dentro(P, f.clave) && dentro(P, f.id)
-    : dentro(P, f.id));
+  const filaDentro = (P, f) => (f.clave ? dentro(P, f.clave) && dentro(P, f.id) : dentro(P, f.id));
 
   function filas(params, todas) {
     const P = params || D.estado.params;
     const out = [];
-    /* El orden es el de las áreas de producción, para que la hoja se lea en
-       el mismo orden en que se decidió la producción. */
     const vistas = new Set();
+    /* El orden de arranque es el de las áreas de producción, para que la hoja
+       se lea como se decidió la producción. Después manda lo que se arrastró. */
     D.AREAS.forEach((a) => {
       D.clavesDeArea(a.id).forEach((c) => {
-        const id = `${c}|${a.planta}`;
-        if (vistas.has(id)) return;
-        vistas.add(id);
+        if (vistas.has(c)) return;
+        vistas.add(c);
         const f = P.prod[c] || {};
-        const fila = {
-          id, tipo: 'clave', clave: c, planta: a.planta,
-          nombre: f.alias || c, rend: Number(f.rend) || 0,
-          pprod: corto[a.planta] || a.planta,
-        };
-        if (!todas && !filaDentro(P, fila)) return;
-        out.push(fila);
+        const nombre = f.alias || c;
+        const rend = Number(f.rend) || 0;
+        const plantas = plantasDe(P, c);
+        /* Con dos plantas van las dos filas de detalle y abajo la que une:
+           ahí se escribe el OH y ahí sale el total, porque la bolsa es una. */
+        if (plantas.length > 1) {
+          plantas.forEach((p) => out.push({
+            id: `${c}|${p}`, tipo: 'planta', clave: c, claves: [c], plantas: [p],
+            nombre, rend, pprod: corto[p] || p, final: false,
+          }));
+          out.push({
+            id: `sum:${c}`, tipo: 'union', clave: c, claves: [c], plantas,
+            nombre, rend, pprod: plantas.map((p) => corto[p] || p).join(' + '), final: true,
+          });
+        } else {
+          const p = plantas[0] || 'Z18';
+          out.push({
+            id: `${c}|${p}`, tipo: 'planta', clave: c, claves: [c], plantas: [p],
+            nombre, rend, pprod: corto[p] || p, final: true,
+          });
+        }
       });
     });
     (P.bolsaExtras || EXTRAS).forEach((e) => {
-      if (!todas && !dentro(P, e.id)) return;
-      if (e.tipo !== 'suma') { out.push({ ...e, rend: Number(e.rend) || 0, pprod: e.pprod || '' }); return; }
-      const base = P.prod[e.partes[0].clave] || {};
-      /* Una suma de una sola clave se llama como la clave —con su alias, para
-         que la tabla no diga HM4 arriba y 5HM4 abajo—; la de varias conserva
-         el nombre que se le puso. */
-      const nombre = e.partes.length === 1 ? (base.alias || e.partes[0].clave) : e.nombre;
-      out.push({ ...e, nombre, rend: Number(base.rend) || 0, pprod: '2 + 18' });
+      if (e.tipo !== 'union') { out.push({ ...e, rend: Number(e.rend) || 0, pprod: e.pprod || '', final: true }); return; }
+      /* Una unión de dos claves distintas: comparten bolsa, así que comparten
+         fila. El rendimiento y el nombre salen de la primera. */
+      const base = P.prod[e.claves[0]] || {};
+      const plantas = [...new Set(e.claves.flatMap((c) => plantasDe(P, c)))];
+      out.push({
+        ...e, clave: null, rend: Number(base.rend) || 0, final: true,
+        plantas: ORDEN_PLANTA.filter((p) => plantas.includes(p)),
+        pprod: ORDEN_PLANTA.filter((p) => plantas.includes(p)).map((p) => corto[p] || p).join(' + '),
+      });
     });
-    return ordenar(P, out);
+    const vivas = todas ? out : out.filter((f) => filaDentro(P, f));
+    return ordenar(P, vivas);
   }
 
   /**
-   * El orden de las filas. De fábrica es el de las áreas de producción, para
-   * que la hoja se lea como se decidió la producción; si se cambió a mano en
-   * Parámetros, manda esa lista. Lo que no esté en ella va después en el orden
-   * de siempre, así una clave nueva aparece al final en vez de perderse.
+   * El orden de las filas. De fábrica es el de las áreas de producción; si se
+   * cambió a mano en Parámetros, manda esa lista. Lo que no esté en ella va
+   * después en el orden de siempre, así una clave nueva aparece al final en
+   * vez de perderse.
    */
   function ordenar(P, lista) {
     const orden = P.bolsaOrden || [];
@@ -114,137 +176,79 @@
     return out;
   }
 
-  /** Los quintales decididos de una clave, por planta y momento. */
-  function qqDe(reg, clave, fecha) {
-    const asign = (reg.turnos || {})[clave] || {};
-    const out = {};
-    D.PLANTAS.forEach((p) => { out[p.id] = { AM: 0, PM: 0 }; });
-    Object.entries(asign).forEach(([t, v]) => {
-      const n = Number(v) || 0;
-      if (!n) return;
-      const pl = D.plantaDeTurno(t);
-      const mo = D.momentoDeTurno(t, fecha);
-      if (out[pl]) out[pl][mo] = r2(out[pl][mo] + n);
-    });
-    return out;
-  }
-
-  /** Lo que el usuario escribió encima, si escribió algo. */
+  /** Lo que el usuario escribió a mano, si escribió algo. */
   const puesto = (b, campo, id) => {
     const v = ((b || {})[campo] || {})[id];
     return v === '' || v === null || v === undefined ? null : Number(v);
   };
 
+  /** El día del que salen las fuentes marcadas «día anterior». */
+  const fechaPrevia = (fecha) => D.sumarDias(fecha, -1);
+
   /**
-   * La tabla completa de un día, ya calculada. `reg` es el registro del día,
-   * que es donde viven los valores escritos a mano.
+   * La tabla completa de un día, ya calculada. La fecha que manda siempre es
+   * la del día a producir; el día anterior sale de ella.
    */
   function calcular(fecha) {
-    const reg = D.registro(fecha);
-    const b = D.estado.bolsa[fecha] || {};
     const P = D.estado.params;
-    const lista = filas(P);
+    const b = D.estado.bolsa[fecha] || {};
+    const fechas = [fecha, fechaPrevia(fecha)];
+    const regs = fechas.map((f) => (D.estado.dias[f] ? D.migrar(D.estado.dias[f]) : { turnos: {} }));
+    const qqDe = (atras, clave, turno) =>
+      Number(((regs[atras] || {}).turnos || {})[clave] ? regs[atras].turnos[clave][turno] : 0) || 0;
 
-    /* Una hoja de bolsa cubre el empaque de un día, y ese día se empaca pan de
-       dos tandas: la de anoche y la de esta mañana. Así que las columnas AM
-       traen los turnos de mañana del día del cálculo, y las columnas PM los
-       turnos de tarde del día anterior. Vale para las dos plantas por igual:
-       lo que manda es el momento del turno, no dónde trabaja.
-       Quién es de mañana y quién de tarde se marca en Parámetros, y los que
-       rotan se leen con la fecha de su propio día. */
-    const fAyer = D.sumarDias(fecha, -1);
-    const regAyer = D.estado.dias[fAyer] ? D.migrar(D.estado.dias[fAyer]) : { turnos: {} };
-    const hoy = {}, ayer = {};
-    D.claves().forEach((c) => {
-      hoy[c] = qqDe(reg, c, fecha);
-      ayer[c] = qqDe(regAyer, c, fAyer);
-    });
-    /* Los quintales de una fila: de mañana los de hoy, de tarde los de ayer. */
-    const am = (c, planta) => ((hoy[c] || {})[planta] || {}).AM || 0;
-    const pm = (c, planta) => ((ayer[c] || {})[planta] || {}).PM || 0;
-
-    /* Primera pasada: los quintales de cada fila. */
-    const filas1 = lista.map((f) => {
-      const qq = { amZ18: 0, pmZ18: 0, amZ2: 0, pmZ2: 0 };
-      if (f.tipo === 'clave') {
-        if (f.planta === 'Z18') { qq.amZ18 = am(f.clave, 'Z18'); qq.pmZ18 = pm(f.clave, 'Z18'); }
-        else if (f.planta === 'Z2') { qq.amZ2 = am(f.clave, 'Z2'); qq.pmZ2 = pm(f.clave, 'Z2'); }
-        else { qq.amZ2 = am(f.clave, 'Z2CZ'); qq.pmZ2 = pm(f.clave, 'Z2CZ'); }
-      } else if (f.tipo === 'suma') {
-        /* Suma la clave en todas sus plantas: es la misma bolsa. */
-        f.partes.forEach((p) => {
-          qq.amZ18 = r2(qq.amZ18 + am(p.clave, 'Z18'));
-          qq.pmZ18 = r2(qq.pmZ18 + pm(p.clave, 'Z18'));
-          qq.amZ2 = r2(qq.amZ2 + am(p.clave, 'Z2') + am(p.clave, 'Z2CZ'));
-          qq.pmZ2 = r2(qq.pmZ2 + pm(p.clave, 'Z2') + pm(p.clave, 'Z2CZ'));
-        });
-      }
-      /* La mañana de la planta Zona 2 se escribe a mano y nada más.
-         Son los quintales producidos HOY ahí, y ese dato todavía no existe en
-         el app cuando se arma la hoja: la foto de Zona 2 que se lee hoy trae la
-         producción de AYER. Lo que el reparto haya puesto en esos turnos es un
-         plan, no un hecho, así que se ofrece como sugerencia —se toca y se
-         copia— pero nunca entra solo.
-         Las filas de Zona 2 CZ no llevan esa casilla: lo de Byron y Julio sí
-         sale del reparto, y además rotan de mañana a tarde. */
-      const aMano = f.tipo === 'suma' || (f.tipo === 'clave' && f.planta === 'Z2');
-      if (!aMano) return { ...f, qq, plan: 0, amZ2Manual: false, sinMano: true };
-      const plan = qq.amZ2;
-      let man = puesto(b, 'qqAmZ2', f.id);
-      /* Una fila 2 + 18 toma lo escrito en la fila de Zona 2 de su clave si en
-         ella misma no se escribió nada: da igual en cuál de las dos se anote,
-         y lo propio manda si está. */
-      if (man == null && f.tipo === 'suma') {
-        const partes = (f.partes || [])
-          .map((x) => puesto(b, 'qqAmZ2', `${x.clave}|Z2`))
-          .filter((v) => v != null && !Number.isNaN(v));
-        if (partes.length) man = r2(partes.reduce((a, v) => a + v, 0));
-      }
-      const hay = man != null && !Number.isNaN(man);
-      return { ...f, qq: { ...qq, amZ2: hay ? man : 0 }, plan, amZ2Manual: hay };
-    });
-
-    /* Segunda pasada: bolsas. */
-    /* La casilla suelta de «HD7 Z2» es de cuando la hoja no tenía fila 2 + 18
-       para el 10HD7: servía para meter a mano lo de Máquina. Con la fila suma
-       puesta eso ya sale del reparto, así que la casilla deja de pisar el
-       empaque y queda sin efecto; sin la fila suma sigue funcionando igual. */
-    const haySumaHD7 = filas1.some((f) => f.tipo === 'suma'
-      && (f.partes || []).some((x) => x.clave === '10HD7'));
-    const hd7z2 = haySumaHD7 ? 0 : Number(b.hd7z2) || 0;
     const mu1 = Number(b.mu1) || 0;
     const mu112 = Number(((b.manual || {})['mu1:12'])) || 0;
 
-    return filas1.map((f) => {
-      const oh = Number(puesto(b, 'oh', f.id)) || 0;
+    return filas(P).map((f) => {
+      const oh = f.final ? (Number(puesto(b, 'oh', f.id)) || 0) : 0;
+
       if (f.tipo === 'manual') {
         const tot = Number(puesto(b, 'manual', f.id)) || 0;
-        return { ...f, oh, prodAM: 0, prodPM: 0, empAM: 0, empPM: 0, total: tot, manual: true };
+        return { ...f, oh: 0, qq: celdas(), qqAM: 0, qqPM: 0,
+          prodAM: 0, prodPM: 0, empAM: 0, empPM: 0, total: tot, manual: true };
       }
       if (f.tipo === 'mu1') {
         /* Las unidades de MU1 se producen en Zona 18 y no las calcula esta
-           app: se escriben. De ahí salen bolsas de seis, menos las de doce,
-           que llevan el doble de unidades cada una. */
+           app: se escriben arriba. De ahí salen bolsas de seis, menos las de
+           doce, que llevan el doble de unidades cada una. */
         const uni = Number(f.unidades) || 6;
         const bolsas6 = Math.ceil(Math.round(1.01 * Math.floor(mu1 / uni)) / MULT_EMPAQUE) * MULT_EMPAQUE;
         const total = Math.max(0, bolsas6 - oh - mu112 * 2);
-        return { ...f, oh, prodAM: 0, prodPM: 0, empAM: 0, empPM: 0,
-          total, nota: `${mu1 ? mu1.toLocaleString('es-GT') : 0} unidades ÷ ${uni}` };
+        return { ...f, oh, qq: celdas(), qqAM: 0, qqPM: 0,
+          prodAM: 0, prodPM: 0, empAM: 0, empPM: 0, total,
+          nota: `${mu1 ? mu1.toLocaleString('es-GT') : 0} unidades ÷ ${uni}` };
       }
+
+      /* Las cuatro celdas de quintales y las dos cubetas, de una sola pasada
+         sobre las fuentes que esa fila abarca. */
+      const qq = celdas();
+      let qqAM = 0, qqPM = 0;
+      (f.claves || []).forEach((c) => {
+        fuentesDe(P, c).forEach((s) => {
+          if (!f.plantas.includes(s.planta)) return;
+          const v = qqDe(s.atras, c, s.turno);
+          if (!v) return;
+          const mo = D.momentoDeTurno(s.turno, fechas[s.atras]);
+          qq[s.atras][mo] = r2(qq[s.atras][mo] + v);
+          if (s.cubeta === 'AM') qqAM = r2(qqAM + v); else qqPM = r2(qqPM + v);
+        });
+      });
       const rend = Number(f.rend) || 0;
-      const prodAM = Math.round(rend * (f.qq.amZ18 + f.qq.amZ2));
-      const prodPM = Math.round(rend * (f.qq.pmZ18 + f.qq.pmZ2));
-      /* Cruzado a propósito: la bolsa de la mañana lleva el pan de la noche. */
-      let empAM = alDiez(prodPM - oh);
-      let empPM = alDiez(prodAM - oh);
-      /* El 10HD7 de Zona 2 se anota aparte y manda sobre el empaque de la
-         tarde, igual que en la tabla accesoria de la hoja. */
-      if (f.tipo === 'clave' && f.clave === '10HD7' && f.planta === 'Z18' && hd7z2) {
-        empPM = Math.round(hd7z2 * rend);
+      const prodAM = Math.round(rend * qqAM);
+      const prodPM = Math.round(rend * qqPM);
+      if (!f.final) {
+        return { ...f, oh: 0, qq, qqAM, qqPM, prodAM, prodPM, empAM: 0, empPM: 0, total: 0 };
       }
-      return { ...f, oh, prodAM, prodPM, empAM, empPM, total: empAM + empPM };
+      /* El OH ya está impreso y se descuenta del empaque de la mañana. */
+      const empAM = alDiez(prodAM - oh);
+      const empPM = alDiez(prodPM);
+      return { ...f, oh, qq, qqAM, qqPM, prodAM, prodPM, empAM, empPM, total: empAM + empPM };
     });
   }
+
+  /* [0] es el día a producir y [1] el anterior, con su mañana y su tarde. */
+  const celdas = () => [{ AM: 0, PM: 0 }, { AM: 0, PM: 0 }];
 
   /**
    * Lo que se escribe a mano. Vive aparte de los días: esta hoja no se
@@ -254,10 +258,10 @@
     const todo = D.estado.bolsa;
     if (!todo[fecha]) todo[fecha] = {};
     const b = todo[fecha];
-    if (campo === 'hd7z2' || campo === 'mu1') {
+    if (campo === 'mu1') {
       const n = Number(valor);
-      b[campo] = String(valor).trim() === '' || Number.isNaN(n) ? 0 : n;
-      if (!b[campo]) delete b[campo];
+      b.mu1 = String(valor).trim() === '' || Number.isNaN(n) ? 0 : n;
+      if (!b.mu1) delete b.mu1;
     } else {
       if (!b[campo]) b[campo] = {};
       const t = String(valor).trim();
@@ -273,17 +277,17 @@
   }
 
   /**
-   * Las filas que no entran al total: las de una clave que más abajo tiene su
-   * fila «2 + 18». La bolsa es la misma, y la que se imprime es la de la
-   * suma; contar las dos daría el doble.
+   * Las filas que entran al total: sólo las que llevan el cálculo. Las de
+   * detalle por planta no cuentan —su bolsa la pide la fila de abajo— y una
+   * clave que está dentro de una unión de dos claves tampoco.
    */
   function enTotal(fs) {
-    const sumadas = new Set();
+    const unidas = new Set();
     fs.forEach((f) => {
-      if (f.tipo !== 'suma') return;
-      (f.partes || []).forEach((p) => sumadas.add(p.clave));
+      if (f.tipo !== 'union' || !f.claves || f.claves.length < 2) return;
+      f.claves.forEach((c) => unidas.add(c));
     });
-    return fs.map((f) => ({ ...f, cuenta: !(f.tipo === 'clave' && sumadas.has(f.clave)) }));
+    return fs.map((f) => ({ ...f, cuenta: !!f.final && !(f.clave && unidas.has(f.clave)) }));
   }
 
   function totales(fs) {
@@ -299,27 +303,27 @@
   function pdf(fecha) {
     const R = window.Resumen;
     const ANCHO = 612, ALTO = 792;
-    const MX = 24, MY = 22;
+    const MX = 20, MY = 22;
     const h = R.hoja(ALTO);
     const fs = enTotal(calcular(fecha));
     const t = totales(fs);
-    const dAM = D.fechaCorta(fecha);
-    const dPM = D.fechaCorta(fechaPrevia(fecha));
+    const d0 = D.fechaCorta(fecha).toUpperCase();
+    const d1 = D.fechaCorta(fechaPrevia(fecha)).toUpperCase();
 
     const cols = [
-      { k: 'pprod', t: 'P PROD', w: 34 },
-      { k: 'nombre', t: 'ITEM', w: 58, alinear: 'left' },
+      { k: 'pprod', t: 'P PROD', w: 36 },
+      { k: 'nombre', t: 'CLAVE', w: 58, alinear: 'left' },
       { k: 'rend', t: 'RENDIM', w: 36 },
-      { k: 'amZ18', lineas: ['QQ AM', 'Z18', dAM], w: 42 },
-      { k: 'pmZ18', lineas: ['QQ PM', 'Z18', dPM], w: 42 },
-      { k: 'pmZ2', lineas: ['QQ PM', 'Z2', dPM], w: 42 },
-      { k: 'amZ2', lineas: ['QQ AM', 'Z2', dAM], w: 42 },
-      { k: 'prodAM', lineas: ['PROD', 'AM', dAM], w: 44 },
-      { k: 'prodPM', lineas: ['PROD', 'PM', dPM], w: 44 },
-      { k: 'oh', t: 'OH', w: 30 },
-      { k: 'empAM', lineas: ['EMPAQUE', 'AM', dAM], w: 52 },
-      { k: 'empPM', lineas: ['EMPAQUE', 'PM', dAM], w: 52 },
-      { k: 'total', lineas: ['TOTAL', 'PROD'], w: 46 },
+      { k: 'q1AM', lineas: [d1, 'QQ AM'], w: 40 },
+      { k: 'q1PM', lineas: [d1, 'QQ PM'], w: 40 },
+      { k: 'q0AM', lineas: [d0, 'QQ AM'], w: 40 },
+      { k: 'q0PM', lineas: [d0, 'QQ PM'], w: 40 },
+      { k: 'prodAM', lineas: ['PROD', 'AM'], w: 44 },
+      { k: 'prodPM', lineas: ['PROD', 'PM'], w: 44 },
+      { k: 'oh', t: 'OH', w: 36 },
+      { k: 'empAM', lineas: ['EMPAQUE', 'AM'], w: 52 },
+      { k: 'empPM', lineas: ['EMPAQUE', 'PM'], w: 52 },
+      { k: 'total', lineas: ['A', 'IMPRIMIR'], w: 52 },
     ];
     const disponible = ANCHO - 2 * MX;
     const bruto = cols.reduce((a, c) => a + c.w, 0);
@@ -332,11 +336,11 @@
 
     const d = D.desdeISO(fecha);
     const larga = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-    h.texto(x0, MY, 'PRODUCCION BOLSA', { tam: 11, negrita: true });
+    h.texto(x0, MY, 'IMPRESION DE BOLSA', { tam: 11, negrita: true });
     h.texto(x0, MY, `${D.nombreDia(fecha)}  ${larga}`,
       { tam: 11, negrita: true, alinear: 'right', ancho: anchoTabla });
 
-    const yCab = MY + 18, hCab = 30;
+    const yCab = MY + 18, hCab = 26;
     const yFilas = yCab + hCab, hTot = 14;
     const hFila = Math.min(12, (ALTO - MY - yFilas - hTot - 4) / Math.max(1, fs.length));
 
@@ -359,10 +363,12 @@
       if (c.k === 'pprod') return f.pprod || '';
       if (c.k === 'nombre') return f.nombre;
       if (c.k === 'rend') return f.rend ? n0(f.rend) : '';
-      if (c.k === 'oh') return f.oh ? n0(f.oh) : '';
-      if (['amZ18', 'pmZ18', 'pmZ2', 'amZ2'].includes(c.k)) {
-        return f.qq ? n2v(f.qq[c.k]) : '';
-      }
+      if (c.k === 'q1AM') return n2v(f.qq[1].AM);
+      if (c.k === 'q1PM') return n2v(f.qq[1].PM);
+      if (c.k === 'q0AM') return n2v(f.qq[0].AM);
+      if (c.k === 'q0PM') return n2v(f.qq[0].PM);
+      /* En las filas de detalle el cálculo lo lleva la de abajo. */
+      if (!f.final && ['oh', 'empAM', 'empPM', 'total'].includes(c.k)) return '';
       return n0(f[c.k]);
     };
 
@@ -371,7 +377,7 @@
       let x = x0;
       cols.forEach((c) => {
         h.rect(x, y, c.w, hFila);
-        const neg = c.k === 'nombre' || c.k === 'total';
+        const neg = f.final && (c.k === 'nombre' || c.k === 'total');
         h.texto(x, y + (hFila - 6.2) / 2, valor(f, c),
           { tam: 6.2, negrita: neg, alinear: c.alinear || 'center', ancho: c.w });
         x += c.w;
@@ -396,9 +402,28 @@
     };
   }
 
-  /** El día del que salen las columnas PM: la tarde anterior. */
-  const fechaPrevia = (fecha) => D.sumarDias(fecha, -1);
+  /**
+   * Producción del día a producir que no está entrando en la hoja porque su
+   * turno quedó en «—». Sin esto la clave sale con menos bolsas de las que
+   * toca y no hay forma de darse cuenta.
+   */
+  function ignorados(fecha) {
+    const P = D.estado.params;
+    const reg = D.estado.dias[fecha] ? D.migrar(D.estado.dias[fecha]) : { turnos: {} };
+    const out = [];
+    Object.keys(reg.turnos || {}).forEach((c) => {
+      if (!P.prod[c] || !dentro(P, c)) return;
+      turnosDeClave(c).forEach((t) => {
+        const v = Number((reg.turnos[c] || {})[t.id]) || 0;
+        if (!v) return;
+        if (fuenteDe(P, c, t.id).hoy) return;
+        out.push({ clave: c, nombre: (P.prod[c] || {}).alias || c, turno: t.nombre, qq: r2(v) });
+      });
+    });
+    return out;
+  }
 
-  window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf,
-    dentro, filaDentro, fechaPrevia, EXTRAS, alDiez };
+  window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf, ignorados,
+    dentro, filaDentro, fechaPrevia, fuenteDe, fuentesDe, turnosDeClave,
+    DESTINOS, DIAS, EXTRAS, alDiez };
 })();

@@ -314,6 +314,11 @@
       /* Claves y filas que NO salen en Impresión de bolsa. Se guarda lo que
          queda fuera para que lo nuevo entre solo. */
       bolsaFuera: [],
+      /* De dónde salen los quintales de cada clave en la hoja de bolsa:
+         { CLAVE: { TURNO: { hoy: 'AM'|'PM'|'', ayer: 'AM'|'PM'|'' } } }, donde
+         «hoy» es el día a producir y «ayer» el anterior. Un turno sin nada
+         escrito cuenta en su propio momento y sólo el día a producir. */
+      bolsaFuentes: {},
       /* El orden de las filas de la hoja de bolsa, si se cambió a mano. Lo que
          no está en la lista va después, en el orden de siempre: una clave
          nueva aparece sola en vez de perderse. */
@@ -431,6 +436,21 @@
       .filter((x) => typeof x === 'string');
     out.bolsaOrden = (Array.isArray(guardado.bolsaOrden) ? guardado.bolsaOrden : [])
       .filter((x) => typeof x === 'string');
+    out.bolsaFuentes = {};
+    const gf = guardado.bolsaFuentes;
+    if (gf && typeof gf === 'object') {
+      Object.keys(gf).forEach((c) => {
+        const fila = gf[c];
+        if (!fila || typeof fila !== 'object') return;
+        const limpia = {};
+        const ok = (x) => (x === 'AM' || x === 'PM' ? x : '');
+        Object.keys(fila).forEach((t) => {
+          const v = fila[t];
+          if (v && typeof v === 'object') limpia[t] = { hoy: ok(v.hoy), ayer: ok(v.ayer) };
+        });
+        if (Object.keys(limpia).length) out.bolsaFuentes[c] = limpia;
+      });
+    }
     out.empaque = (Array.isArray(guardado.empaque) && guardado.empaque.length
       ? guardado.empaque : EMPAQUE)
       .filter((e) => e && e.id)

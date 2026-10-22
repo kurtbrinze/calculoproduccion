@@ -227,8 +227,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.27';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.27';`
+1. `js/ui.js` → `const VERSION = 'V.2026.28';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.28';`
 
 ## Plantas, claves y productos nuevos
 
@@ -310,85 +310,59 @@ le marquen.
 
 ## Impresión bolsa
 
-La pestaña **Impresión bolsa** dice cuántas bolsas hay que mandar a imprimir con su lote y
-vencimiento. Es la tabla `Nueva` de `Calc_Bolsa`, con los quintales ya puestos.
+La pestaña **Impresión bolsa** dice cuántas bolsas hay que mandar a imprimir. Toma la producción
+sola, del reparto, y la fecha que manda siempre es la del **día a producir**; el día anterior
+sale de ella.
 
 | Columna | De dónde sale |
 |---|---|
-| P PROD | La planta de esa fila: `18`, `2 CZ`, `2` o `2 + 18` |
-| ITEM | La clave, con su alias si tiene |
+| P PROD | La planta de esa fila: `18`, `2 CZ`, `2` o la unión `2 + 18` |
+| CLAVE | La clave, con su alias si tiene |
 | RENDIM | Bolsas por quintal, del catálogo |
-| QQ AM Z18 / QQ AM Z2 | Los turnos de **mañana** del **día a producir** |
-| QQ PM Z18 / QQ PM Z2 | Los turnos de **tarde** del **día anterior** |
-| PROD AM / PROD PM | Rendimiento × quintales de ese momento |
-| OH | Lo que ya hay impreso. Se resta del empaque |
-| EMPAQUE AM | `PROD PM − OH`, redondeado a diez |
-| EMPAQUE PM | `PROD AM − OH`, redondeado a diez |
-| TOTAL PROD | Los dos empaques |
+| QQ AM / QQ PM del día anterior | Lo que las fuentes elegidas traen de ese día, partido por momento |
+| QQ AM / QQ PM del día a producir | Lo mismo, del día a producir |
+| PROD AM | Quintales de la cubeta **AM** × rendimiento |
+| PROD PM | Quintales de la cubeta **PM** × rendimiento |
+| OH | Lo que ya hay impreso |
+| EMPAQUE AM | `PROD AM − OH`, redondeado a diez |
+| EMPAQUE PM | `PROD PM`, redondeado a diez |
+| A IMPRIMIR | `EMPAQUE AM + EMPAQUE PM` |
 
-**Una hoja cubre el empaque de un día, con pan de dos tandas.** La mañana del día a producir se
-empaca el pan hecho la tarde anterior, y la tarde de ese mismo día se empaca el de esa mañana.
-De ahí las dos fechas: las columnas AM son del día a producir y las columnas PM del día de
-antes, en las **dos plantas por igual** —lo que manda es el momento del turno, no dónde
-trabaja—. Los dos EMPAQUE son del día a producir. Cada encabezado lleva su fecha escrita, en
-pantalla y en el PDF.
+**De dónde salen los quintales se parametriza.** En Parámetros → Impresión de bolsa, cada clave
+lista sus turnos y cada turno lleva **dos** ajustes: qué hace lo que produjo el **día a
+producir** («hoy») y qué hace lo del **día anterior** («ant»). Cada uno va a la cubeta `AM`, a la
+`PM`, o a `—` si no entra. Hacen falta los dos porque un mismo turno puede contar de un lado un
+día y del otro al siguiente: en la hoja de Kurt, RED AM del día anterior va a PROD AM y RED AM
+del día a producir va a PROD PM.
 
-Quién es de mañana y quién de tarde se marca en Parámetros → Turnos y topes, columna
-**Momento**. Si cambia el personal se cambia ahí y la hoja se acomoda sola. Byron y Julio no
-llevan selector: les toca lo que diga la rotación, y cada día se lee con su propia fecha, así
-que en una hoja puede salir uno en la columna AM y el otro en la PM.
-En el Excel la parte de Zona 2 era `=SUMA(CALC_PROD!AI:AK)`, las últimas columnas de la planta.
+Sin tocar nada, cada turno **de los que la clave tiene marcados en Productos** cuenta en su
+propio momento y sólo el día a producir. Los demás turnos quedan en `—`. Si ese día hay
+producción en un turno apagado, la pestaña lo avisa con la clave, el turno y los quintales, para
+que no se pierda sin que nadie se entere.
 
-**`QQ AM Z2` va a mano y es a propósito.** Ahí van los quintales que Zona 2 produce **hoy**,
-y ese dato todavía no está en el app cuando se arma la hoja: la foto de Zona 2 que se lee hoy
-trae la producción de **ayer**. Lo que el reparto haya puesto en esos turnos sale debajo de la
-casilla como sugerencia —se toca y se copia— pero nunca entra solo, porque un plan no es un
-hecho.
+**Las cuatro columnas de quintales son lo que de verdad entra en la cuenta**: muestran las
+fuentes elegidas y nada más, partidas por día y por momento del turno. Lo que se ve es lo que se
+suma.
 
-**El orden de las filas se cambia a mano.** De fábrica salen en el orden de las áreas de
-producción. En Parámetros → Impresión de bolsa, cada fila es una ficha: se agarra del asa y se
-arrastra a donde vaya. Lo que no esté en ese orden guardado va después, así que **una clave
-nueva aparece al final** en vez de perderse. «Orden de siempre» devuelve el de fábrica.
+**Una clave que sale de dos plantas lleva tres filas.** Una por planta, sólo para ver de dónde
+viene cada parte, y abajo la que las une —el `2 + 18` de la hoja—, que es donde se escribe el
+**OH** y donde sale **A IMPRIMIR**, porque la bolsa es una sola. Las filas de detalle no entran
+en el total. Una clave de una sola planta lleva una fila y ahí va todo. `12WY1 + K` funciona
+igual, pero une dos claves distintas que comparten bolsa.
 
-**Se quita o se pone fila por fila.** La ficha de cada fila lleva su casilla, así que una clave
-que tiene fila en una planta donde no se produce nada —el 10HD7 en Zona 2 CZ, por ejemplo— se
-saca sin tocar sus otras filas. La lista guardada (`bolsaFuera`) acepta las dos formas: la clave
-entera, como se guardaba antes, o el id de una fila, `CLAVE|PLANTA`.
+**Lo único que se escribe a mano** son el OH, las claves que se cuentan a mano —`5HD2`, `15PL1`,
+`8PL1`, `10S11T`, `12S11T`, `10WY1 M`, `10WY1 G`— y las unidades de MU1, arriba de la tabla. De
+esas unidades salen las bolsas de `6MU1`, menos lo ya impreso y menos el doble de lo que se
+escriba en `12MU1`, que llevan el doble de unidades cada una.
+
+**Qué filas salen y en qué orden** se elige en la misma sección de Parámetros. Cada ficha es una
+fila de la hoja y lleva su casilla, así que una clave con fila en una planta donde no se produce
+nada se saca sin tocar sus otras filas. Para moverla, se agarra del asa y se arrastra. Lo que no
+esté en el orden guardado va después, así que una clave nueva aparece al final en vez de
+perderse. «Orden de siempre» devuelve el de las áreas de producción.
 
 **Esta hoja no se sincroniza.** Se guarda aparte de los días, en el equipo donde se imprime.
 Sí entra en el respaldo.
-
-Las filas **2 + 18** de la hoja son `10HD7`, `10HR3`, `5HM4` y `12WY1 + K`. La del 10HD7 es la
-que suma PANADEROS PM de Zona 18 con Máquina de Zona 2; con ella puesta, la casilla suelta de
-«HD7 Z2» —que servía para meter eso a mano cuando no había fila— queda sin efecto. En una fila
-2 + 18 el QQ AM Z2 se puede escribir ahí mismo o en la fila de Zona 2 de esa clave: la suma toma
-lo que haya en la fila de la planta si en ella misma no se escribió nada, y lo propio manda.
-
-Una clave que se hace en dos plantas lleva una fila por planta y, más abajo, una fila **2 + 18**
-que las suma, porque la bolsa es la misma. Esa suma es la que se imprime: las filas de arriba
-salen apagadas con «va en la fila 2 + 18» y **no entran en el total**, para no pedir el doble.
-
-Tres casos aparte, como en la hoja:
-
-- **10HD7 en Zona 2** se anota arriba en quintales y manda sobre el empaque PM de su fila.
-- **MU1** no lo calcula esta app: se escriben las unidades producidas y de ahí salen las bolsas
-  de seis — `techo(redondeo(1.01 × entero(unidades ÷ 6)) a diez)` — menos las de doce, que
-  llevan el doble de unidades cada una.
-- Las presentaciones que se cuentan a mano (5HD2, 15PL1, 8PL1, 10S11T, 12S11T, 10WY1 M y G)
-  tienen el TOTAL escribible.
-
-**Enter y Tab bajan por la misma columna**, no por la fila: una hoja así se llena una columna
-entera de arriba abajo. Al entrar a una celda se selecciona lo que hay, para escribir encima de
-un toque en la tablet.
-
-**Qué claves salen** se elige en Parámetros, en la sección «Impresión de bolsa». La hoja con
-todo el catálogo estorba a la hora de decidir, así que ahí se quitan las que no se imprimen —y
-también las filas de más: las sumas, MU1 y las que se cuentan a mano. Se guarda lo que queda
-**fuera**, así que una clave nueva entra sola; si no la querés, la desmarcás. «Quitar todas»
-deja la hoja en blanco para marcar sólo el puñado que de verdad usás.
-
-**PDF para imprimir** saca la tabla entera en carta vertical, con el mismo recorte que el área
-de impresión del Excel. Se guarda en la carpeta elegida, igual que los demás archivos.
 
 ## Cálculos secundarios
 
