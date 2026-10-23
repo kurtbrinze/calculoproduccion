@@ -25,11 +25,24 @@
   const fechaArchivo = (iso) => String(iso).replace(/-/g, '_');
 
   /** Lo que se va a mostrar, ya resuelto para una planta. */
+  /* Combinaciones de plantas que salen en el selector además de cada planta
+     suelta. `plantas: null` es todas. La primera es la que sale al abrir,
+     porque es la que se usa a diario. */
+  const GRUPOS = [
+    { id: 'Z18+Z2CZ', nombre: 'Zona 18 + Zona 2 CZ', corto: 'Z18+Z2CZ', plantas: ['Z18', 'Z2CZ'] },
+    { id: 'TODAS', nombre: 'Todas las plantas', corto: 'Todas', plantas: null },
+  ];
+
   function datos(fecha, planta) {
     const reg = D.registro(fecha);
     const t = C.calcularTodo(D.estado, reg, fecha);
-    const turnos = planta === 'TODAS' ? D.TURNOS : D.turnosDePlanta(planta);
-    const nombrePlanta = planta === 'TODAS' ? 'TODAS LAS PLANTAS'
+    const g = GRUPOS.find((x) => x.id === planta);
+    /* Un grupo junta varias plantas en una sola hoja; sin grupo, es una
+       planta suelta. */
+    const turnos = g
+      ? (g.plantas ? D.TURNOS.filter((x) => g.plantas.includes(D.plantaDeTurno(x.id))) : D.TURNOS)
+      : D.turnosDePlanta(planta);
+    const nombrePlanta = g ? g.nombre.toUpperCase()
       : ((D.PLANTAS.find((p) => p.id === planta) || {}).nombre || planta).toUpperCase();
 
     const filas = t.filas.map((f) => {
@@ -447,7 +460,7 @@
 
   function abrir(fecha, decir) {
     const avisar = decir || (() => {});
-    let planta = 'Z18';
+    let planta = GRUPOS[0].id;
 
     const m = document.createElement('div');
     m.className = 'lector';
@@ -461,7 +474,8 @@
         <div class="card rescard">
           <div class="fila" style="align-items:center">
             <label for="rPlanta" class="dim" style="font-size:.84rem">Planta</label>
-            <select id="rPlanta" style="min-width:170px">
+            <select id="rPlanta" style="min-width:190px">
+              <option value="${GRUPOS[0].id}">${esc2(GRUPOS[0].nombre)}</option>
               ${D.PLANTAS.map((p) => `<option value="${p.id}">${esc2(p.nombre)}</option>`).join('')}
               <option value="TODAS">Todas juntas</option>
             </select>
@@ -508,7 +522,7 @@
       q('#rVista').appendChild(cv);
     }
 
-    const sufPlanta = () => (planta === 'TODAS' ? 'Todas' : planta);
+    const sufPlanta = () => ((GRUPOS.find((x) => x.id === planta) || {}).corto || planta);
     const nombrePdf = () => `Produccion ${sufPlanta()} ${fechaArchivo(fecha)}.pdf`;
     const nombreImg = (suf) => `Produccion ${sufPlanta()} ${fechaArchivo(fecha)}${suf}.png`;
 
@@ -599,7 +613,7 @@
   }
 
   window.Resumen = {
-    abrir, datos, imagenSimple, imagenCompleta, pdf, pdfBytes,
+    abrir, datos, imagenSimple, imagenCompleta, pdf, pdfBytes, GRUPOS,
     // el dibujo, que reusan la tabla de feriados y la de impresión de bolsa
     lienzo, celda, aBlob, compartir, COL, hoja, anchoTexto, fechaArchivo,
   };

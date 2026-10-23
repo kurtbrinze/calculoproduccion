@@ -51,7 +51,10 @@ amanece. Si la foto no deja leer la fecha, queda en ayer y se puede cambiar arri
 
 ### Resumen del día
 
-El botón **Resumen del día** arma lo que hay que repartir, para la planta que se elija:
+El botón **Resumen del día** arma lo que hay que repartir, para la planta o la combinación que
+se elija. El selector abre en **Zona 18 + Zona 2 CZ**, que es la que se usa a diario; después
+van cada planta por separado y «Todas juntas». Una combinación junta los turnos de sus plantas
+en una sola hoja y suma sus quintales. Se agregan en `GRUPOS`, arriba de `js/resumen.js`.
 
 - **Imagen clave y qq** — sólo las dos columnas, para mandar por WhatsApp.
 - **Imagen completa** — además el desglose por turno, con las celdas en gris donde
@@ -227,8 +230,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.28';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.28';`
+1. `js/ui.js` → `const VERSION = 'V.2026.29';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.29';`
 
 ## Plantas, claves y productos nuevos
 
