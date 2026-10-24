@@ -29,7 +29,11 @@
      suelta. `plantas: null` es todas. La primera es la que sale al abrir,
      porque es la que se usa a diario. */
   const GRUPOS = [
-    { id: 'Z18+Z2CZ', nombre: 'Zona 18 + Zona 2 CZ', corto: 'Z18+Z2CZ', plantas: ['Z18', 'Z2CZ'] },
+    /* `soloSuyas` deja en la hoja únicamente las claves que se hacen en esas
+       plantas: una combinación se arma para trabajarla, y las claves de la
+       planta que quedó fuera sólo estorban. Una planta suelta sigue saliendo
+       con el catálogo entero, como siempre. */
+    { id: 'Z18+Z2CZ', nombre: 'Zona 18 + Zona 2 CZ', corto: 'Z18+Z2CZ', plantas: ['Z18', 'Z2CZ'], soloSuyas: true },
     { id: 'TODAS', nombre: 'Todas las plantas', corto: 'Todas', plantas: null },
   ];
 
@@ -45,7 +49,11 @@
     const nombrePlanta = g ? g.nombre.toUpperCase()
       : ((D.PLANTAS.find((p) => p.id === planta) || {}).nombre || planta).toUpperCase();
 
-    const filas = t.filas.map((f) => {
+    const suyas = g && g.soloSuyas && g.plantas
+      ? t.filas.filter((f) => g.plantas.some((p) => D.enPlanta(f.clave, p)))
+      : t.filas;
+
+    const filas = suyas.map((f) => {
       const porTurno = {};
       let total = 0;
       turnos.forEach((x) => {
@@ -463,7 +471,7 @@
     let planta = GRUPOS[0].id;
 
     const m = document.createElement('div');
-    m.className = 'lector';
+    m.className = 'lector resumen';
     m.innerHTML = `<div class="lcaja" style="max-width:1000px">
       <div class="lbar">
         <h3>Resumen de producción</h3>

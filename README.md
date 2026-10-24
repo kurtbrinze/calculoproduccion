@@ -54,7 +54,10 @@ amanece. Si la foto no deja leer la fecha, queda en ayer y se puede cambiar arri
 El botón **Resumen del día** arma lo que hay que repartir, para la planta o la combinación que
 se elija. El selector abre en **Zona 18 + Zona 2 CZ**, que es la que se usa a diario; después
 van cada planta por separado y «Todas juntas». Una combinación junta los turnos de sus plantas
-en una sola hoja y suma sus quintales. Se agregan en `GRUPOS`, arriba de `js/resumen.js`.
+en una sola hoja, suma sus quintales y deja **sólo las claves que se hacen en esas plantas** —se
+arma para trabajarla, y las de la planta que quedó fuera sólo estorban—. Una planta suelta sigue
+saliendo con el catálogo entero. Las combinaciones se agregan en `GRUPOS`, arriba de
+`js/resumen.js`.
 
 - **Imagen clave y qq** — sólo las dos columnas, para mandar por WhatsApp.
 - **Imagen completa** — además el desglose por turno, con las celdas en gris donde
@@ -230,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.29';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.29';`
+1. `js/ui.js` → `const VERSION = 'V.2026.30';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.30';`
 
 ## Plantas, claves y productos nuevos
 
@@ -363,6 +366,15 @@ fila de la hoja y lleva su casilla, así que una clave con fila en una planta do
 nada se saca sin tocar sus otras filas. Para moverla, se agarra del asa y se arrastra. Lo que no
 esté en el orden guardado va después, así que una clave nueva aparece al final en vez de
 perderse. «Orden de siempre» devuelve el de las áreas de producción.
+
+**Los sábados la hoja lleva el domingo encima.** La bolsa del domingo de Zona 2 se manda a
+imprimir el sábado, cuando esa producción todavía no existe en ningún lado. Lo único con qué
+estimarla son los domingos anteriores, que el app sí guarda porque la foto de Zona 2 entra a
+diario. Así que cuando el día a producir cae en sábado se le **suma** a lo que ya trae la hoja el
+promedio de los últimos domingos capturados, turno por turno, y cada turno entra por la cubeta
+que tenga puesta. Un domingo sin nada capturado no cuenta como cero: se salta y se busca el
+anterior. La pestaña dice cuántos quintales sumó y de qué domingos salieron. Se apaga, se cambia
+la planta o el número de domingos en Parámetros → Impresión de bolsa.
 
 **Esta hoja no se sincroniza.** Se guarda aparte de los días, en el equipo donde se imprime.
 Sí entra en el respaldo.

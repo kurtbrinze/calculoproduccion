@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.29';
+  const VERSION = 'V.2026.30';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -701,6 +701,25 @@
         'Los quintales salen de la pestaña Producción, del día a producir o del anterior según '
         + 'lo que tenga puesto cada clave. Reparte ahí y esta tabla se llena sola.']);
     }
+    /* El sábado la hoja lleva encima el domingo estimado. Hay que decirlo: son
+       quintales que todavía no existen, y de qué domingos salieron. */
+    const dom = B.promDomingos(D.estado.params, fecha);
+    if (dom) {
+      const planta = (D.PLANTAS.find((x) => x.id === dom.planta) || {}).nombre || dom.planta;
+      const qqDom = Object.values(dom.qq).reduce((a, f) =>
+        a + Object.values(f).reduce((x, v) => x + v, 0), 0);
+      av.push(dom.dias.length
+        ? ['', `Esta hoja lleva el domingo de ${planta} sumado encima`,
+          `Son ${n2(C.redondea(qqDom, 2))} QQ estimados, el promedio de `
+          + `${dom.dias.length} domingo${dom.dias.length > 1 ? 's' : ''}: `
+          + `${dom.dias.map((f) => D.fechaCorta(f)).join(' · ')}. `
+          + 'La bolsa del domingo se manda a imprimir hoy, y esa producción todavía no existe. '
+          + 'Se apaga o se cambian los domingos en Parámetros → Impresión de bolsa.']
+        : ['warn', `No hay domingos capturados de ${planta}`,
+          'La hoja del sábado debería llevar el domingo estimado encima, pero no hay ningún '
+          + 'domingo con producción de esa planta para sacar el promedio.']);
+    }
+
     const fuera = B.ignorados(fecha);
     if (fuera.length) {
       av.push(['warn', fuera.length === 1
@@ -1163,6 +1182,22 @@
             style="margin-left:6px">Volver a lo de siempre</button>
         </p>
         <div id="bolsaFuentes"></div>
+        <h4 class="subrot" style="margin-top:18px">El domingo que se imprime el sábado</h4>
+        <p class="dim" style="font-size:.84rem;margin:0 2px 10px">
+          La bolsa del domingo se manda a imprimir el sábado, cuando esa producción todavía no
+          existe. Los sábados la hoja le suma encima el promedio de los últimos domingos
+          capturados de esa planta, turno por turno, y cada turno entra por la cubeta que tenga
+          puesta arriba. Un domingo sin nada capturado no cuenta como cero: se salta.
+        </p>
+        <div class="fila" style="align-items:flex-end;margin:0 2px 4px">
+          <label class="sw"><input type="checkbox" id="chkBolsaDom"> Sumar el domingo estimado</label>
+          <div class="campo"><label for="inBolsaDomPlanta">Planta</label>
+            <select id="inBolsaDomPlanta" style="min-width:150px">
+              ${D.PLANTAS.map((x) => `<option value="${x.id}">${esc(x.nombre)}</option>`).join('')}
+            </select></div>
+          <div class="campo"><label for="inBolsaDomSem">Domingos a promediar</label>
+            <input class="inqq" inputmode="numeric" id="inBolsaDomSem" style="width:90px"></div>
+        </div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -1251,6 +1286,10 @@
     pintarFeriados();
     pintarBolsaClaves();
     pintarBolsaFuentes();
+    const bd = D.estado.params.bolsaDomingo;
+    $('#chkBolsaDom').checked = bd.activo !== false;
+    $('#inBolsaDomPlanta').value = bd.planta;
+    $('#inBolsaDomSem').value = bd.semanas;
   }
 
   /* De dónde salen los quintales de cada clave en la hoja de bolsa: turno por
@@ -1908,6 +1947,11 @@
         } else if (id === 'inRotAm') {
           P.rotacion.amPrimero = e.target.value;
           D.guardarParams(); pintarParametros(); pintarProduccion(); return;
+        } else if (id === 'chkBolsaDom' || id === 'inBolsaDomPlanta' || id === 'inBolsaDomSem') {
+          if (id === 'chkBolsaDom') P.bolsaDomingo.activo = e.target.checked;
+          else if (id === 'inBolsaDomPlanta') P.bolsaDomingo.planta = e.target.value;
+          else P.bolsaDomingo.semanas = Math.max(1, Math.round(Number(e.target.value) || 4));
+          D.guardarParams(); pintarParametros(); pintarBolsa(); return;
         }
         else return;
         D.guardarParams();

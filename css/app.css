@@ -413,3 +413,9 @@ td.conped{color:var(--accent-2)}
 /* Encabezado de dos pisos de la hoja de bolsa. */
 #theadBolsa th.bloque{border-bottom:1px solid var(--line);font-size:.72rem;
   letter-spacing:.04em}
+
+/* El resumen del día no va a pegado al borde: deja aire arriba y abajo para
+   que se vea que la ventana está entera, y la hoja se encoge sola para caber
+   en lo que queda. */
+.lector.resumen{padding:16px 0}
+.lector.resumen .lcaja{border:1px solid var(--line);border-radius:14px;overflow:hidden}

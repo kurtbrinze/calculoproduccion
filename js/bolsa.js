@@ -185,6 +185,58 @@
   /** El día del que salen las fuentes marcadas «día anterior». */
   const fechaPrevia = (fecha) => D.sumarDias(fecha, -1);
 
+  // ---------- el domingo que todavía no pasó ----------
+  /* La bolsa del domingo de Zona 2 se manda a imprimir el sábado, cuando esa
+     producción todavía no existe en ningún lado. Lo único con qué estimarla
+     son los domingos anteriores, que el app sí guarda porque la foto de Zona 2
+     entra todos los días. Así que el sábado se le suma a la hoja el promedio
+     de los últimos domingos, turno por turno, y cada turno entra por la misma
+     cubeta que tenga puesta. */
+  const SABADO = 5, DOMINGO = 6;   // con lunes = 0
+
+  /**
+   * El promedio por clave y turno de los últimos domingos con producción en
+   * esa planta. Devuelve también de qué domingos salió, para poder decirlo.
+   */
+  function promDomingos(P, fecha) {
+    const cfg = P.bolsaDomingo || {};
+    if (cfg.activo === false) return null;
+    if (D.indiceDia(fecha) !== SABADO) return null;
+    const planta = cfg.planta || 'Z2';
+    const cuantos = Math.max(1, Math.round(Number(cfg.semanas) || 4));
+    const ids = D.turnosDePlanta(planta).map((t) => t.id);
+    /* Un domingo sin nada guardado no es un domingo de cero: es un domingo que
+       no se capturó, y promediarlo como cero bajaría el estimado. Se salta. */
+    const dias = [];
+    let f = fecha;
+    for (let i = 0; i < 70 && dias.length < cuantos; i++) {
+      f = D.sumarDias(f, -1);
+      if (D.indiceDia(f) !== DOMINGO) continue;
+      const r = D.estado.dias[f] ? D.migrar(D.estado.dias[f]) : null;
+      if (!r) continue;
+      const hay = Object.values(r.turnos || {}).some((t) => ids.some((id) => Number((t || {})[id]) > 0));
+      if (hay) dias.push(f);
+    }
+    if (!dias.length) return { dias: [], qq: {}, planta, cuantos };
+    const suma = {};
+    dias.forEach((d) => {
+      const r = D.migrar(D.estado.dias[d]);
+      Object.keys(r.turnos || {}).forEach((c) => {
+        ids.forEach((id) => {
+          const v = Number((r.turnos[c] || {})[id]) || 0;
+          if (!v) return;
+          (suma[c] = suma[c] || {})[id] = (suma[c][id] || 0) + v;
+        });
+      });
+    });
+    const qq = {};
+    Object.keys(suma).forEach((c) => {
+      qq[c] = {};
+      Object.keys(suma[c]).forEach((id) => { qq[c][id] = r2(suma[c][id] / dias.length); });
+    });
+    return { dias, qq, planta, cuantos };
+  }
+
   /**
    * La tabla completa de un día, ya calculada. La fecha que manda siempre es
    * la del día a producir; el día anterior sale de ella.
@@ -199,6 +251,7 @@
 
     const mu1 = Number(b.mu1) || 0;
     const mu112 = Number(((b.manual || {})['mu1:12'])) || 0;
+    const dom = promDomingos(P, fecha);
 
     return filas(P).map((f) => {
       const oh = f.final ? (Number(puesto(b, 'oh', f.id)) || 0) : 0;
@@ -224,14 +277,25 @@
          sobre las fuentes que esa fila abarca. */
       const qq = celdas();
       let qqAM = 0, qqPM = 0;
+      const sumar = (atras, turno, cubeta, v) => {
+        const mo = D.momentoDeTurno(turno, fechas[atras]);
+        qq[atras][mo] = r2(qq[atras][mo] + v);
+        if (cubeta === 'AM') qqAM = r2(qqAM + v); else qqPM = r2(qqPM + v);
+      };
       (f.claves || []).forEach((c) => {
         fuentesDe(P, c).forEach((s) => {
           if (!f.plantas.includes(s.planta)) return;
           const v = qqDe(s.atras, c, s.turno);
-          if (!v) return;
-          const mo = D.momentoDeTurno(s.turno, fechas[s.atras]);
-          qq[s.atras][mo] = r2(qq[s.atras][mo] + v);
-          if (s.cubeta === 'AM') qqAM = r2(qqAM + v); else qqPM = r2(qqPM + v);
+          if (v) sumar(s.atras, s.turno, s.cubeta, v);
+        });
+        /* El sábado se le suma encima el domingo estimado, que va en la
+           columna del día a producir porque es bolsa de esta misma tanda. */
+        if (!dom) return;
+        const fila = dom.qq[c] || {};
+        Object.keys(fila).forEach((id) => {
+          if (!f.plantas.includes(D.plantaDeTurno(id))) return;
+          const cub = fuenteDe(P, c, id).hoy;
+          if (cub && fila[id]) sumar(0, id, cub, fila[id]);
         });
       });
       const rend = Number(f.rend) || 0;
@@ -424,6 +488,6 @@
   }
 
   window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf, ignorados,
-    dentro, filaDentro, fechaPrevia, fuenteDe, fuentesDe, turnosDeClave,
+    dentro, filaDentro, fechaPrevia, fuenteDe, fuentesDe, turnosDeClave, promDomingos,
     DESTINOS, DIAS, EXTRAS, alDiez };
 })();

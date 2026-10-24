@@ -319,6 +319,10 @@
          «hoy» es el día a producir y «ayer» el anterior. Un turno sin nada
          escrito cuenta en su propio momento y sólo el día a producir. */
       bolsaFuentes: {},
+      /* El sábado se le suma a la hoja la producción estimada del domingo de
+         esa planta, sacada del promedio de los últimos domingos capturados.
+         Es la bolsa del domingo, que se manda a imprimir el sábado. */
+      bolsaDomingo: { activo: true, planta: 'Z2', semanas: 4 },
       /* El orden de las filas de la hoja de bolsa, si se cambió a mano. Lo que
          no está en la lista va después, en el orden de siempre: una clave
          nueva aparece sola en vez de perderse. */
@@ -436,6 +440,12 @@
       .filter((x) => typeof x === 'string');
     out.bolsaOrden = (Array.isArray(guardado.bolsaOrden) ? guardado.bolsaOrden : [])
       .filter((x) => typeof x === 'string');
+    const gd = guardado.bolsaDomingo || {};
+    out.bolsaDomingo = {
+      activo: gd.activo !== false,
+      planta: PLANTAS.some((p) => p.id === gd.planta) ? gd.planta : base.bolsaDomingo.planta,
+      semanas: Math.max(1, Math.round(Number(gd.semanas) || base.bolsaDomingo.semanas)),
+    };
     out.bolsaFuentes = {};
     const gf = guardado.bolsaFuentes;
     if (gf && typeof gf === 'object') {
