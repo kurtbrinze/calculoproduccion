@@ -80,7 +80,19 @@ h1,h2,h3{letter-spacing:-.01em}
 .btn svg{width:18px;height:18px;flex:none}
 
 /* ---------- pestañas ---------- */
-.tabs{display:flex;gap:4px;margin:16px 0 0;border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none}
+/* La barra de módulos se queda pegada arriba al bajar por una tabla larga:
+   en la tablet es la única forma de cambiar de módulo sin volver hasta el
+   principio. Mismo tratamiento que la barra de abajo —fondo casi opaco y
+   desenfoque— para que el contenido que pasa por detrás no se lea. Los
+   márgenes negativos la estiran hasta el borde de la pantalla, porque el
+   contenedor tiene 16 px de aire a los lados. */
+.tabs{display:flex;gap:4px;margin:16px 0 0;
+  border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;
+  position:sticky;top:0;z-index:30;background:rgba(24,33,46,.96);
+  backdrop-filter:blur(8px);
+  /* La sombra estira el fondo hasta el borde de la pantalla sin ensanchar la
+     barra: con márgenes negativos la página se corría de lado en la tablet. */
+  box-shadow:-20px 0 0 rgba(24,33,46,.96), 20px 0 0 rgba(24,33,46,.96)}
 .tabs::-webkit-scrollbar{display:none}
 .tabs button{
   min-height:46px;padding:0 16px;border:0;background:transparent;color:var(--muted);

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.30';
+  const VERSION = 'V.2026.31';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1864,6 +1864,13 @@
       if (k === 'prom') pintarPromedios();
       if (k === 'param') pintarParametros();
       window.scrollTo({ top: 0 });
+      /* En la tablet la tira de módulos no cabe entera y rueda de lado. Si el
+         que queda activo está fuera de vista —al abrir el app con el último
+         módulo guardado, por ejemplo— se trae a la vista. */
+      const bot = $(tabs[k]);
+      if (bot && bot.parentElement) {
+        bot.parentElement.scrollTo({ left: Math.max(0, bot.offsetLeft - 16), behavior: 'smooth' });
+      }
     };
     Object.keys(tabs).forEach((k) => { $(tabs[k]).onclick = () => window.irA(k); });
 
