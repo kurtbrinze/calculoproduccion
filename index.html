@@ -111,6 +111,17 @@
     </div>
     <p class="dim" style="font-size:.85rem;margin:10px 2px" id="pistaInv"></p>
     <div id="difCont"></div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>Conteo de CZ5</h3>
+      <p class="sub">
+        El CZ5 no se cuenta por clave sino por empaque, y no es un producto del catálogo: en
+        producción es CZ3 con empaque individual. Se anota lo que se empacó hoy y lo que quedó en
+        el conteo de la tarde, cada cosa en su empaque; el app lo pasa a unidades y saca la venta
+        del día. Lo que quedó anoche es lo que hay esta mañana, así que esa casilla no se escribe.
+      </p>
+      <div id="cz5Cont"></div>
+    </div>
   </section>
 
   <!-- ============ PEDIDOS ESPECIALES ============ -->
@@ -219,7 +230,8 @@
     <div class="kpis" id="kpisHist"></div>
     <div id="avisosHist"></div>
     <div class="fila" style="margin-bottom:10px" id="histVista"></div>
-    <div class="tablabox">
+    <div id="histVenta" hidden></div>
+    <div class="tablabox" id="histTabla">
       <table><thead id="theadHist"></thead><tbody id="tbodyHist"></tbody></table>
     </div>
   </section>
@@ -283,6 +295,7 @@
 <script src="js/lectorz2.js"></script>
 <script src="js/archivo.js"></script>
 <script src="js/resumen.js"></script>
+<script src="js/venta.js"></script>
 <script src="js/bolsa.js"></script>
 <script src="js/secundarios.js"></script>
 <script src="js/sync.js"></script>

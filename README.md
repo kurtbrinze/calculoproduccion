@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.33';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.33';`
+1. `js/ui.js` → `const VERSION = 'V.2026.34';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.34';`
 
 ## Plantas, claves y productos nuevos
 
@@ -405,6 +405,43 @@ días ya no sirve para decidir nada y la preventa son miles de líneas al año, 
 estado vivo al abrir el app y después de cada sincronización. No se tira: queda guardado aparte
 en ese equipo, fuera de la sincronización.
 
+## El CZ5 y la venta real
+
+El CZ5 no es un producto del catálogo: en producción es CZ3, y lo que lo vuelve CZ5 es el
+empaque individual. Por eso no se cuenta por clave como todo lo demás, sino por empaque, y vive
+en su propia tarjeta al final de **Inventario**.
+
+Se anotan dos cosas: **las parrillas que se empacaron hoy** y **el conteo de la tarde**, cada
+empaque por su lado. El app pasa todo a unidades con la tabla de siempre:
+
+| Empaque | Unidades |
+|---|---|
+| CZ5 · parrilla | 55 |
+| 20CZ5 · parrilla de 6×20 | 120 |
+| 15CZ5 · bolsa | 15 |
+| 16CZ5T · unidades | 1 |
+| 20CZ5T · bolsa de 20 | 20 |
+
+El inventario de la mañana no se escribe: es el cierre de la noche anterior, y el app lo trae
+solo del último día que tenga conteo. De ahí salen las tres líneas:
+
+```
+DISPONIBLE = inventario AM + empacado de hoy
+INV PM     = la suma de los cinco empaques del conteo
+VENTA      = DISPONIBLE − INV PM
+```
+
+Es la misma cuenta de la hoja `Data_CZ5` del libro de preventas, con los mismos factores.
+
+**La venta real de cualquier clave.** En **Historial** hay una vista nueva, *Venta real*, que
+hace lo mismo para todo el catálogo: `stock de ayer + lo producido − el INV PM del día`. Sólo
+salen los días que tienen INV PM guardado —sin conteo no hay venta que medir—. Arriba van los
+totales, en medio la gráfica de la venta mes por mes y abajo la tabla con el total, el promedio,
+el mínimo y el máximo de cada mes.
+
+No reemplaza a los promedios que mueven el sugerido: ésos son históricos y se cargan del libro.
+Esta vista es para ver si siguen valiendo.
+
 ## Cálculos secundarios
 
 La pestaña **Cálculos** trae las tablas sueltas de la pestaña `INV_PM` del libro. Son
@@ -517,6 +554,7 @@ equipo. La sincronización mantiene a los dos iguales, así que un borrado por e
 | `js/sync.js` | Mezcla y sincronización entre equipos |
 | `js/resumen.js` | Imágenes y PDF del resumen del día |
 | `js/bolsa.js` | Impresión de bolsa: la tabla y su PDF |
+| `js/venta.js` | Conteo de CZ5 y la venta real derivada |
 | `js/secundarios.js` | Cálculos secundarios de inventario |
 | `js/ui.js` | Pantallas |
 | `api/extract.js` | El lector de inventario, para desplegar en Vercel |

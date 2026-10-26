@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.33';
+  const VERSION = 'V.2026.34';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -17,7 +17,7 @@
     try { const f = localStorage.getItem('panprod_fecha'); return /^\d{4}-\d{2}-\d{2}$/.test(f || '') ? f : null; }
     catch (_) { return null; }
   })();
-  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos' };
+  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5' };
   const recordarFecha = () => { try { localStorage.setItem('panprod_fecha', ui.fecha); } catch (_) {} };
 
   // ---------- avisos ----------
@@ -472,6 +472,7 @@
     $('#pistaInv').innerHTML = 'Los números en gris de <b>STOCK AYER</b> y <b>PROD AYER</b> se toman solos del día anterior. '
       + 'Si escribes encima, ese valor manda y queda en blanco sobre el fondo.';
     pintarDiferenciados(r, P);
+    pintarCz5();
   }
 
   /** Las claves que se arman sumando varias presentaciones de la hoja. */
@@ -505,6 +506,59 @@
       <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0">
         <table><thead><tr><th class="l">Clave</th><th class="l">Partes · valor · aporte</th><th>Total INV PM</th></tr></thead>
         <tbody>${filas}</tbody></table></div></div>`;
+  }
+
+  /* El conteo de CZ5, por empaque. Va en Inventario porque es el mismo conteo
+     de cierre y lo hace la misma persona en el mismo momento. */
+  function pintarCz5() {
+    const cont = $('#cz5Cont');
+    if (!cont) return;
+    const V = window.Venta;
+    const d = V.cz5De(ui.fecha);
+    const fila = (x) => {
+      const v = Number(d.puesto[x.id]) || 0;
+      return `<tr>
+        <td class="l clave">${esc(x.nombre)}<span class="mini">${esc(x.unidad)}</span></td>
+        <td><input class="inqq" inputmode="decimal" data-cz5="${esc(x.id)}"
+          value="${d.puesto[x.id]}" aria-label="${esc(x.nombre)} en ${esc(x.unidad)}"></td>
+        <td class="num dim">${v ? n0(v * x.uni) : ''}</td></tr>`;
+    };
+    const emp = V.CZ5.filter((x) => x.empaque).map(fila).join('');
+    const con = V.CONTEO.map(fila).join('');
+    const nota = d.fAyer
+      ? `el cierre del ${esc(D.fechaCorta(d.fAyer))}`
+      : 'todavía no hay un día anterior con conteo';
+    cont.innerHTML = `<div class="lcols">
+      <div class="tablabox">
+        <table>
+          <thead><tr><th class="l">Lo que entró</th><th>Cantidad</th><th>Unidades</th></tr></thead>
+          <tbody>
+            <tr><td class="l clave">Inventario AM<span class="mini">${nota}</span></td>
+              <td class="num dim">${d.amUni ? `${n2(d.amP)} parr` : '—'}</td>
+              <td class="num dim">${d.amUni ? n0(d.amUni) : '—'}</td></tr>
+            ${emp}
+          </tbody>
+          <tfoot><tr class="totales"><td class="l">DISPONIBLE</td><td></td>
+            <td class="num"><b>${d.dispUni ? n0(d.dispUni) : '—'}</b></td></tr></tfoot>
+        </table></div>
+      <div class="tablabox">
+        <table>
+          <thead><tr><th class="l">Conteo de la tarde</th><th>Cantidad</th><th>Unidades</th></tr></thead>
+          <tbody>${con}</tbody>
+          <tfoot><tr class="totales"><td class="l">INV PM</td>
+            <td class="num">${d.invUni ? `${n2(d.invP)} parr` : ''}</td>
+            <td class="num"><b>${d.invUni ? n0(d.invUni) : '—'}</b></td></tr></tfoot>
+        </table></div>
+      </div>
+      <div class="kpis" style="margin-top:12px">
+        ${kpi('Disponible del día', d.dispUni ? n0(d.dispUni) : '—')}
+        ${kpi('Quedó en el conteo', d.invUni ? n0(d.invUni) : '—')}
+        ${kpi('Venta del día', d.venta == null ? '—' : n0(d.venta), d.venta != null && d.venta < 0 ? 'alerta' : '')}
+        ${kpi('En parrillas', d.ventaP == null ? '—' : n2(d.ventaP))}
+      </div>
+      ${d.venta != null && d.venta < 0 ? `<div class="aviso warn" style="margin-top:10px">
+        <h4>La venta sale negativa</h4><p>Quedó más de lo que había disponible. Suele ser que
+        falte anotar lo que se empacó hoy, o que el conteo de ayer haya quedado corto.</p></div>` : ''}`;
   }
 
   /** Mete en el día lo que vino de la foto o del Excel del inventario. */
@@ -900,7 +954,134 @@
     { id: 'planta', nombre: 'Por planta' },
     { id: 'clave',  nombre: 'Por clave' },
     { id: 'inv',    nombre: 'Inventario INV PM' },
+    { id: 'venta',  nombre: 'Venta real' },
   ];
+
+  /**
+   * La venta real día por día y mes por mes. Sale de restar: lo que había más
+   * lo que se produjo, menos lo que quedó en el conteo. No es el promedio que
+   * mueve el sugerido —ése es histórico y se carga del libro—, es el dato de
+   * cada día, que sirve para ver si ese promedio sigue valiendo.
+   */
+  function pintarVenta() {
+    const V = window.Venta;
+    const cont = $('#histVenta');
+    const esCz5 = ui.ventaClave === 'CZ5';
+    const serie = esCz5 ? V.serieCz5() : V.serieClave(ui.ventaClave);
+    const meses = V.porMes(serie, 'venta');
+    const unidad = esCz5 ? 'unidades' : 'bolsas';
+
+    const opciones = `<option value="CZ5" ${esCz5 ? 'selected' : ''}>CZ5 · por empaque, en unidades</option>`
+      + D.productos().filter((p) => p.activo !== false).map((p) =>
+        `<option value="${esc(p.clave)}" ${ui.ventaClave === p.clave ? 'selected' : ''}>`
+        + `${esc(p.clave)}${p.alias ? ` · ${esc(p.alias)}` : ''}</option>`).join('');
+
+    const total = meses.reduce((a, m) => a + m.total, 0);
+    const dias = meses.reduce((a, m) => a + m.dias, 0);
+
+    cont.innerHTML = `<div class="card" style="margin-bottom:14px">
+        <div class="fila" style="align-items:flex-end">
+          <div class="campo"><label for="inVentaClave">Producto</label>
+            <select id="inVentaClave" style="min-width:250px">${opciones}</select></div>
+          <p class="sub" style="margin:0 0 6px">
+            ${esCz5
+              ? 'Disponible del día −  lo que quedó en el conteo, en unidades. Sólo salen los días con conteo de CZ5.'
+              : 'Stock de ayer + lo producido − el INV PM del día, en bolsas. Sólo salen los días con INV PM.'}
+          </p>
+        </div>
+      </div>
+      <div class="kpis" style="margin-bottom:14px">
+        ${kpi('Días con dato', dias)}
+        ${kpi(`Venta total · ${unidad}`, n0(total))}
+        ${kpi('Promedio por día', dias ? n0(Math.round(total / dias)) : '—')}
+        ${kpi('Meses', meses.length)}
+      </div>`
+      + (meses.length ? `<div class="card" style="margin-bottom:14px">
+          <h3 style="margin-top:0">Venta por mes <span class="dim" style="font-weight:400">· ${esc(unidad)}</span></h3>
+          <div id="ventaGrafica"></div>
+        </div>` : `<div class="aviso warn"><h4>Todavía no hay con qué calcular</h4>
+          <p>${esCz5
+            ? 'Hace falta el conteo de CZ5 de por lo menos un día. Se anota en Inventario.'
+            : 'Hace falta el INV PM de por lo menos un día guardado.'}</p></div>`);
+
+    /* La tabla de abajo: el mes y el detalle de los últimos días. */
+    const filasMes = meses.slice().reverse().map((m) => `<tr>
+      <td class="l clave">${esc(V.nombreMes(m.mes))}</td>
+      <td class="num"><b>${n0(m.total)}</b></td>
+      <td class="num dim">${m.dias}</td>
+      <td class="num dim">${n0(m.prom)}</td>
+      <td class="num dim">${n0(m.min)}</td>
+      <td class="num dim">${n0(m.max)}</td></tr>`).join('');
+    $('#theadHist').innerHTML = `<tr><th class="l">Mes</th><th>Venta ${esc(unidad)}</th>
+      <th>Días</th><th>Promedio</th><th>Mínimo</th><th>Máximo</th></tr>`;
+    $('#tbodyHist').innerHTML = filasMes
+      || `<tr><td colspan="6" class="l dim" style="padding:18px">Sin meses que mostrar.</td></tr>`;
+
+    if (meses.length) dibujarVenta(meses, unidad);
+  }
+
+  /** La gráfica de barras del mes, dibujada a mano como el resto del app. */
+  function dibujarVenta(meses, unidad) {
+    const caja = $('#ventaGrafica');
+    if (!caja) return;
+    const ultimos = meses.slice(-24);
+    const ESC = 2;
+    const ancho = Math.max(560, ultimos.length * 58 + 70);
+    const alto = 260;
+    const cv = document.createElement('canvas');
+    cv.width = ancho * ESC; cv.height = alto * ESC;
+    const g = cv.getContext('2d');
+    const css = getComputedStyle(document.body);
+    const tinta = css.getPropertyValue('--ink') || '#E8EEF6';
+    const suave = css.getPropertyValue('--muted') || '#8A9AAE';
+    const linea = css.getPropertyValue('--line') || '#24324A';
+    const barra = css.getPropertyValue('--accent') || '#4ADE9B';
+
+    const mx = 54, my = 18, pie = 34;
+    const anchoUtil = ancho - mx - 16;
+    const altoUtil = alto - my - pie;
+    const tope = Math.max(...ultimos.map((m) => m.total), 1);
+    /* Una escala redonda: la barra más alta no toca el techo. */
+    const paso = Math.pow(10, Math.floor(Math.log10(tope)));
+    const techo = Math.ceil(tope / paso) * paso;
+
+    g.font = `${11 * ESC}px system-ui, sans-serif`;
+    g.textBaseline = 'middle';
+    for (let i = 0; i <= 4; i++) {
+      const v = (techo / 4) * i;
+      const y = my + altoUtil - (altoUtil * i) / 4;
+      g.strokeStyle = linea.trim(); g.lineWidth = 1 * ESC;
+      g.beginPath(); g.moveTo(mx * ESC, y * ESC); g.lineTo((mx + anchoUtil) * ESC, y * ESC); g.stroke();
+      g.fillStyle = suave.trim(); g.textAlign = 'right';
+      g.fillText(v >= 1000 ? `${Math.round(v / 1000)}k` : String(Math.round(v)), (mx - 8) * ESC, y * ESC);
+    }
+
+    /* Con pocos meses la barra no se estira de lado a lado: queda del ancho
+       de siempre y el grupo se centra, que es lo que se lee bien. */
+    const w = Math.min(anchoUtil / ultimos.length, 92);
+    const bw = w * 0.64;
+    const centro = (anchoUtil - ultimos.length * w) / 2;
+    ultimos.forEach((m, i) => {
+      const h = (m.total / techo) * altoUtil;
+      const x = mx + centro + i * w + (w - bw) / 2;
+      g.fillStyle = barra.trim();
+      g.fillRect(x * ESC, (my + altoUtil - h) * ESC, bw * ESC, h * ESC);
+      g.fillStyle = suave.trim(); g.textAlign = 'center';
+      g.save();
+      g.translate((x + bw / 2) * ESC, (my + altoUtil + 12) * ESC);
+      g.fillText(window.Venta.nombreMes(m.mes), 0, 0);
+      g.restore();
+      g.fillStyle = tinta.trim();
+      g.font = `700 ${10 * ESC}px system-ui, sans-serif`;
+      g.fillText(m.total >= 1000 ? `${Math.round(m.total / 1000)}k` : String(Math.round(m.total)),
+        (x + bw / 2) * ESC, (my + altoUtil - h - 9) * ESC);
+      g.font = `${11 * ESC}px system-ui, sans-serif`;
+    });
+
+    cv.style.cssText = 'max-width:100%;height:auto;display:block;border-radius:9px';
+    caja.innerHTML = '';
+    caja.appendChild(cv);
+  }
 
   function pintarHistorial() {
     const fechas = Object.keys(D.estado.dias).sort().reverse();
@@ -917,11 +1098,16 @@
         + '<p>Al terminar un día, el botón <b>Guardar el día</b> lo deja aquí. '
         + 'Si ya tienes historial en Excel, súbelo con <b>Subir historial de Excel</b>.</p></div>';
       $('#histVista').innerHTML = ''; $('#theadHist').innerHTML = ''; $('#tbodyHist').innerHTML = '';
+      $('#histVenta').hidden = true;
       return;
     }
     $('#avisosHist').innerHTML = '';
     $('#histVista').innerHTML = VISTAS.map((v) =>
       `<button class="btn ${ui.vistaHist === v.id ? '' : 'sec'} mini" type="button" data-vista="${v.id}">${esc(v.nombre)}</button>`).join('');
+
+    const esVenta = ui.vistaHist === 'venta';
+    $('#histVenta').hidden = !esVenta;
+    if (esVenta) { pintarVenta(); return; }
 
     const claves = D.claves();
     let th = '', tb = '';
@@ -2157,6 +2343,11 @@
         const p = D.estado.pedidos[d.pedb];
         if (p && v != null && !Number.isNaN(v) && v > 0) p.bolsas = Math.round(v);
         D.guardarPedidos(); pintarPedidos(); pintarProduccion();
+      } else if (e.target.id === 'inVentaClave') {
+        ui.ventaClave = e.target.value; pintarVenta();
+      } else if (d.cz5) {
+        window.Venta.escribirCz5(ui.fecha, d.cz5, e.target.value);
+        pintarCz5(); pintarInventario();
       } else if (d.pedcta) {
         const p = D.estado.pedidos[d.pedcta];
         if (p) p.cuenta = e.target.checked;

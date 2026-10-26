@@ -761,7 +761,8 @@
     const algo = (o) => Object.values(o || {}).some((v) => v != null && v !== '');
     const turnos = Object.values(r.turnos || {}).some((t) => Object.values(t || {}).some((v) => Number(v) > 0));
     return !algo(r.invPM) && !algo(r.stockAyer) && !algo(r.prodAyer) && !algo(r.crudo)
-      && !algo(r.prodImport) && !algo(r.turnoImport) && !turnos && !(r.nota || '').trim();
+      && !algo(r.prodImport) && !algo(r.turnoImport) && !algo(r.cz5)
+      && !turnos && !(r.nota || '').trim();
   }
   const guardarDias = () => {
     Object.keys(estado.dias).forEach((f) => { if (vacio(estado.dias[f])) delete estado.dias[f]; });
@@ -799,7 +800,7 @@
   function registroVacio(fecha) {
     const invPM = {}, stockAyer = {}, prodAyer = {}, turnos = {};
     claves().forEach((c) => { invPM[c] = null; stockAyer[c] = null; prodAyer[c] = null; turnos[c] = {}; });
-    return { fecha, invPM, stockAyer, prodAyer, turnos, crudo: {}, nota: '', cerrado: false, guardadoEn: null };
+    return { fecha, invPM, stockAyer, prodAyer, turnos, crudo: {}, cz5: {}, nota: '', cerrado: false, guardadoEn: null };
   }
 
   /** Trae registros de versiones anteriores al esquema de hoy. */

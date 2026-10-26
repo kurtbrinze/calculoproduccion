@@ -214,7 +214,7 @@
    * toca borrarla.
    */
   const SECCION = {
-    invPM: 'INV PM', turnos: 'reparto', stockAyer: 'STOCK AYER',
+    invPM: 'INV PM', turnos: 'reparto', stockAyer: 'STOCK AYER', cz5: 'conteo CZ5',
     prodAyer: 'PROD AYER', crudo: 'lectura', nota: 'nota', cerrado: 'cierre',
   };
 
