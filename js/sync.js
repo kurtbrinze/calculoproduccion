@@ -28,6 +28,44 @@
   const clave = () => cfg('syncClave').trim();
   const activo = () => cfg('syncOn') === '1' && !!clave();
 
+  // ---------- qué partes sincroniza este equipo ----------
+  /* Se elige por equipo, no en los parámetros: si viajara con la
+     sincronización los dos equipos acabarían con la misma configuración y no
+     habría nada que controlar. Vive en el navegador, como la clave.
+
+     Una parte apagada no se manda ni se trae: lo de aquí se queda aquí y lo
+     del servidor se queda como estaba. Tampoco entra en la huella, así que al
+     volver a encenderla es como la primera vez —si los dos lados dicen lo
+     mismo no pregunta nada, y si difieren pregunta una vez. */
+  const PARTES = [
+    { id: 'dias', nombre: 'El día', detalle: 'Producción, Inventario y el historial de días.' },
+    { id: 'pedidos', nombre: 'Pedidos', detalle: 'Los pedidos y preventas.' },
+    { id: 'prom', nombre: 'Promedios', detalle: 'La venta promedio por día de la semana.' },
+    { id: 'params', nombre: 'Parámetros', detalle: 'Turnos, topes, productos, calendario y feriados.' },
+  ];
+  function partes() {
+    let g = {};
+    try { g = JSON.parse(cfg('syncPartes', '{}')) || {}; } catch (_) { g = {}; }
+    const out = {};
+    PARTES.forEach((p) => { out[p.id] = g[p.id] !== false; });
+    return out;
+  }
+  function fijarParte(id, valor) {
+    const g = partes();
+    if (!Object.prototype.hasOwnProperty.call(g, id)) return partes();
+    g[id] = !!valor;
+    setCfg('syncPartes', JSON.stringify(g));
+    /* La huella de una parte apagada deja de tener sentido, y la de una que se
+       enciende tiene que faltar para que la mezcla la trate como primera vez. */
+    const b = base();
+    if (b && typeof b === 'object' && b[id] !== undefined) {
+      delete b[id];
+      guardarBase(b);
+    }
+    return g;
+  }
+  const apagadas = () => PARTES.filter((p) => !partes()[p.id]);
+
   // ---------- huellas ----------
   /* JSON con las llaves en orden, para que dos equipos que guardaron lo mismo
      en distinto orden den la misma huella. `migrado` es una marca interna. */
@@ -127,12 +165,15 @@
     return out;
   }
   function arbolRaiz(est) {
-    return {
-      params: arbol(est.params, PROF.params),
-      prom: arbol(est.prom, PROF.prom),
-      dias: arbolDias(est.dias),
-      pedidos: arbol(est.pedidos || {}, PROF.pedidos),
-    };
+    const P = partes();
+    const out = {};
+    /* Una parte apagada no deja huella: sin ella, al encenderla de nuevo la
+       mezcla la trata como primer encuentro en vez de ver un borrado. */
+    if (P.params) out.params = arbol(est.params, PROF.params);
+    if (P.prom) out.prom = arbol(est.prom, PROF.prom);
+    if (P.dias) out.dias = arbolDias(est.dias);
+    if (P.pedidos) out.pedidos = arbol(est.pedidos || {}, PROF.pedidos);
+    return out;
   }
 
   // ---------- la mezcla ----------
@@ -242,38 +283,58 @@
       traidos: [...reg.traidos], mandados: [...reg.mandados], conflictos: [...reg.conflictos],
       borrados: [...reg.borrados], indecisos: [...reg.indecisos],
     });
+    const P = partes();
+    /* Lo que queda de una parte apagada: lo que ya tenía el servidor, para no
+       pisárselo al otro equipo. Si el servidor no tiene nada, la parte no se
+       manda; el otro equipo la completa con la suya, como hace con un equipo
+       de versión vieja. */
+    const comoEsta = (k) => (remoto && remoto[k] !== undefined ? remoto[k] : undefined);
+
     if (!remoto) {
       reg.mandados.add('todo');
-      return salida({ v: 1, params: local.params, prom: local.prom,
-        dias: { ...local.dias }, pedidos: { ...local.pedidos } });
+      return salida({ v: 1,
+        params: P.params ? local.params : undefined,
+        prom: P.prom ? local.prom : undefined,
+        dias: P.dias ? { ...local.dias } : undefined,
+        pedidos: P.pedidos ? { ...local.pedidos } : undefined });
     }
     const bb = b || {};
     remoto = completar(local, remoto);
-    const params = mezclarNodo(local.params, remoto.params, bb.params, PROF.params, 'los parámetros', reg, eleccion);
-    const prom = mezclarNodo(local.prom, remoto.prom, bb.prom, PROF.prom, 'los promedios', reg, eleccion);
-    const pedidos = mezclarNodo(local.pedidos || {}, remoto.pedidos || {}, bb.pedidos,
-      PROF.pedidos, 'los pedidos especiales', reg, eleccion);
+    const params = P.params
+      ? mezclarNodo(local.params, remoto.params, bb.params, PROF.params, 'los parámetros', reg, eleccion)
+      : AUSENTE;
+    const prom = P.prom
+      ? mezclarNodo(local.prom, remoto.prom, bb.prom, PROF.prom, 'los promedios', reg, eleccion)
+      : AUSENTE;
+    const pedidos = P.pedidos
+      ? mezclarNodo(local.pedidos || {}, remoto.pedidos || {}, bb.pedidos,
+        PROF.pedidos, 'los pedidos especiales', reg, eleccion)
+      : AUSENTE;
 
     /* Los días se recorren uno por uno para poder nombrarlos en los avisos. */
-    const dias = {};
-    const bd = esObjeto(bb.dias) ? bb.dias : {};
-    const fechas = new Set([...Object.keys(local.dias || {}), ...Object.keys(remoto.dias || {}), ...Object.keys(bd)]);
-    [...fechas].sort().forEach((f) => {
-      const dl = (local.dias || {})[f];
-      let dr = (remoto.dias || {})[f];
-      /* Un día que no viene es un día borrado; un día que viene sin una de sus
-         secciones es un equipo con versión vieja. Sólo lo segundo se completa. */
-      if (dr !== undefined) dr = completar(dl, dr);
-      const v = mezclarNodo(dl, dr, bd[f], profDia(f), D.fechaCorta(f), reg, eleccion, []);
-      if (v !== AUSENTE) dias[f] = v;
-    });
+    let dias = null;
+    if (P.dias) {
+      dias = {};
+      const bd = esObjeto(bb.dias) ? bb.dias : {};
+      const fechas = new Set([...Object.keys(local.dias || {}), ...Object.keys(remoto.dias || {}), ...Object.keys(bd)]);
+      [...fechas].sort().forEach((f) => {
+        const dl = (local.dias || {})[f];
+        let dr = (remoto.dias || {})[f];
+        /* Un día que no viene es un día borrado; un día que viene sin una de
+           sus secciones es un equipo con versión vieja. Sólo lo segundo se
+           completa. */
+        if (dr !== undefined) dr = completar(dl, dr);
+        const v = mezclarNodo(dl, dr, bd[f], profDia(f), D.fechaCorta(f), reg, eleccion, []);
+        if (v !== AUSENTE) dias[f] = v;
+      });
+    }
 
     return salida({
       v: 1,
-      params: params === AUSENTE ? local.params : params,
-      prom: prom === AUSENTE ? local.prom : prom,
-      pedidos: pedidos === AUSENTE ? (local.pedidos || {}) : pedidos,
-      dias,
+      params: P.params ? (params === AUSENTE ? local.params : params) : comoEsta('params'),
+      prom: P.prom ? (prom === AUSENTE ? local.prom : prom) : comoEsta('prom'),
+      pedidos: P.pedidos ? (pedidos === AUSENTE ? (local.pedidos || {}) : pedidos) : comoEsta('pedidos'),
+      dias: P.dias ? dias : comoEsta('dias'),
     });
   }
 
@@ -405,14 +466,16 @@
 
   /** Escribe el resultado de la mezcla en el estado de la app. */
   function aplicar(est) {
-    if (est.params) D.estado.params = D.fusionarParams(est.params);
-    if (est.prom) D.estado.prom = est.prom;
-    D.estado.pedidos = est.pedidos || {};
-    D.estado.dias = est.dias || {};
-    D.guardarParams(); D.guardarProm(); D.guardarPedidos();
-    /* Se graba directo: guardarDias() limpia los días vacíos y eso borraría
-       días que el otro equipo acaba de crear pero todavía no llena. */
-    D.grabar('dias', D.estado.dias);
+    const P = partes();
+    if (P.params && est.params) { D.estado.params = D.fusionarParams(est.params); D.guardarParams(); }
+    if (P.prom && est.prom) { D.estado.prom = est.prom; D.guardarProm(); }
+    if (P.pedidos) { D.estado.pedidos = est.pedidos || {}; D.guardarPedidos(); }
+    if (P.dias) {
+      D.estado.dias = est.dias || {};
+      /* Se graba directo: guardarDias() limpia los días vacíos y eso borraría
+         días que el otro equipo acaba de crear pero todavía no llena. */
+      D.grabar('dias', D.estado.dias);
+    }
   }
 
   /** Olvida la huella: la próxima sincronización vuelve a preguntar. */
@@ -422,6 +485,7 @@
 
   window.Sync = {
     sincronizar, disponible, reiniciar, activo, clave, cfg, setCfg,
+    PARTES, partes, fijarParte, apagadas,
     escrituras: () => escrituras(false), TOPE_AVISO, TOPE_ENVIO,
     ultima: () => cfg('syncUltima', ''),
     // expuestos para las pruebas

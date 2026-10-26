@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.31';
+  const VERSION = 'V.2026.32';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1244,6 +1244,15 @@
             <button class="btn sec mini" type="button" id="btnSyncOlvidar">Empezar de cero</button></div>
         </div>
         <p class="dim" style="font-size:.84rem;margin:11px 2px 0" id="estadoSync"></p>
+        <h4 class="subrot" style="margin-top:18px">Qué se sincroniza desde este equipo</h4>
+        <p class="dim" style="font-size:.84rem;margin:0 2px 10px">
+          Se elige <b>por equipo</b> y no viaja con la sincronización: la tablet puede quedarse
+          sin los pedidos mientras la laptop los lleva. Una parte apagada no se manda ni se trae
+          —lo de acá se queda acá y lo del servidor queda como estaba—, pero se sigue guardando
+          en este equipo. Al volver a encenderla, si los dos lados dicen lo mismo no pregunta
+          nada; si difieren, pregunta una vez cuál vale.
+        </p>
+        <div id="syncPartes"></div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -1587,10 +1596,133 @@
       partes.push(`${n} de 2,000 guardados este mes.`);
       if (n >= S.TOPE_AVISO) partes.push('<b class="neg">Vas cerca del límite del plan gratis.</b>');
     }
+    const off = S.apagadas();
+    if (off.length) {
+      partes.push(`Sin sincronizar desde este equipo: <b>${esc(off.map((p) => p.nombre).join(', '))}</b>.`);
+    }
     $('#estadoSync').innerHTML = partes.join(' ');
     const b = $('#btnSync');
     if (b) b.hidden = !S.activo();
+
+    const cont = $('#syncPartes');
+    if (cont) {
+      const on = S.partes();
+      cont.innerHTML = `<div class="rej">${S.PARTES.map((p) => `
+        <label class="sw rejilla" title="${esc(p.detalle)}">
+          <input type="checkbox" data-sparte="${esc(p.id)}" ${on[p.id] ? 'checked' : ''}>
+          <span class="nom">${esc(p.nombre)}</span></label>`).join('')}</div>
+        <p class="dim" style="font-size:.8rem;margin:8px 2px 0">
+          ${S.PARTES.map((p) => `<b>${esc(p.nombre)}</b>: ${esc(p.detalle)}`).join(' · ')}</p>`;
+    }
   }
+
+  // ================= TECLADO EN LAS TABLAS =================
+  /* Llenar una hoja es moverse por la cuadrícula, no por el orden de la
+     página. Sin esto, el Tab del navegador se sale de la tabla al primer botón
+     que encuentra —sincronizar, guardar el día— y hay que volver con el dedo.
+
+     Enter y las flechas bajan y suben por la misma columna; al llegar al final
+     siguen en la columna de al lado, como una hoja de cálculo. Tab y Shift+Tab
+     van por el orden de la tabla, de izquierda a derecha y luego a la fila de
+     abajo, y dan la vuelta al llegar al final en vez de soltar el foco. Escape
+     suelta el foco, que es la salida cuando se quiere ir a los botones. */
+
+  /** Una firma estable del campo, para volver a encontrarlo tras el repintado. */
+  function firmaCampo(el) {
+    const d = el.dataset || {};
+    const ks = Object.keys(d).filter((k) => d[k] !== '' && d[k] != null).sort();
+    if (!ks.length) return null;
+    return ks.map((k) => {
+      const attr = 'data-' + k.replace(/[A-Z]/g, (m) => '-' + m.toLowerCase());
+      return `[${attr}="${CSS.escape(String(d[k]))}"]`;
+    }).join('');
+  }
+
+  const camposDe = (tabla) => [...tabla.querySelectorAll('input.inqq:not([disabled])')]
+    .filter((x) => x.offsetParent !== null);
+
+  /** El de al lado en el orden de la tabla, dando la vuelta. */
+  function vecinoOrden(tabla, el, paso) {
+    const todos = camposDe(tabla);
+    const i = todos.indexOf(el);
+    if (i < 0 || todos.length < 2) return null;
+    return todos[(i + paso + todos.length) % todos.length];
+  }
+
+  /** El de arriba o abajo en la misma columna; al final, la columna siguiente. */
+  function vecinoColumna(tabla, el, paso) {
+    const celda = el.closest('td');
+    if (!celda) return vecinoOrden(tabla, el, paso);
+    const col = celda.cellIndex;
+    const enCol = camposDe(tabla).filter((x) => {
+      const c = x.closest('td');
+      return c && c.cellIndex === col;
+    });
+    const i = enCol.indexOf(el);
+    if (i < 0) return vecinoOrden(tabla, el, paso);
+    const n = enCol[i + paso];
+    if (n) return n;
+    /* Se acabó la columna: se sigue por la de al lado, arriba o abajo según
+       hacia dónde se venía. */
+    const todos = camposDe(tabla);
+    const cols = [...new Set(todos.map((x) => {
+      const c = x.closest('td');
+      return c ? c.cellIndex : -1;
+    }))].sort((a, b) => a - b);
+    const ic = cols.indexOf(col);
+    const sigCol = cols[ic + (paso > 0 ? 1 : -1)];
+    if (sigCol === undefined) return null;
+    const enSig = todos.filter((x) => {
+      const c = x.closest('td');
+      return c && c.cellIndex === sigCol;
+    });
+    return paso > 0 ? enSig[0] : enSig[enSig.length - 1];
+  }
+
+  /**
+   * Mueve el foco. El valor se guarda al salir del campo y eso vuelve a pintar
+   * la tabla, así que el destino se identifica antes y se busca otra vez
+   * después del repintado.
+   */
+  function saltarA(destino) {
+    const tabla = destino.closest('table');
+    const firma = firmaCampo(destino);
+    const col = destino.closest('td') ? destino.closest('td').cellIndex : -1;
+    const fila = destino.closest('tr') ? destino.closest('tr').rowIndex : -1;
+    const panel = destino.closest('.panel') || document;
+    const idTabla = tabla && tabla.closest('[id]') ? tabla.closest('[id]').id : '';
+    setTimeout(() => {
+      let n = null;
+      if (firma) {
+        const dentro = idTabla ? document.getElementById(idTabla) : panel;
+        n = (dentro || panel).querySelector('input.inqq' + firma);
+      }
+      if (!n && tabla && tabla.isConnected && fila >= 0 && col >= 0) {
+        const f = tabla.rows[fila];
+        const c = f && f.cells[col];
+        n = c && c.querySelector('input.inqq');
+      }
+      if (n) { n.focus(); if (n.select) n.select(); }
+    }, 0);
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const el = e.target;
+    if (!el || !el.matches || !el.matches('input.inqq')) return;
+    if (e.key === 'Escape') { el.blur(); return; }
+    const tabla = el.closest('table');
+    if (!tabla) return;
+    let destino = null;
+    if (e.key === 'Enter') destino = vecinoColumna(tabla, el, e.shiftKey ? -1 : 1);
+    else if (e.key === 'ArrowDown') destino = vecinoColumna(tabla, el, 1);
+    else if (e.key === 'ArrowUp') destino = vecinoColumna(tabla, el, -1);
+    else if (e.key === 'Tab') destino = vecinoOrden(tabla, el, e.shiftKey ? -1 : 1);
+    else return;
+    e.preventDefault();
+    if (!destino || destino === el) return;
+    el.blur();
+    saltarA(destino);
+  });
 
   /** Una pasada de sincronización, con los avisos que correspondan. */
   async function sincronizar(manual, eleccion) {
@@ -1806,6 +1938,13 @@
     }
     else if (d.pcon) P.prod[d.pcon].prodEnConteo = v;
     else if (d.tpl) { P.turnos[d.tpl].planta = t.value; D.guardarParams(); pintarParametros(); return true; }
+    else if (d.sparte) {
+      window.Sync.fijarParte(d.sparte, v);
+      pintarSync();
+      aviso(v ? `${d.sparte === 'dias' ? 'El día' : 'Esa parte'} vuelve a sincronizarse desde este equipo.`
+        : 'Esa parte deja de sincronizarse desde este equipo. Se sigue guardando acá.');
+      return true;
+    }
     else if (d.bfuente) {
       const todo = P.bolsaFuentes || (P.bolsaFuentes = {});
       const fila = todo[d.bfuente] || (todo[d.bfuente] = {});
@@ -2148,23 +2287,6 @@
     });
     /* Enter baja por la misma columna, que es como se llena una hoja así: una
        columna entera de arriba abajo, no una fila a la vez. */
-    $('#tbodyBolsa').addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' || !e.target.matches('input.inqq')) return;
-      e.preventDefault();
-      const campo = e.target.dataset.bcampo;
-      const ins = [...document.querySelectorAll(`#tbodyBolsa input.inqq[data-bcampo="${campo}"]`)];
-      const i = ins.indexOf(e.target);
-      /* Al cambiar el valor la tabla se vuelve a pintar, así que el siguiente
-         campo se busca después de ese repintado. */
-      const sig = ins[i + 1];
-      const id = sig && sig.dataset.bid;
-      e.target.blur();
-      if (!id) return;
-      setTimeout(() => {
-        const n = document.querySelector(`#tbodyBolsa input.inqq[data-bcampo="${campo}"][data-bid="${CSS.escape(id)}"]`);
-        if (n) { n.focus(); n.select(); }
-      }, 0);
-    });
     /* Un toque en la celda del teléfono o la tablet selecciona lo que hay,
        para escribir encima sin tener que borrar. */
     $('#btnBolsaPdf').onclick = async () => {
@@ -2196,22 +2318,6 @@
         S.grabar(datos);
       }
       pintarSecundarios();
-    });
-    /* Enter baja por la misma columna, igual que en impresión de bolsa. */
-    $('#secCont').addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' || !e.target.matches('input.inqq')) return;
-      e.preventDefault();
-      const tabla = e.target.closest('table');
-      const i = [...tabla.querySelectorAll('input.inqq')].indexOf(e.target);
-      const col = [...e.target.closest('tr').children].indexOf(e.target.closest('td'));
-      const sig = [...tabla.querySelectorAll('tbody tr')]
-        .map((r) => r.children[col] && r.children[col].querySelector('input.inqq'))
-        .filter(Boolean);
-      const act = sig.indexOf(e.target);
-      const n = sig[act + 1];
-      e.target.blur();
-      if (n) setTimeout(() => { n.focus(); n.select(); }, 0);
-      else if (i < 0) { /* sin tabla, nada que hacer */ }
     });
     $('#btnSecLimpiar').onclick = async () => {
       if (!await preguntar('Limpiar los cálculos',

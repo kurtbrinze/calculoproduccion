@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.31';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.31';`
+1. `js/ui.js` → `const VERSION = 'V.2026.32';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.32';`
 
 ## Plantas, claves y productos nuevos
 
@@ -454,6 +454,24 @@ tocaste Sincronizar y la app lo avisa.
 
 Sincroniza al abrir, al guardar el día y con el botón. No más seguido: el plan gratis de Vercel
 da 2,000 guardados al mes y la tarjeta lleva la cuenta.
+
+**Qué se sincroniza se elige por equipo.** En la misma tarjeta hay cuatro casillas: *El día*
+(Producción, Inventario y el historial), *Pedidos*, *Promedios* y *Parámetros*. La elección vive
+en el navegador de cada equipo y **no viaja con la sincronización** —si viajara, los dos equipos
+acabarían con la misma configuración y no habría nada que controlar—, así que la tablet puede
+quedarse sin los pedidos mientras la laptop los lleva.
+
+Una parte apagada no se manda ni se trae: lo que hay en ese equipo se queda ahí y lo que hay en
+el servidor queda como estaba, sin que el equipo apagado se lo pise al otro. Tampoco deja huella
+de comparación, así que al volver a encenderla la mezcla la trata como primer encuentro: si los
+dos lados dicen lo mismo no pregunta nada, si traen cosas distintas las junta, y sólo pregunta
+cuando el mismo dato cambió en los dos lados.
+
+**Enter y Tab se mueven por la cuadrícula.** En cualquier tabla del app, Enter y las flechas
+bajan y suben por la misma columna —al final de una columna siguen en la de al lado, como una
+hoja de cálculo— y Tab recorre la tabla de izquierda a derecha y luego la fila de abajo, dando
+la vuelta al llegar al final. Así el Tab no se escapa al primer botón de la página. Escape
+suelta el foco, que es la salida cuando se quiere ir a los botones.
 
 ## Respaldos
 
