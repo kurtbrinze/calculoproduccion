@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.32';
+  const VERSION = 'V.2026.33';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -549,23 +549,75 @@
     return limite <= ui.fecha || limite < C.proximaCorrida(D.estado.params, ui.fecha, plantas);
   }
 
+  /**
+   * Lo que se puede pedir: primero las presentaciones con que llegan los
+   * pedidos —ordenadas por uso, así lo frecuente queda arriba— y después las
+   * claves del catálogo que no tienen presentación, para que nada quede sin
+   * poder pedirse. El valor lleva el prefijo que dice cuál de las dos es.
+   */
+  function opcionesPedido() {
+    const conPres = new Set();
+    const pres = D.presentaciones().map((p) => {
+      if (p.clave) conPres.add(p.clave);
+      const dest = p.clave ? p.clave : 'no entra al cálculo';
+      return `<option value="c:${esc(p.cod)}">${esc(p.cod)} · ${esc(p.desc)} — ${esc(dest)}</option>`;
+    }).join('');
+    const sueltas = D.activos().filter((p) => !conPres.has(p.clave))
+      .map((p) => `<option value="k:${esc(p.clave)}">${esc(p.clave)}${p.alias ? ` · ${esc(p.alias)}` : ''} — en bolsas</option>`)
+      .join('');
+    return `<optgroup label="Presentaciones de preventa">${pres}</optgroup>`
+      + (sueltas ? `<optgroup label="Otras claves, en bolsas">${sueltas}</optgroup>` : '');
+  }
+
+  /** Lo elegido en el formulario, ya resuelto a presentación o clave suelta. */
+  function elegidoPedido() {
+    const v = $('#pdClave').value || '';
+    if (v.startsWith('c:')) {
+      const p = D.presentacionDe(v.slice(2));
+      return p ? { pres: p, clave: p.clave, uxb: p.uxb || 1 } : null;
+    }
+    if (v.startsWith('k:')) return { pres: null, clave: v.slice(2), uxb: 1 };
+    return null;
+  }
+
+  /** La pista bajo el formulario: en qué se convierte lo que se está pidiendo. */
+  function pistaPedido() {
+    const el = elegidoPedido();
+    const cant = Math.max(0, Math.round(Number($('#pdBolsas').value) || 0));
+    $('#pdLblCant').textContent = el && el.pres && el.uxb > 1 ? 'Unidades' : 'Bolsas';
+    if (!el) { $('#pdPista').textContent = 'Elegí un producto.'; return; }
+    const partes = [];
+    if (el.pres && el.uxb > 1) {
+      const bolsas = cant ? Math.ceil(cant / el.uxb) : 0;
+      partes.push(`${n0(cant)} unidades de ${el.uxb} = <b>${n0(bolsas)} bolsas</b>`);
+      if (el.pres.bxp) partes.push(`${n2(C.redondea(bolsas / el.pres.bxp, 2))} parrillas`);
+    } else if (cant) partes.push(`<b>${n0(cant)} bolsas</b>`);
+    partes.push(el.clave
+      ? `va a <b>${esc(el.clave)}</b>`
+      : '<b>no entra al cálculo de producción</b>');
+    $('#pdPista').innerHTML = partes.join(' · ')
+      + '. La fecha y el cliente se quedan puestos para seguir agregando.';
+  }
+
   function pintarPedidos() {
     const lista = D.pedidosLista();
-    $('#pdClave').innerHTML = D.activos().map((p) =>
-      `<option value="${esc(p.clave)}">${esc(p.clave)}</option>`).join('');
+    const antes = $('#pdClave').value;
+    $('#pdClave').innerHTML = opcionesPedido();
+    if (antes) $('#pdClave').value = antes;
     $('#pdClientes').innerHTML = D.clientes().map((c) => `<option value="${esc(c)}">`).join('');
     if (!$('#pdFecha').value) $('#pdFecha').value = D.sumarDias(D.hoyISO(), 1);
-    $('#pdPista').textContent = 'La fecha y el cliente se quedan puestos para seguir agregando claves del mismo pedido.';
+    pistaPedido();
 
     const porEstado = { pendiente: 0, vencido: 0, entregado: 0, cancelado: 0 };
     lista.forEach((p) => { porEstado[D.estadoPedido(p)]++; });
     const vivos = D.pedidosVivos();
     const bolsasVivas = vivos.reduce((a, p) => a + (Number(p.bolsas) || 0), 0);
-    const hoyToca = vivos.filter(tocaHoy);
+    const hoyToca = D.pedidosQueCuentan().filter(tocaHoy);
+    const suman = D.pedidosQueCuentan().length;
     $('#kpisPed').innerHTML =
       kpi('Pedidos pendientes', porEstado.pendiente) +
       kpi('Bolsas comprometidas', n0(bolsasVivas)) +
-      kpi(`Para producir el ${D.fechaCorta(ui.fecha)}`, hoyToca.length, hoyToca.length ? 'alerta' : '') +
+      kpi('Suman al sugerido', suman, suman ? 'alerta' : '') +
       kpi('Vencidos sin cerrar', porEstado.vencido, porEstado.vencido ? 'alerta' : 'bien');
 
     const av = [];
@@ -587,11 +639,12 @@
     });
 
     $('#theadPed').innerHTML = `<tr>
-      <th class="l">Día entrega</th><th class="l">Cliente</th><th class="l">Clave</th>
-      <th>Bolsas</th><th>QQ</th><th class="l">Producir antes de</th><th class="l">Estado</th><th class="l"></th></tr>`;
+      <th class="l">Día entrega</th><th class="l">Cliente</th><th class="l">Producto</th>
+      <th>Unidades</th><th>Bolsas</th><th>QQ</th><th class="l">Suma</th>
+      <th class="l">Producir antes de</th><th class="l">Estado</th><th class="l"></th></tr>`;
 
     if (!visibles.length) {
-      $('#tbodyPed').innerHTML = `<tr><td colspan="8" class="l dim" style="padding:18px">`
+      $('#tbodyPed').innerHTML = `<tr><td colspan="10" class="l dim" style="padding:18px">`
         + (lista.length ? 'No hay pedidos con ese filtro.' : 'Todavía no hay pedidos. Agrega el primero arriba.')
         + '</td></tr>';
       return;
@@ -604,13 +657,24 @@
       const ant = C.anticipacionDe(D.estado.params, p.clave);
       const limite = D.sumarDias(p.fecha, -ant);
       const et = ETIQ_PED[e === 'pendiente' && tocaHoy(p) ? 'hoy' : e];
+      /* Una presentación sin clave del catálogo se captura igual, pero no hay
+         nada que producir: se dice, para que no parezca que se perdió. */
+      const sinCalc = !p.clave || !D.estado.params.prod[p.clave];
+      const nombre = p.codigo || ficha.alias || p.clave;
+      const destino = ficha.alias || p.clave;
+      const pie = sinCalc ? 'no entra al cálculo'
+        : (p.codigo && destino !== nombre ? destino : '');
       return `<tr class="${e === 'vencido' ? 'ojo' : ''}">
         <td class="l clave">${esc(D.fechaCorta(p.fecha))}</td>
         <td class="l">${esc(p.cliente || '—')}</td>
-        <td class="l clave">${esc(ficha.alias || p.clave)}</td>
-        <td><input class="inqq" style="width:96px" inputmode="numeric" data-pedb="${esc(p.id)}"
-            value="${p.bolsas}" aria-label="Bolsas de ${esc(p.clave)}"></td>
+        <td class="l clave">${esc(nombre)}${pie ? `<span class="mini">${esc(pie)}</span>` : ''}</td>
+        <td class="num dim">${p.unidades ? n0(p.unidades) : ''}</td>
+        <td><input class="inqq" style="width:90px" inputmode="numeric" data-pedb="${esc(p.id)}"
+            value="${p.bolsas}" aria-label="Bolsas de ${esc(nombre)}"></td>
         <td class="num dim">${qq == null ? '' : n2(qq)}</td>
+        <td class="l"><label class="sw" title="${sinCalc ? 'Esta clave no se produce acá' : 'Suma al sugerido de producción'}">
+          <input type="checkbox" data-pedcta="${esc(p.id)}" ${p.cuenta ? 'checked' : ''}
+            ${sinCalc ? 'disabled' : ''}></label></td>
         <td class="l dim">${esc(D.fechaCorta(limite))}${ant ? ` <span class="mini2">${ant} d antes</span>` : ''}</td>
         <td class="l"><span class="chip ${et.chip}">${esc(et.txt)}</span></td>
         <td class="l acc">
@@ -1733,6 +1797,10 @@
       const r = await S.sincronizar({ manual, eleccion: eleccion || null });
       if (!r.ok) { if (manual) aviso('No se sincronizó: ' + r.motivo, 'err'); return; }
 
+      /* Lo que llegó del otro equipo puede traer entregados viejos: se
+         archivan acá también, para que no vuelvan a entrar por la puerta de
+         atrás en cada sincronización. */
+      D.archivarPedidos();
       refrescarTodo();
 
       /* Quedaron cosas sin decidir: lo claro ya se aplicó, pero no se sube
@@ -2030,19 +2098,37 @@
     };
     $('#btnAgregarPed').onclick = () => {
       const fecha = $('#pdFecha').value;
-      const clave = $('#pdClave').value;
-      const bolsas = D.num($('#pdBolsas').value);
+      const el = elegidoPedido();
+      const cant = D.num($('#pdBolsas').value);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) { aviso('Falta el día de entrega.', 'err'); $('#pdFecha').focus(); return; }
-      if (!clave) { aviso('Falta la clave.', 'err'); return; }
-      if (!bolsas || Number.isNaN(bolsas) || bolsas <= 0) { aviso('Las bolsas tienen que ser un número mayor que cero.', 'err'); $('#pdBolsas').focus(); return; }
-      D.nuevoPedido({ fecha, cliente: $('#pdCliente').value, clave, bolsas });
+      if (!el) { aviso('Falta el producto.', 'err'); $('#pdClave').focus(); return; }
+      if (!cant || Number.isNaN(cant) || cant <= 0) {
+        aviso('La cantidad tiene que ser un número mayor que cero.', 'err'); $('#pdBolsas').focus(); return;
+      }
+      /* Con presentación se captura en unidades y el app saca las bolsas; una
+         clave suelta se pide en bolsas y no hay nada que convertir. */
+      const enUnidades = !!(el.pres && el.uxb > 1);
+      const p = D.nuevoPedido({
+        fecha, cliente: $('#pdCliente').value,
+        codigo: el.pres ? el.pres.cod : '',
+        clave: el.clave,
+        unidades: enUnidades ? cant : 0,
+        bolsas: enUnidades ? null : cant,
+        cuenta: $('#pdCuenta').checked,
+      });
       D.guardarPedidos();
       /* La fecha y el cliente se quedan: un pedido suele traer varias claves. */
       $('#pdBolsas').value = '';
       pintarPedidos(); pintarProduccion();
-      aviso(`${clave}: ${n0(bolsas)} bolsas para ${D.fechaCorta(fecha)}.`);
-      $('#pdClave').focus();
+      const quien = el.pres ? el.pres.cod : el.clave;
+      aviso(`${quien}: ${enUnidades ? `${n0(cant)} unidades = ` : ''}${n0(p.bolsas)} bolsas `
+        + `para ${D.fechaCorta(fecha)}${p.cuenta ? ', suman al sugerido' : ''}.`);
+      $('#pdBolsas').focus();
     };
+    ['#pdClave', '#pdBolsas'].forEach((s) => {
+      $(s).addEventListener('input', pistaPedido);
+      $(s).addEventListener('change', pistaPedido);
+    });
     $('#pdBolsas').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); $('#btnAgregarPed').click(); }
     });
@@ -2070,6 +2156,10 @@
         const v = D.num(e.target.value);
         const p = D.estado.pedidos[d.pedb];
         if (p && v != null && !Number.isNaN(v) && v > 0) p.bolsas = Math.round(v);
+        D.guardarPedidos(); pintarPedidos(); pintarProduccion();
+      } else if (d.pedcta) {
+        const p = D.estado.pedidos[d.pedcta];
+        if (p) p.cuenta = e.target.checked;
         D.guardarPedidos(); pintarPedidos(); pintarProduccion();
       } else if (d.prom) {
         const v = D.num(e.target.value);

@@ -901,24 +901,158 @@
     return r ? (migrar(r).turnos || {}) : {};
   };
 
-  // ---------- pedidos especiales ----------
-  /* Un pedido es producto comprometido fuera del promedio de venta: una fecha
-     de entrega, un cliente, una clave y las bolsas. */
+  /* Las presentaciones con que se reciben los pedidos. Vienen del libro de
+     preventas: `cod` es como lo pide el cliente, `uxb` cuántas unidades trae
+     cada bolsa y `bxp` cuántas bolsas lleva una parrilla. `clave` es a qué
+     producto del catálogo le pega para el cálculo de producción; vacía
+     significa que el pedido se captura igual pero no mueve el sugerido —son
+     las que calcula otra persona, o las que no se producen acá—.
+     Ordenadas por uso real, para que lo frecuente quede arriba al elegir. */
+  const PRESENTACIONES = [
+    { cod: '15PL1U', desc: 'Pirujo de Leche Empacado 15 uni', uxb: 15, bxp: 4, clave: '15PL1' },
+    { cod: '20CZ5', desc: 'Zepelin Empacado 20 uni', uxb: 20, bxp: 6, clave: 'CZ3' },
+    { cod: '20CZ3', desc: 'Zepelin CZ3 Empacado', uxb: 20, bxp: 6, clave: 'CZ3' },
+    { cod: 'CZ5Gr', desc: 'Zepelin Empacado Granel', uxb: 1, bxp: 55, clave: 'CZ3' },
+    { cod: '10PM3', desc: 'Pirujo Montegua', uxb: 10, bxp: 6, clave: '10PM3' },
+    { cod: '10HM5', desc: 'Hamburgues Montegua', uxb: 10, bxp: 9, clave: '10HM5' },
+    { cod: '15PL1', desc: 'Pirujo de Leche', uxb: 15, bxp: 6, clave: '15PL1' },
+    { cod: '15CZ5', desc: 'Zepelin Empacado 15 uni', uxb: 15, bxp: 8, clave: 'CZ3' },
+    { cod: 'S19M', desc: 'Sandwich S19M', uxb: 1, bxp: 12, clave: 'S19' },
+    { cod: '16CZ5', desc: 'Zepelin Empaado 16 uni Transparente', uxb: 16, bxp: 8, clave: 'CZ3' },
+    { cod: '24CZ5T', desc: 'Zepelin Empacado 24 uni Transparente', uxb: 24, bxp: 6, clave: 'CZ3' },
+    { cod: 'EN1', desc: 'Encanelado Grande', uxb: 1, bxp: 80, clave: 'EN1' },
+    { cod: '10HR3', desc: 'Hot Dog Rodajado', uxb: 10, bxp: 10, clave: '10HR3' },
+    { cod: '24CZ3T', desc: 'Zepelin 24 uni Transparente', uxb: 24, bxp: 6, clave: 'CZ3' },
+    { cod: '20CZ5T', desc: 'Zepelin Empacado 20 uni Transparente', uxb: 20, bxp: 6, clave: 'CZ3' },
+    { cod: 'S19', desc: 'Sandwich S19', uxb: 1, bxp: 12, clave: 'S19' },
+    { cod: '5HG7', desc: 'Hamburgues Gigante', uxb: 5, bxp: 15, clave: '5HG7' },
+    { cod: '12QU1', desc: 'Quesadita Tira', uxb: 12, bxp: 5, clave: '6QU1' },
+    { cod: 'MGND', desc: 'Magdalena Navideña en Domo', uxb: 1, bxp: 8, clave: 'MGN' },
+    { cod: '6MU1Am', desc: 'Muffin AMERICANA', uxb: 6, bxp: 14, clave: '6MU1' },
+    { cod: '12WY1', desc: 'Hamburgues Wimpy', uxb: 12, bxp: 5, clave: '12WY1' },
+    { cod: 'CG2N5', desc: 'Cubilete Naranja Empacado', uxb: 1, bxp: 60, clave: '6CG2N' },
+    { cod: 'S16', desc: 'Sandwich S16', uxb: 1, bxp: 12, clave: 'S16' },
+    { cod: '12MU2', desc: 'Muffin Montegua', uxb: 12, bxp: 12, clave: '6MU1' },
+    { cod: 'ME4Ch', desc: 'Mexicano Chocolate', uxb: 1, bxp: 80, clave: 'ME4' },
+    { cod: 'ME4V', desc: 'Mexicano Vainilla', uxb: 1, bxp: 80, clave: 'ME4' },
+    { cod: 'S32', desc: 'Sandwich S32', uxb: 1, bxp: 8, clave: 'S32' },
+    { cod: '10MA5M', desc: 'Mollete Empacado', uxb: 10, bxp: 0, clave: 'MA3' },
+    { cod: 'MG4', desc: 'Magdalena Grande', uxb: 1, bxp: 7, clave: 'MG4' },
+    { cod: '12ES2T', desc: 'Espumilla Grande Granel', uxb: 12, bxp: 6, clave: 'ES2' },
+    { cod: 'PS3MhD', desc: 'PS3 Milhoja Domo', uxb: 20, bxp: 3, clave: '' },
+    { cod: 'MG4D', desc: 'Magdalena Grande en Domo', uxb: 1, bxp: 7, clave: 'MG4' },
+    { cod: 'S11', desc: 'Sandwich S11', uxb: 1, bxp: 18, clave: 'S11' },
+    { cod: '10CHD', desc: 'ChocoDoggy 10 Uni', uxb: 10, bxp: 10, clave: 'CHD' },
+    { cod: 'S26', desc: 'Sandwich S26', uxb: 1, bxp: 10, clave: 'S26' },
+    { cod: '10HD7', desc: 'Hotdog Shuko', uxb: 10, bxp: 7, clave: '10HD7' },
+    { cod: '12BLL', desc: 'BOLLO', uxb: 12, bxp: 15, clave: '12BLL' },
+    { cod: '12WYK+P', desc: 'Hamburgues WYK + pesa', uxb: 12, bxp: 5, clave: 'WYK+P' },
+    { cod: '6CG2N', desc: 'Cubilete Naranja', uxb: 6, bxp: 21, clave: '6CG2N' },
+    { cod: 'S25', desc: 'Sandwich Integral', uxb: 1, bxp: 10, clave: 'S25' },
+    { cod: '10CZ4', desc: 'Zepelincito', uxb: 10, bxp: 12, clave: '10CZ4' },
+    { cod: '10EN4', desc: 'Encanelado Pequeño', uxb: 10, bxp: 11, clave: 'EN4' },
+    { cod: '16PA1', desc: 'Palito', uxb: 16, bxp: 18, clave: '16PA1' },
+    { cod: '6HD12', desc: 'Hot Dog Submarino', uxb: 6, bxp: 6, clave: '6HD12' },
+    { cod: '24ES1', desc: 'Espumilla Pequeña', uxb: 24, bxp: 0, clave: 'ES1' },
+    { cod: '6PC4', desc: 'Hamburgues PC4', uxb: 6, bxp: 14, clave: '6PC4' },
+    { cod: 'MG1', desc: 'Magdalena Personal', uxb: 1, bxp: 20, clave: 'MG1' },
+    { cod: 'PS3MaD', desc: 'PS3 Marquesote Domo', uxb: 20, bxp: 3, clave: '' },
+    { cod: 'CZ5', desc: 'Zepelin Empacado', uxb: 1, bxp: 55, clave: 'CZ3' },
+    { cod: 'PS1_Pañ', desc: 'PS1 Pañuelo', uxb: 210, bxp: 1, clave: '' },
+    { cod: 'PS3SuD', desc: 'PS3 Surtido DOMO', uxb: 20, bxp: 3, clave: '' },
+    { cod: '12WYK', desc: 'Hamburgues WYK', uxb: 12, bxp: 5, clave: '12WYK' },
+    { cod: '5ST2', desc: 'Stake', uxb: 5, bxp: 10, clave: '5ST2' },
+    { cod: '6CG2V', desc: 'Cubilete Almendra', uxb: 6, bxp: 21, clave: '6CG2V' },
+    { cod: '6MU1Ta', desc: 'Muffin TAHONA', uxb: 6, bxp: 17, clave: '6MU1' },
+    { cod: 'CZ3', desc: 'Zepelin', uxb: 1, bxp: 60, clave: 'CZ3' },
+    { cod: 'MGN', desc: 'Magdalena Navideña', uxb: 1, bxp: 8, clave: 'MGN' },
+    { cod: 'PS1_Cor', desc: 'PS1 Corbata', uxb: 125, bxp: 1, clave: '' },
+    { cod: '10FP8', desc: 'Pirujo Desabrido', uxb: 10, bxp: 4, clave: '10FP8' },
+    { cod: '5HD8', desc: 'Hotdog HD8', uxb: 5, bxp: 10, clave: '5HD8' },
+    { cod: '5HM4', desc: 'Hamburgues Grande', uxb: 5, bxp: 15, clave: '5HM4' },
+    { cod: 'CG2', desc: 'Cubilete Pequeño', uxb: 30, bxp: 2, clave: '' },
+    { cod: 'CHO5', desc: 'Cubilete Chocolate Empacado', uxb: 1, bxp: 60, clave: '6CHO' },
+    { cod: 'PS5', desc: 'Herradura Empacada', uxb: 1, bxp: 80, clave: '' },
+    { cod: 'S11T', desc: 'Sandwich Tostado', uxb: 1, bxp: 21, clave: 'S11' },
+    { cod: '12ES2', desc: 'Espumilla Grande', uxb: 12, bxp: 0, clave: 'ES2' },
+    { cod: '12ES2G', desc: 'Espumilla Grande Granel', uxb: 12, bxp: 0, clave: 'ES2' },
+    { cod: '24ES1G', desc: 'Espumilla Pequeña Granel', uxb: 24, bxp: 0, clave: 'ES1' },
+    { cod: '5QU1', desc: 'Quezadita', uxb: 5, bxp: 20, clave: '5QU1' },
+    { cod: 'PL1_E', desc: 'Pirujo de Leche Empacado', uxb: 1, bxp: 60, clave: '15PL1' },
+    { cod: 'PS1_Co', desc: 'Corbata PS1', uxb: 1, bxp: 125, clave: '' },
+    { cod: 'PS1_Ma', desc: 'Marquesote PS1', uxb: 1, bxp: 140, clave: '' },
+    { cod: 'PS1_Mar', desc: 'PS1 Marquezote', uxb: 140, bxp: 1, clave: '' },
+    { cod: 'PS1_Mi', desc: 'Milhoja PS1', uxb: 1, bxp: 120, clave: '' },
+    { cod: 'PS1_Mil', desc: 'PS1 Milhoja', uxb: 120, bxp: 1, clave: '' },
+  ];
+  const presentaciones = () => (estado.params.presentaciones || PRESENTACIONES);
+  const presentacionDe = (cod) => presentaciones().find((p) => p.cod === cod) || null;
+
+  // ---------- pedidos ----------
+  /* Un pedido es producto comprometido para una fecha, un cliente y una
+     presentación. La mayoría es preventa de todos los días, que el promedio de
+     venta ya contiene: ésa se captura para saber qué empacar, pero no mueve el
+     sugerido. Sólo los marcados con `cuenta` entran al cálculo, que es la
+     forma de decir «esto es de más». */
   const nuevoId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-  function nuevoPedido({ fecha, cliente, clave, bolsas, nota }) {
+  function nuevoPedido({ fecha, cliente, clave, bolsas, nota, codigo, unidades, cuenta }) {
     const id = nuevoId();
+    const pres = codigo ? presentacionDe(codigo) : null;
+    const uni = Math.max(0, Math.round(Number(unidades) || 0));
+    /* Se captura en unidades, que es como lo pide el cliente, y se guardan las
+       bolsas, que es como calcula el app. Las dos quedan: la unidad para
+       cotejar contra la hoja del cliente y la bolsa para el cálculo. */
+    const bol = bolsas != null && bolsas !== ''
+      ? Math.max(0, Math.round(Number(bolsas) || 0))
+      : (pres && pres.uxb > 0 ? Math.ceil(uni / pres.uxb) : uni);
     estado.pedidos[id] = {
-      id, fecha, cliente: String(cliente || '').trim(), clave,
-      bolsas: Math.max(0, Math.round(Number(bolsas) || 0)),
+      id, fecha, cliente: String(cliente || '').trim(),
+      clave: clave || (pres ? pres.clave : '') || '',
+      codigo: String(codigo || '').trim(),
+      unidades: uni,
+      bolsas: bol,
+      cuenta: !!cuenta,
       estado: 'pendiente', nota: String(nota || '').trim(),
       creado: new Date().toISOString(),
     };
     return estado.pedidos[id];
   }
 
+  /* Los pedidos de antes del cheque se crearon cuando todos movían el cálculo.
+     Dejarlos en cero cambiaría el sugerido de un día para otro sin que nadie
+     lo haya pedido, así que los viejos entran marcados. */
+  function migrarPedidos() {
+    let toco = false;
+    Object.values(estado.pedidos || {}).forEach((p) => {
+      if (!p || typeof p !== 'object') return;
+      if (p.cuenta === undefined) { p.cuenta = true; toco = true; }
+      if (p.codigo === undefined) { p.codigo = ''; toco = true; }
+      if (p.unidades === undefined) { p.unidades = 0; toco = true; }
+    });
+    return toco;
+  }
+
+  /* La preventa son miles de líneas al año y la sincronización las carga
+     todas. Un pedido entregado o cancelado hace más de ocho días ya no sirve
+     para decidir nada, así que sale del estado vivo. No se tira: queda en este
+     equipo, aparte, fuera de la sincronización. */
+  const DIAS_ARCHIVO = 8;
+  function archivarPedidos(hoy) {
+    const corte = sumarDias(hoy || hoyISO(), -DIAS_ARCHIVO);
+    const fuera = Object.values(estado.pedidos || {}).filter((p) => p && p.fecha
+      && p.fecha < corte && (p.estado === 'entregado' || p.estado === 'cancelado'));
+    if (!fuera.length) return 0;
+    const viejos = leer('pedidosViejos', {}) || {};
+    fuera.forEach((p) => { viejos[p.id] = p; delete estado.pedidos[p.id]; });
+    grabar('pedidosViejos', viejos);
+    guardarPedidos();
+    return fuera.length;
+  }
+  const pedidosViejos = () => leer('pedidosViejos', {}) || {};
+
   const pedidosLista = () => Object.values(estado.pedidos || {})
-    .filter((p) => p && p.fecha && p.clave)
+    .filter((p) => p && p.fecha && (p.clave || p.codigo))
     .sort((a, b) => (a.fecha === b.fecha
       ? String(a.cliente).localeCompare(String(b.cliente))
       : a.fecha.localeCompare(b.fecha)));
@@ -936,8 +1070,16 @@
     return p.fecha < h ? 'vencido' : 'pendiente';
   }
 
-  /** Los que mueven el cálculo: pendientes y con fecha de hoy en adelante. */
+  /** Pendientes: los que todavía hay que entregar. */
   const pedidosVivos = (hoy) => pedidosLista().filter((p) => estadoPedido(p, hoy) === 'pendiente');
+
+  /**
+   * Los que mueven el cálculo: pendientes, marcados con el cheque y de una
+   * clave que el app produce. Una presentación sin clave —las que calcula otra
+   * persona— se captura igual pero no toca el sugerido.
+   */
+  const pedidosQueCuentan = (hoy) => pedidosVivos(hoy)
+    .filter((p) => p.cuenta && p.clave && estado.params.prod[p.clave]);
 
   /** Clientes ya usados, para no escribir el mismo nombre de tres maneras. */
   const clientes = () => [...new Set(pedidosLista().map((p) => p.cliente).filter(Boolean))].sort();
@@ -996,6 +1138,12 @@
     if (!f.dias) estado.params.feriados[i] = feriadoNuevo(f.fecha, f.nombre);
   });
 
+  /* Al abrir: los pedidos de antes del cheque quedan marcados, y los
+     entregados viejos salen del estado vivo. Va acá abajo porque las dos cosas
+     usan piezas que se definen más arriba. */
+  if (migrarPedidos()) guardarPedidos();
+  archivarPedidos();
+
   const api = {
     DIAS, TURNOS, FAMILIAS, PRODUCTOS, PLANTAS, AREAS, ORDEN_Z2, PROM_INICIAL, DIFERENCIADOS,
     prodPorClave, turnoPorId, fichaDe, mapaPlantas,
@@ -1006,7 +1154,9 @@
     diasFeriado, feriadoNuevo, feriadoDe, plantaTrabaja, normalDe,
     paramsPorDefecto, fusionarParams,
     estado, guardarParams, guardarProm, guardarDias, guardarPedidos, guardarBolsa, leer, grabar,
-    nuevoPedido, pedidosLista, pedidosVivos, estadoPedido, clientes, ANTICIPACION,
+    nuevoPedido, pedidosLista, pedidosVivos, pedidosQueCuentan, estadoPedido,
+    clientes, ANTICIPACION, migrarPedidos, archivarPedidos, pedidosViejos,
+    PRESENTACIONES, presentaciones, presentacionDe, DIAS_ARCHIVO,
     misDefecto, fijarDefecto, borrarDefecto, hayDefecto, ESQUEMA,
     hoyISO, desdeISO, aISO, sumarDias, indiceDia, nombreDia, fechaCorta,
     registro, registroVacio, migrar, diaPrevio, produccionDe, turnosDe, porTurnoDe, porPlantaDe,

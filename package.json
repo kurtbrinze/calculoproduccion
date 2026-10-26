@@ -1,7 +1,7 @@
 {
   "name": "produccion-pana",
   "private": true,
-  "version": "2026.32",
+  "version": "2026.33",
   "description": "App de produccion de panaderia: inventario, sugerido por turno y planta, e historial",
   "type": "module",
   "dependencies": {

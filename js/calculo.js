@@ -159,7 +159,7 @@
 
   /** Los pedidos vivos de una clave con entrega en esa fecha. */
   function pedidosDe(estado, clave, iso, hoy) {
-    return D.pedidosVivos(hoy).filter((p) => p.clave === clave && p.fecha === iso);
+    return D.pedidosQueCuentan(hoy).filter((p) => p.clave === clave && p.fecha === iso);
   }
   const bolsasDe = (lista) => lista.reduce((a, p) => a + (Number(p.bolsas) || 0), 0);
 
@@ -188,7 +188,7 @@
     const cubiertos = new Set([fecha, ...offs.map((o) => D.sumarDias(fecha, o))]);
     const corrida = proximaCorrida(params, fecha, plantas);
     const ant = anticipacionDe(params, clave);
-    return D.pedidosVivos(hoy).filter((p) => {
+    return D.pedidosQueCuentan(hoy).filter((p) => {
       if (p.clave !== clave || cubiertos.has(p.fecha)) return false;
       return D.sumarDias(p.fecha, -ant) < corrida;   // la próxima ya sería tarde
     });

@@ -116,10 +116,13 @@
   <!-- ============ PEDIDOS ESPECIALES ============ -->
   <section class="panel" id="pPed" role="tabpanel" aria-labelledby="tabPed" hidden>
     <div class="card" style="margin-bottom:14px">
-      <h3>Pedidos especiales</h3>
+      <h3>Pedidos y preventa</h3>
       <p class="sub">
-        Producto comprometido fuera del promedio de venta. Se suma al consumo del día de entrega
-        y entra al sugerido cuando la próxima corrida ya no alcanzaría a producirlo a tiempo.
+        Se captura en unidades, como lo pide el cliente, y el app saca las bolsas. La preventa de
+        todos los días ya está dentro del promedio de venta, así que <b>no mueve el cálculo</b>:
+        sólo lo que marques con «Suma al sugerido» se cuenta de más. Eso se suma al consumo del
+        día de entrega y entra al sugerido cuando la próxima corrida ya no alcanzaría a
+        producirlo a tiempo.
       </p>
       <div class="fila" style="align-items:flex-end">
         <div class="campo"><label for="pdFecha">Día de entrega</label>
@@ -127,10 +130,13 @@
         <div class="campo"><label for="pdCliente">Cliente</label>
           <input type="text" id="pdCliente" list="pdClientes" autocomplete="off" style="min-width:190px" placeholder="a quién se le entrega">
           <datalist id="pdClientes"></datalist></div>
-        <div class="campo"><label for="pdClave">Clave</label>
-          <select id="pdClave" style="min-width:140px"></select></div>
-        <div class="campo"><label for="pdBolsas">Bolsas</label>
+        <div class="campo"><label for="pdClave">Producto</label>
+          <select id="pdClave" style="min-width:230px"></select></div>
+        <div class="campo"><label for="pdBolsas" id="pdLblCant">Unidades</label>
           <input type="number" id="pdBolsas" inputmode="numeric" min="1" step="1" style="width:120px"></div>
+        <div class="campo"><label>&nbsp;</label>
+          <label class="sw" style="height:36px" title="Sólo los marcados suman al sugerido de producción">
+            <input type="checkbox" id="pdCuenta"> Suma al sugerido</label></div>
         <div class="campo"><label>&nbsp;</label>
           <button class="btn" id="btnAgregarPed" type="button">Agregar</button></div>
         <span class="dim" id="pdPista" style="margin-left:auto;font-size:.85rem"></span>

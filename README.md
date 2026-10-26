@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.32';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.32';`
+1. `js/ui.js` → `const VERSION = 'V.2026.33';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.33';`
 
 ## Plantas, claves y productos nuevos
 
@@ -378,6 +378,32 @@ la planta o el número de domingos en Parámetros → Impresión de bolsa.
 
 **Esta hoja no se sincroniza.** Se guarda aparte de los días, en el equipo donde se imprime.
 Sí entra en el respaldo.
+
+## Pedidos y preventa
+
+La pestaña **Pedidos** lleva la preventa del día y los pedidos especiales en la misma tabla.
+
+**Se captura en unidades y el app saca las bolsas.** El selector trae las 75 presentaciones con
+que llegan los pedidos —`20CZ5`, `15PL1U`, `CZ5Gr`…—, ordenadas por uso para que lo frecuente
+quede arriba. Cada una sabe cuántas unidades lleva su bolsa y cuántas bolsas su parrilla, y a
+qué clave del catálogo le pega. Debajo del formulario se ve en qué se convierte lo que se está
+pidiendo: *2,000 unidades de 20 = 100 bolsas · 16.67 parrillas · va a CZ3*. Las claves del
+catálogo que no tienen presentación salen al final del selector y se piden en bolsas.
+
+**Sólo lo marcado mueve el cálculo.** La preventa de todos los días ya está dentro del promedio
+de venta, así que sumarla otra vez haría producir de más. Por eso el pedido entra apagado y sólo
+cuenta si se marca **Suma al sugerido**, que es la forma de decir «esto es de más». El cheque se
+puede poner al capturar o después, en la tabla. Los pedidos cargados antes de que existiera el
+cheque quedaron marcados, porque se crearon cuando todos contaban.
+
+Una presentación sin clave del catálogo —Encanelado, Mexicano, Espumilla, los postres, MU1— se
+captura igual, porque sirve para decidir qué empacar, pero no toca el sugerido y su cheque sale
+deshabilitado.
+
+**Los entregados viejos se archivan solos.** Un pedido entregado o cancelado hace más de ocho
+días ya no sirve para decidir nada y la preventa son miles de líneas al año, así que sale del
+estado vivo al abrir el app y después de cada sincronización. No se tira: queda guardado aparte
+en ese equipo, fuera de la sincronización.
 
 ## Cálculos secundarios
 
