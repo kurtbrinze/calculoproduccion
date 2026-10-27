@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.37';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.37';`
+1. `js/ui.js` → `const VERSION = 'V.2026.38';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.38';`
 
 ## Plantas, claves y productos nuevos
 
@@ -331,8 +331,14 @@ sale de ella.
 | PROD PM | Quintales de la cubeta **PM** × rendimiento |
 | OH | Lo que ya hay impreso |
 | EMPAQUE AM | `PROD AM − OH`, redondeado a diez |
-| EMPAQUE PM | `PROD PM`, redondeado a diez |
+| EMPAQUE PM | `PROD PM −` lo que del OH no cupo en la mañana, redondeado a diez |
 | A IMPRIMIR | `EMPAQUE AM + EMPAQUE PM` |
+
+**El OH se descuenta del día completo**, no de una sola cubeta: primero contra la mañana y lo
+que sobre contra la tarde. Saliendo sólo de la mañana, un día en que la producción grande cae
+en la tarde —lo normal en Zona 2, que toma el PM del día anterior— el OH se perdía y la hoja
+mandaba a imprimir bolsa que ya estaba impresa. Si el OH es mayor que todo el día, A IMPRIMIR
+queda en cero y la clave igual sale en la orden, con el cero a la vista.
 
 **De dónde salen los quintales se parametriza.** En Parámetros → Impresión de bolsa, cada clave
 lista sus turnos y cada turno lleva **dos** ajustes: qué hace lo que produjo el **día a

@@ -12,8 +12,13 @@
      PROD AM    = quintales de la cubeta AM × rendimiento
      PROD PM    = quintales de la cubeta PM × rendimiento
      EMPAQUE AM = PROD AM − OH
-     EMPAQUE PM = PROD PM
+     EMPAQUE PM = PROD PM − lo que del OH no alcanzó a caber en la mañana
      A IMPRIMIR = EMPAQUE AM + EMPAQUE PM
+
+   El OH se descuenta del día entero, no de una sola cubeta: primero contra
+   la mañana y lo que sobre contra la tarde. Si saliera sólo de la mañana,
+   un día en que la producción grande cae en la tarde mandaría a imprimir
+   bolsa que ya está impresa.
 
    Las cuatro columnas de quintales son una foto de dónde están esos
    quintales: día anterior o día a producir, mañana o tarde. Son las fuentes
@@ -320,9 +325,11 @@
       if (!f.final) {
         return { ...f, oh: 0, qq, qqAM, qqPM, prodAM, prodPM, empAM: 0, empPM: 0, total: 0 };
       }
-      /* El OH ya está impreso y se descuenta del empaque de la mañana. */
+      /* El OH ya está impreso: sale del día completo. Primero contra la
+         mañana y, si no cabe entero ahí, el resto contra la tarde. */
+      const sobra = Math.max(0, oh - prodAM);
       const empAM = alDiez(prodAM - oh);
-      const empPM = alDiez(prodPM);
+      const empPM = alDiez(prodPM - sobra);
       return { ...f, oh, qq, qqAM, qqPM, prodAM, prodPM, empAM, empPM, total: empAM + empPM };
     });
   }
