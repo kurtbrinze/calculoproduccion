@@ -367,7 +367,7 @@
   function pdf(fecha) {
     const R = window.Resumen;
     const ANCHO = 792, ALTO = 612;
-    const MX = 22, MY = 20;
+    const MX = 20, MY = 16;
     const fs = enTotal(calcular(fecha));
     const t = totales(fs);
     const d0 = D.fechaCorta(fecha).toUpperCase();
@@ -401,19 +401,13 @@
     const d = D.desdeISO(fecha);
     const larga = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
 
-    const yCab = MY + 22, hCab = 30;
-    const yFilas = yCab + hCab, hTot = 18;
-    const alCuerpo = ALTO - MY - yFilas - hTot - 4;
-    /* El papel acostado es más corto que de pie, así que con el catálogo
-       entero la letra se achicaría todavía más de lo que estaba. Antes de
-       eso se parte en hojas: dos renglones grandes se leen; cincuenta y dos
-       apretados, no. */
-    const H_COMODA = 14;
-    const hojas = Math.max(1, Math.ceil(fs.length / Math.floor(alCuerpo / H_COMODA)));
-    const porHoja = Math.ceil(fs.length / hojas);
-    const hFila = Math.min(22, alCuerpo / Math.max(1, porHoja));
-    const TAM_FILA = Math.max(6.4, Math.min(11, hFila - 4.5));
-    const TAM_TOT = Math.min(12, TAM_FILA + 1);
+    /* Una sola hoja, siempre: el reparto del día se mira completo o no sirve.
+       Como el alto está fijo, lo que se estira es la letra, hasta donde el
+       renglón y la columna más angosta la dejen crecer. */
+    const yCab = MY + 18, hCab = 24;
+    const yFilas = yCab + hCab;
+    const alCuerpo = ALTO - MY - yFilas - 4;
+    const hFila = Math.min(24, alCuerpo / Math.max(1, fs.length));
 
     const n0 = (v) => (!v ? '' : Math.round(v).toLocaleString('es-GT'));
     const n2v = (v) => (!v ? '' : Number(v).toLocaleString('es-GT', { maximumFractionDigits: 2 }));
@@ -430,68 +424,64 @@
       return n0(f[c.k]);
     };
 
-    const TAM_CAB = 7.5;
-    const paginas = [];
-    for (let p = 0; p < hojas; p++) {
-      const h = R.hoja(ALTO);
-      const trozo = fs.slice(p * porHoja, (p + 1) * porHoja);
+    const TAM_FILA = tamQueCabe(fs, cols, valor, hFila);
+    const TAM_CAB = Math.min(8.5, Math.max(6, TAM_FILA));
 
-      h.texto(x0, MY, 'IMPRESION DE BOLSA', { tam: 14, negrita: true });
-      if (hojas > 1) {
-        h.texto(x0, MY, `HOJA ${p + 1} DE ${hojas}`,
-          { tam: 10, negrita: true, alinear: 'center', ancho: anchoTabla });
-      }
-      h.texto(x0, MY, `${D.nombreDia(fecha)}  ${larga}`,
-        { tam: 14, negrita: true, alinear: 'right', ancho: anchoTabla });
+    const h = R.hoja(ALTO);
+    h.texto(x0, MY, 'IMPRESION DE BOLSA', { tam: 13, negrita: true });
+    h.texto(x0, MY, `${D.nombreDia(fecha)}  ${larga}`,
+      { tam: 13, negrita: true, alinear: 'right', ancho: anchoTabla });
 
-      /* El encabezado se repite en cada hoja: una página suelta sin títulos
-         de columna no se puede leer. */
-      let xc = x0;
+    let xc = x0;
+    cols.forEach((c) => {
+      h.rect(xc, yCab, c.w, hCab);
+      const ls = c.lineas || [c.t];
+      const y0 = yCab + (hCab - ls.length * (TAM_CAB + 2.4)) / 2;
+      ls.forEach((l, i) => {
+        h.texto(xc, y0 + i * (TAM_CAB + 2.4), l,
+          { tam: TAM_CAB, negrita: true, alinear: 'center', ancho: c.w });
+      });
+      xc += c.w;
+    });
+
+    let y = yFilas;
+    fs.forEach((f) => {
+      let x = x0;
       cols.forEach((c) => {
-        h.rect(xc, yCab, c.w, hCab);
-        const ls = c.lineas || [c.t];
-        const y0 = yCab + (hCab - ls.length * (TAM_CAB + 2.4)) / 2;
-        ls.forEach((l, i) => {
-          h.texto(xc, y0 + i * (TAM_CAB + 2.4), l,
-            { tam: TAM_CAB, negrita: true, alinear: 'center', ancho: c.w });
-        });
-        xc += c.w;
+        h.rect(x, y, c.w, hFila);
+        const neg = f.final && (c.k === 'nombre' || c.k === 'total');
+        h.texto(x, y + (hFila - TAM_FILA) / 2, valor(f, c),
+          { tam: TAM_FILA, negrita: neg, alinear: c.alinear || 'center', ancho: c.w });
+        x += c.w;
       });
+      y += hFila;
+    });
 
-      let y = yFilas;
-      trozo.forEach((f) => {
-        let x = x0;
-        cols.forEach((c) => {
-          h.rect(x, y, c.w, hFila);
-          const neg = f.final && (c.k === 'nombre' || c.k === 'total');
-          h.texto(x, y + (hFila - TAM_FILA) / 2, valor(f, c),
-            { tam: TAM_FILA, negrita: neg, alinear: c.alinear || 'center', ancho: c.w });
-          x += c.w;
-        });
-        y += hFila;
-      });
-
-      /* El total del día va una sola vez, al pie de la última hoja. */
-      if (p === hojas - 1) {
-        let xt = x0;
-        cols.forEach((c) => {
-          h.rect(xt, y, c.w, hTot);
-          const v = c.k === 'nombre' ? 'TOTAL'
-            : (['prodAM', 'prodPM', 'empAM', 'empPM', 'total'].includes(c.k) ? n0(t[c.k]) : '');
-          h.texto(xt, y + (hTot - TAM_TOT) / 2, v,
-            { tam: TAM_TOT, negrita: true, alinear: c.alinear || 'center', ancho: c.w });
-          xt += c.w;
-        });
-      }
-      paginas.push(h.fin());
-    }
-
-    const bytes = R.pdfBytes(paginas, ANCHO, ALTO);
+    const bytes = R.pdfBytes([h.fin()], ANCHO, ALTO);
     return {
       blob: new Blob([bytes], { type: 'application/pdf' }),
       nombre: `Impresion Bolsa ${R.fechaArchivo(fecha)}.pdf`,
-      hojas,
+      tam: Math.round(TAM_FILA * 10) / 10,
     };
+  }
+
+  /**
+   * La letra más grande que cabe: la limita el alto del renglón y, columna
+   * por columna, el texto más largo que le toca. Sin lo segundo un «1,550»
+   * se sale de RENDIM en cuanto la hoja tiene pocas claves.
+   */
+  function tamQueCabe(fs, cols, valor, hFila, tope) {
+    const R = window.Resumen;
+    let max = Math.min(tope || 11, hFila - 1.3);
+    cols.forEach((c) => {
+      fs.forEach((f) => {
+        const s = valor(f, c);
+        if (!s) return;
+        const porPunto = R.anchoTexto(s, 1, true);
+        if (porPunto > 0) max = Math.min(max, (c.w - 5) / porPunto);
+      });
+    });
+    return Math.max(5, max);
   }
 
   // ---------- La orden de impresión ----------
@@ -504,9 +494,9 @@
   const COLS_ORDEN = [
     { k: 'nombre', t: 'CLAVE', p: 1.5, alinear: 'left' },
     { k: 'total',  t: 'A IMPRIMIR', p: 1.3 },
-    { k: 'oh',     t: 'OH', p: 0.8 },
-    { k: 'impAM',  t: 'IMPRIMIR AM', p: 1.15, vacia: true },
-    { k: 'impPM',  t: 'IMPRIMIR PM', p: 1.15, vacia: true },
+    { k: 'oh',     t: 'OH', p: 0.7 },
+    { k: 'impAM',  t: 'IMPRIMIR AM', p: 1.22, vacia: true },
+    { k: 'impPM',  t: 'IMPRIMIR PM', p: 1.22, vacia: true },
     { k: 'suma',   t: 'TOTAL', p: 1.0, vacia: true },
   ];
 
@@ -517,11 +507,6 @@
       .filter((f) => f.cuenta && (f.total || f.oh))
       .map((f) => ({ nombre: f.nombre, total: f.total || 0, oh: f.oh || 0 }));
   }
-
-  const sumaOrden = (ls) => ({
-    total: ls.reduce((a, f) => a + f.total, 0),
-    oh: ls.reduce((a, f) => a + f.oh, 0),
-  });
 
   const nOrden = (v) => (!v ? '' : Math.round(v).toLocaleString('es-GT'));
 
@@ -538,7 +523,6 @@
     const MX = 12, MY = 12;
     const h = R.hoja(ALTO);
     const ls = ordenLineas(fecha);
-    const t = sumaOrden(ls);
 
     const ancho = ANCHO - 2 * MX;
     const unidad = ancho / COLS_ORDEN.reduce((a, c) => a + c.p, 0);
@@ -550,11 +534,12 @@
     h.texto(x0, MY + 12, tituloOrden(fecha), { tam: 8, negrita: true });
 
     const yCab = MY + 26, hCab = 18;
-    const yFilas = yCab + hCab, hTot = 16;
+    const yFilas = yCab + hCab;
     /* La fila se estira hasta llenar la hoja: en estas tres columnas se
        escribe a mano y el renglón apretado no sirve de nada. */
-    const hFila = Math.min(26, (ALTO - MY - yFilas - hTot - 4) / Math.max(1, ls.length));
-    const TAM = Math.max(5, Math.min(9, hFila - 6));
+    const hFila = Math.min(28, (ALTO - MY - yFilas - 4) / Math.max(1, ls.length));
+    const valorOrden = (f, c) => (c.vacia ? '' : (c.k === 'nombre' ? f.nombre : nOrden(f[c.k])));
+    const TAM = tamQueCabe(ls, cols, valorOrden, hFila, 12);
 
     let xc = x0;
     cols.forEach((c) => {
@@ -569,26 +554,14 @@
       let x = x0;
       cols.forEach((c) => {
         h.rect(x, y, c.w, hFila);
-        if (!c.vacia) {
-          const v = c.k === 'nombre' ? f.nombre : nOrden(f[c.k]);
-          h.texto(x, y + (hFila - TAM) / 2, v,
-            { tam: TAM, negrita: c.k !== 'oh', alinear: c.alinear || 'center', ancho: c.w });
-        }
+        h.texto(x, y + (hFila - TAM) / 2, valorOrden(f, c),
+          { tam: TAM, negrita: c.k !== 'oh', alinear: c.alinear || 'center', ancho: c.w });
         x += c.w;
       });
       y += hFila;
     });
 
-    let xt = x0;
-    cols.forEach((c) => {
-      h.rect(xt, y, c.w, hTot);
-      const v = c.k === 'nombre' ? 'TOTAL' : (c.vacia ? '' : nOrden(t[c.k]));
-      h.texto(xt, y + (hTot - TAM) / 2, v,
-        { tam: TAM, negrita: true, alinear: c.alinear || 'center', ancho: c.w });
-      xt += c.w;
-    });
-
-    h.rect(x0, yCab, anchoTabla, y + hTot - yCab);
+    h.rect(x0, yCab, anchoTabla, y - yCab);
 
     const bytes = R.pdfBytes([h.fin()], ANCHO, ALTO);
     return {
@@ -602,9 +575,10 @@
   function ordenImagen(fecha) {
     const R = window.Resumen, COL = R.COL;
     const ls = ordenLineas(fecha);
-    const t = sumaOrden(ls);
-    const ANCHO = 470, TIT = 32, CAB = 28, FILA = 24;
-    const alto = TIT + CAB + ls.length * FILA + FILA;
+    /* Sin fila de totales: en el teléfono cada renglón que sobra es uno que
+       se puede hacer más alto y con la letra más grande. */
+    const ANCHO = 470, TIT = 34, CAB = 30, FILA = 30;
+    const alto = TIT + CAB + ls.length * FILA;
     const { cv, g } = R.lienzo(ANCHO, alto);
 
     const unidad = ANCHO / COLS_ORDEN.reduce((a, c) => a + c.p, 0);
@@ -614,7 +588,7 @@
 
     R.celda(g, 0, 0, ANCHO, TIT, {
       fondo: COL.naranja, texto: `IMPRESIÓN DE BOLSA · ${tituloOrden(fecha)}`,
-      color: COL.blanco, fuente: 'bold 13px system-ui, sans-serif', borde: COL.naranja,
+      color: COL.blanco, fuente: 'bold 14px system-ui, sans-serif', borde: COL.naranja,
     });
 
     let y = TIT;
@@ -636,19 +610,10 @@
           texto: esClave ? f.nombre : nOrden(f[c.k]),
           color: c.k === 'oh' ? COL.grisTexto : COL.tinta,
           alinear: esClave ? 'left' : 'center',
-          fuente: c.k === 'oh' ? '12px system-ui, sans-serif' : 'bold 12px system-ui, sans-serif',
+          fuente: c.k === 'oh' ? '14px system-ui, sans-serif' : 'bold 15px system-ui, sans-serif',
         });
       });
       y += FILA;
-    });
-
-    cols.forEach((c, i) => {
-      R.celda(g, xs[i], y, c.w, FILA, {
-        fondo: COL.naranjaSuave, borde: COL.naranjaSuave, color: COL.tinta,
-        texto: c.k === 'nombre' ? 'TOTAL' : (c.vacia ? '' : nOrden(t[c.k])),
-        alinear: c.k === 'nombre' ? 'left' : 'center',
-        fuente: 'bold 12px system-ui, sans-serif',
-      });
     });
 
     return { cv, nombre: `Orden Impresion Bolsa ${R.fechaArchivo(fecha)}.png`, lineas: ls.length };

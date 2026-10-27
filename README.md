@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.35';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.35';`
+1. `js/ui.js` → `const VERSION = 'V.2026.36';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.36';`
 
 ## Plantas, claves y productos nuevos
 
@@ -402,10 +402,13 @@ Sale de dos formas, con el mismo contenido: **Orden en ¼ de carta** da el PDF v
 tamaño que se lleva en la mano, con los renglones altos para poder escribir; **Orden para
 WhatsApp** da la imagen, que el teléfono manda directo y los demás equipos descargan.
 
-**La hoja completa** es la tabla entera en PDF, en **carta acostada** y de margen a margen.
-Como son trece columnas y el catálogo entero, la letra se parte en hojas antes que achicarse:
-si los renglones no caben cómodos en una, salen dos con el encabezado repetido y el total al
-pie de la última. En la pantalla dice cuántas hojas salieron.
+**La hoja completa** es la tabla entera en PDF, en **carta acostada**, de margen a margen y
+siempre en **una sola hoja**: el reparto del día se mira completo o no sirve. Como el alto está
+fijo, lo que se estira es la letra: crece hasta donde la dejen el renglón y el texto más largo
+de cada columna, medido de verdad con los anchos de Helvetica, no a ojo.
+
+**Ninguno de los dos lleva fila de totales.** Cada renglón que se ahorra es alto que gana la
+letra, y los totales ya están en la pantalla, arriba de la tabla.
 
 ## Pedidos y preventa
 

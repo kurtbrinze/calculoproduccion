@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.35';
+  const VERSION = 'V.2026.36';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2572,11 +2572,10 @@
        para escribir encima sin tener que borrar. */
     $('#btnBolsaPdf').onclick = async () => {
       try {
-        const { blob, nombre, hojas } = window.Bolsa.pdf(ui.fechaBolsa);
+        const { blob, nombre } = window.Bolsa.pdf(ui.fechaBolsa);
         const r = await descargar(blob, nombre, window.Archivo.TIPO_PDF);
         if (r.modo === 'cancelado') return;
-        aviso(`Hoja completa guardada${donde(r)}: carta acostada`
-          + (hojas > 1 ? `, ${hojas} hojas.` : '.'));
+        aviso(`Hoja completa guardada${donde(r)}: carta acostada, en una hoja.`);
       } catch (err) { aviso('No se pudo armar el PDF: ' + err.message, 'err'); }
     };
     $('#btnOrdenPdf').onclick = async () => {
