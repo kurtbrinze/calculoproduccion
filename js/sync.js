@@ -40,6 +40,7 @@
   const PARTES = [
     { id: 'dias', nombre: 'El día', detalle: 'Producción, Inventario y el historial de días.' },
     { id: 'pedidos', nombre: 'Pedidos', detalle: 'Los pedidos y preventas.' },
+    { id: 'bolsa', nombre: 'Impresión de bolsa', detalle: 'El OH, las claves que se cuentan a mano y las unidades de MU1 de cada día.' },
     { id: 'prom', nombre: 'Promedios', detalle: 'La venta promedio por día de la semana.' },
     { id: 'params', nombre: 'Parámetros', detalle: 'Turnos, topes, productos, calendario y feriados.' },
   ];
@@ -106,13 +107,17 @@
   const estadoLocal = () => ({
     v: 1, params: D.estado.params, prom: D.estado.prom,
     dias: diasReales(), pedidos: D.estado.pedidos || {},
+    bolsa: D.estado.bolsa || {},
   });
 
   /* Hasta dónde se baja a comparar en cada rama. Los parámetros se tratan
      enteros, porque media configuración de cada equipo no es una configuración.
      Los días bajan hasta la clave: así conviven el INV PM que capturó la
      tablet y el reparto que hizo la laptop el mismo día. */
-  const PROF = { params: 0, prom: 1, pedidos: 1 };
+  /* La hoja de bolsa baja hasta la casilla —día, campo y clave—: la laptop
+     escribe el OH de unas claves y la tablet el de otras el mismo día, y las
+     dos tienen que quedar. */
+  const PROF = { params: 0, prom: 1, pedidos: 1, bolsa: 3 };
 
   /* Los días recientes se comparan hasta la última casilla: la clave dentro de
      la sección y, donde hay otro nivel, el turno o la celda de impresión de
@@ -173,6 +178,7 @@
     if (P.prom) out.prom = arbol(est.prom, PROF.prom);
     if (P.dias) out.dias = arbolDias(est.dias);
     if (P.pedidos) out.pedidos = arbol(est.pedidos || {}, PROF.pedidos);
+    if (P.bolsa) out.bolsa = arbol(est.bolsa || {}, PROF.bolsa);
     return out;
   }
 
@@ -216,6 +222,7 @@
   const SECCION = {
     invPM: 'INV PM', turnos: 'reparto', stockAyer: 'STOCK AYER', cz5: 'conteo CZ5',
     prodAyer: 'PROD AYER', crudo: 'lectura', nota: 'nota', cerrado: 'cierre',
+    oh: 'OH', manual: 'cálculo manual', mu1: 'unidades de MU1',
   };
 
   /* Cuando el choque es en una sola casilla conviene nombrarla: «MIE 14/10»
@@ -296,7 +303,8 @@
         params: P.params ? local.params : undefined,
         prom: P.prom ? local.prom : undefined,
         dias: P.dias ? { ...local.dias } : undefined,
-        pedidos: P.pedidos ? { ...local.pedidos } : undefined });
+        pedidos: P.pedidos ? { ...local.pedidos } : undefined,
+        bolsa: P.bolsa ? { ...local.bolsa } : undefined });
     }
     const bb = b || {};
     remoto = completar(local, remoto);
@@ -310,6 +318,20 @@
       ? mezclarNodo(local.pedidos || {}, remoto.pedidos || {}, bb.pedidos,
         PROF.pedidos, 'los pedidos especiales', reg, eleccion)
       : AUSENTE;
+    /* La hoja de bolsa se recorre por día, como los días, para que el aviso
+       diga «MIE 28/10 de la bolsa (OH S19)» y no una ruta con la fecha cruda. */
+    let bolsa = null;
+    if (P.bolsa) {
+      bolsa = {};
+      const bh = esObjeto(bb.bolsa) ? bb.bolsa : {};
+      const lb = local.bolsa || {}, rb = remoto.bolsa || {};
+      const fechas = new Set([...Object.keys(lb), ...Object.keys(rb), ...Object.keys(bh)]);
+      [...fechas].sort().forEach((f) => {
+        const v = mezclarNodo(lb[f], rb[f], bh[f], PROF.bolsa - 1,
+          `${D.fechaCorta(f)} de la bolsa`, reg, eleccion, []);
+        if (v !== AUSENTE) bolsa[f] = v;
+      });
+    }
 
     /* Los días se recorren uno por uno para poder nombrarlos en los avisos. */
     let dias = null;
@@ -334,6 +356,7 @@
       params: P.params ? (params === AUSENTE ? local.params : params) : comoEsta('params'),
       prom: P.prom ? (prom === AUSENTE ? local.prom : prom) : comoEsta('prom'),
       pedidos: P.pedidos ? (pedidos === AUSENTE ? (local.pedidos || {}) : pedidos) : comoEsta('pedidos'),
+      bolsa: P.bolsa ? bolsa : comoEsta('bolsa'),
       dias: P.dias ? dias : comoEsta('dias'),
     });
   }
@@ -470,6 +493,7 @@
     if (P.params && est.params) { D.estado.params = D.fusionarParams(est.params); D.guardarParams(); }
     if (P.prom && est.prom) { D.estado.prom = est.prom; D.guardarProm(); }
     if (P.pedidos) { D.estado.pedidos = est.pedidos || {}; D.guardarPedidos(); }
+    if (P.bolsa) { D.estado.bolsa = est.bolsa || {}; D.guardarBolsa(); }
     if (P.dias) {
       D.estado.dias = est.dias || {};
       /* Se graba directo: guardarDias() limpia los días vacíos y eso borraría

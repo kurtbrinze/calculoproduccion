@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.38';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.38';`
+1. `js/ui.js` → `const VERSION = 'V.2026.39';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.39';`
 
 ## Plantas, claves y productos nuevos
 
@@ -389,8 +389,10 @@ cantidad; sin las dos cosas la regla no hace nada. De fábrica viene `10WY1 M` c
 martes y jueves**. En la hoja el número sale en gris, como todo lo que el app pone solo, y lo
 que se escriba encima manda ese día; al borrar lo escrito vuelve el fijo.
 
-**Esta hoja no se sincroniza.** Se guarda aparte de los días, en el equipo donde se imprime.
-Sí entra en el respaldo. Las cantidades fijas sí viajan: son parámetros.
+**Esta hoja se sincroniza aparte.** Se guarda fuera de los días y viaja como su propia parte,
+que se enciende o se apaga por equipo en Parámetros → Sincronizar. Se compara hasta la casilla
+—día, campo y clave—, así que el OH que escribió la laptop y el que escribió la tablet el mismo
+día conviven. Las cantidades fijas viajan por otro lado: son parámetros.
 
 ### Los dos papeles que salen de aquí
 
@@ -567,8 +569,9 @@ tocaste Sincronizar y la app lo avisa.
 Sincroniza al abrir, al guardar el día y con el botón. No más seguido: el plan gratis de Vercel
 da 2,000 guardados al mes y la tarjeta lleva la cuenta.
 
-**Qué se sincroniza se elige por equipo.** En la misma tarjeta hay cuatro casillas: *El día*
-(Producción, Inventario y el historial), *Pedidos*, *Promedios* y *Parámetros*. La elección vive
+**Qué se sincroniza se elige por equipo.** En la misma tarjeta hay cinco casillas: *El día*
+(Producción, Inventario y el historial), *Pedidos*, *Impresión de bolsa* (el OH, las claves de
+cálculo manual y las unidades de MU1), *Promedios* y *Parámetros*. La elección vive
 en el navegador de cada equipo y **no viaja con la sincronización** —si viajara, los dos equipos
 acabarían con la misma configuración y no habría nada que controlar—, así que la tablet puede
 quedarse sin los pedidos mientras la laptop los lleva.

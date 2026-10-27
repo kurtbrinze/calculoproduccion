@@ -94,9 +94,14 @@ queda en unos 110 KB en vez de crecer sin freno.
 
 ## Qué no viaja
 
-**Impresión bolsa** y **Cálculos** no se sincronizan: son hojas de trabajo del equipo donde se
-escriben y se guardan aparte de los días. Tampoco viajan el PDF ni las imágenes del resumen, que se generan
-en el momento. Todo lo demás —ajustes, promedios, días, pedidos— sí.
+**Cálculos** no se sincroniza: es una hoja de trabajo del equipo donde se escribe. Tampoco
+viajan el PDF ni las imágenes del resumen, que se generan en el momento. Todo lo demás
+—ajustes, promedios, días, pedidos e impresión de bolsa— sí.
+
+**Impresión bolsa** viaja como su propia parte y se compara hasta la casilla: el día, el campo
+—OH, cálculo manual, unidades de MU1— y la clave. Así el OH que escribió la laptop y el que
+escribió la tablet el mismo día quedan los dos. Se apaga por equipo en
+Parámetros → Sincronizar, igual que las demás partes.
 
 ## Cuándo sincroniza
 
