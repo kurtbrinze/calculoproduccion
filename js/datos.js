@@ -229,7 +229,7 @@
        4 = el catálogo se ordenó como la hoja de papel.
        5 = se separó la planta Zona 2 de la de dulces (Zona 2 CZ).
        6 = tope de quintales por producto y reparto por porcentaje. */
-  const ESQUEMA = 6;
+  const ESQUEMA = 7;
 
   /**
    * Mapa de plantas de un producto. Acepta la forma nueva (`plantas` como
@@ -323,6 +323,13 @@
          esa planta, sacada del promedio de los últimos domingos capturados.
          Es la bolsa del domingo, que se manda a imprimir el sábado. */
       bolsaDomingo: { activo: true, planta: 'Z2', semanas: 4 },
+      /* Claves que llevan una cantidad fija en ciertos días de la semana:
+         bolsa que se manda a imprimir sin esperar producción, porque el dato
+         se sabe de antemano. `dias` va con lunes = 0. Lo que se escriba a
+         mano en la hoja manda sobre esto. */
+      bolsaFijos: {
+        'man:10WY1M': { dias: [1, 3], cantidad: 960 },
+      },
       /* El orden de las filas de la hoja de bolsa, si se cambió a mano. Lo que
          no está en la lista va después, en el orden de siempre: una clave
          nueva aparece sola en vez de perderse. */
@@ -446,6 +453,24 @@
       planta: PLANTAS.some((p) => p.id === gd.planta) ? gd.planta : base.bolsaDomingo.planta,
       semanas: Math.max(1, Math.round(Number(gd.semanas) || base.bolsaDomingo.semanas)),
     };
+    /* Antes del esquema 7 no existían las cantidades fijas: la primera vez
+       entra la de fábrica, después manda lo guardado aunque quede vacío. */
+    out.bolsaFijos = {};
+    const gfj = viejoEsquema < 7 ? base.bolsaFijos : guardado.bolsaFijos;
+    if (gfj && typeof gfj === 'object') {
+      Object.keys(gfj).forEach((id) => {
+        const f = gfj[id];
+        if (!f || typeof f !== 'object') return;
+        const dias = (Array.isArray(f.dias) ? f.dias : [])
+          .map((d) => Math.round(Number(d)))
+          .filter((d) => d >= 0 && d <= 6);
+        const cantidad = Math.max(0, Math.round(Number(f.cantidad) || 0));
+        /* A medio llenar también se guarda: se marcan los días y después se
+           escribe la cantidad, y entre una cosa y otra no se pierde nada.
+           Mientras falte una de las dos, la regla no hace nada. */
+        if (dias.length || cantidad) out.bolsaFijos[id] = { dias: [...new Set(dias)].sort(), cantidad };
+      });
+    }
     out.bolsaFuentes = {};
     const gf = guardado.bolsaFuentes;
     if (gf && typeof gf === 'object') {

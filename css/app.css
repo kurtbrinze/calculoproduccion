@@ -422,6 +422,12 @@ td.conped{color:var(--accent-2)}
 .fuente>i{font-style:normal;color:var(--muted);font-size:.68rem;flex:0 0 auto}
 .fuente select{flex:0 0 56px;font-size:.78rem;padding:3px 4px}
 .fuente.apagada>span{color:var(--muted)}
+/* Los siete días como toques cortos, para marcar martes y jueves de un vistazo. */
+.diasf{gap:4px;margin:0;flex-wrap:nowrap}
+.diaf{min-height:32px;gap:4px;font-size:.8rem;color:var(--muted);
+  border:1px solid var(--line);border-radius:7px;padding:2px 7px 2px 5px}
+.diaf:has(input:checked){border-color:rgba(74,222,155,.45);color:var(--accent)}
+.diaf input{margin:0}
 /* Encabezado de dos pisos de la hoja de bolsa. */
 #theadBolsa th.bloque{border-bottom:1px solid var(--line);font-size:.72rem;
   letter-spacing:.04em}

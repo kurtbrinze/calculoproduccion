@@ -195,6 +195,17 @@
   const SABADO = 5, DOMINGO = 6;   // con lunes = 0
 
   /**
+   * La cantidad que esa clave lleva fija ese día de la semana, o 0. Es bolsa
+   * que se manda a imprimir sin esperar producción, porque el dato se sabe de
+   * antemano: el 10WY1 M de martes y jueves, por ejemplo.
+   */
+  function fijoDe(P, id, fecha) {
+    const f = (P.bolsaFijos || {})[id];
+    if (!f || !Array.isArray(f.dias)) return 0;
+    return f.dias.includes(D.indiceDia(fecha)) ? (Number(f.cantidad) || 0) : 0;
+  }
+
+  /**
    * El promedio por clave y turno de los últimos domingos con producción en
    * esa planta. Devuelve también de qué domingos salió, para poder decirlo.
    */
@@ -257,9 +268,14 @@
       const oh = f.final ? (Number(puesto(b, 'oh', f.id)) || 0) : 0;
 
       if (f.tipo === 'manual') {
-        const tot = Number(puesto(b, 'manual', f.id)) || 0;
+        /* Lo escrito a mano manda. Si no hay nada escrito y ese día de la
+           semana tiene cantidad fija, entra la fija. */
+        const aMano = puesto(b, 'manual', f.id);
+        const fijo = fijoDe(P, f.id, fecha);
+        const tot = aMano !== null ? aMano : fijo;
         return { ...f, oh: 0, qq: celdas(), qqAM: 0, qqPM: 0,
-          prodAM: 0, prodPM: 0, empAM: 0, empPM: 0, total: tot, manual: true };
+          prodAM: 0, prodPM: 0, empAM: 0, empPM: 0, total: tot, manual: true,
+          fijo, auto: aMano === null && !!fijo };
       }
       if (f.tipo === 'mu1') {
         /* Las unidades de MU1 se producen en Zona 18 y no las calcula esta
@@ -500,11 +516,16 @@
     { k: 'suma',   t: 'TOTAL', p: 1.0, vacia: true },
   ];
 
-  /* Una línea por cosa que se imprime: ni las filas de detalle por planta
-     —su bolsa la pide la de abajo— ni las claves que no llevan nada hoy. */
+  /**
+   * Una línea por cosa que se imprime: ni las filas de detalle por planta
+   * —su bolsa la pide la de abajo— ni las claves que hoy no producen nada.
+   * El OH no entra en el filtro: llega en la mañana y se anota encima, así
+   * que una clave con producción sale aunque todavía no tenga OH, y una sin
+   * producción no entra sólo por tener OH escrito.
+   */
   function ordenLineas(fecha) {
     return enTotal(calcular(fecha))
-      .filter((f) => f.cuenta && (f.total || f.oh))
+      .filter((f) => f.cuenta && (f.prodAM > 0 || f.prodPM > 0 || f.total > 0))
       .map((f) => ({ nombre: f.nombre, total: f.total || 0, oh: f.oh || 0 }));
   }
 
@@ -642,6 +663,6 @@
 
   window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf, ignorados,
     ordenLineas, ordenPdf, ordenImagen, COLS_ORDEN,
-    dentro, filaDentro, fechaPrevia, fuenteDe, fuentesDe, turnosDeClave, promDomingos,
+    dentro, filaDentro, fechaPrevia, fuenteDe, fuentesDe, turnosDeClave, promDomingos, fijoDe,
     DESTINOS, DIAS, EXTRAS, alDiez };
 })();

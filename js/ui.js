@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.36';
+  const VERSION = 'V.2026.37';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -792,8 +792,10 @@
         <td class="num bolsas">${f.empAM ? n0(f.empAM) : ''}</td>
         <td class="num bolsas">${f.empPM ? n0(f.empPM) : ''}</td>
         <td>${f.manual
-          ? `<input class="inqq" inputmode="decimal" enterkeyhint="next"
-              data-bcampo="manual" data-bid="${esc(f.id)}" value="${f.total || ''}"
+          ? `<input class="inqq${f.auto ? ' auto' : ''}" inputmode="decimal" enterkeyhint="next"
+              data-bcampo="manual" data-bid="${esc(f.id)}"
+              value="${f.auto ? '' : (f.total || '')}"
+              placeholder="${f.fijo ? n0(f.fijo) : ''}"
               aria-label="A imprimir de ${esc(f.nombre)}">`
           : `<b class="num">${f.total ? n0(f.total) : ''}</b>`}</td>
       </tr>`;
@@ -1448,6 +1450,14 @@
           <div class="campo"><label for="inBolsaDomSem">Domingos a promediar</label>
             <input class="inqq" inputmode="numeric" id="inBolsaDomSem" style="width:90px"></div>
         </div>
+        <h4 class="subrot" style="margin-top:18px">Cantidades fijas por día de la semana</h4>
+        <p class="dim" style="font-size:.84rem;margin:0 2px 10px">
+          Las claves que se cuentan a mano pueden llevar una cantidad fija en ciertos días: bolsa
+          que se manda a imprimir sin esperar producción, porque el dato se sabe de antemano.
+          Se marcan los días y se escribe la cantidad; sin días o sin cantidad no pasa nada.
+          En la hoja el número sale en gris, y lo que se escriba encima manda ese día.
+        </p>
+        <div id="bolsaFijos"></div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -1545,10 +1555,47 @@
     pintarFeriados();
     pintarBolsaClaves();
     pintarBolsaFuentes();
+    pintarBolsaFijos();
     const bd = D.estado.params.bolsaDomingo;
     $('#chkBolsaDom').checked = bd.activo !== false;
     $('#inBolsaDomPlanta').value = bd.planta;
     $('#inBolsaDomSem').value = bd.semanas;
+  }
+
+  /* Las letras de los días, con lunes = 0 como todo el app. */
+  const LETRA_DIA = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+  const NOMBRE_DIA = ['lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+
+  /* Las claves que se cuentan a mano y pueden llevar cantidad fija por día.
+     Son las de la hoja que no salen del reparto: los manuales y el 12MU1. */
+  function clavesFijables() {
+    return window.Bolsa.EXTRAS.filter((e) => e.tipo === 'manual');
+  }
+
+  /** Cantidad fija por día de la semana para las claves de cálculo manual. */
+  function pintarBolsaFijos() {
+    const cont = $('#bolsaFijos');
+    if (!cont) return;
+    const fijos = D.estado.params.bolsaFijos || {};
+    const filas = clavesFijables().map((e) => {
+      const f = fijos[e.id] || {};
+      const dias = Array.isArray(f.dias) ? f.dias : [];
+      const toques = LETRA_DIA.map((l, i) => `<label class="sw diaf">
+          <input type="checkbox" data-fdia="${esc(e.id)}" value="${i}" ${dias.includes(i) ? 'checked' : ''}
+            aria-label="${NOMBRE_DIA[i]} de ${esc(e.nombre)}"> ${l}</label>`).join('');
+      return `<tr><td class="l clave">${esc(e.nombre)}</td>
+        <td class="l"><div class="fila diasf">${toques}</div></td>
+        <td><input class="inqq" inputmode="numeric" data-fcant="${esc(e.id)}"
+          value="${f.cantidad || ''}" placeholder="—"
+          aria-label="Cantidad fija de ${esc(e.nombre)}"></td>
+        <td class="l dim">${dias.length && f.cantidad
+          ? `${n0(f.cantidad)} los ${dias.map((i) => NOMBRE_DIA[i]).join(' y ')}`
+          : 'sin cantidad fija'}</td></tr>`;
+    }).join('');
+    cont.innerHTML = `<div class="tablabox"><table>
+      <thead><tr><th class="l">Clave</th><th class="l">Días</th>
+        <th style="width:110px">A imprimir</th><th class="l" style="width:100%"></th></tr></thead>
+      <tbody>${filas}</tbody></table></div>`;
   }
 
   /* De dónde salen los quintales de cada clave en la hoja de bolsa: turno por
@@ -2207,6 +2254,22 @@
       const actual = window.Bolsa.fuenteDe(P, d.bfuente, d.bturno);
       fila[d.bturno] = { ...actual, [d.bdia]: ['AM', 'PM'].includes(t.value) ? t.value : '' };
       D.guardarParams(); pintarBolsaFuentes(); pintarBolsaClaves(); pintarBolsa(); return true;
+    }
+    else if (d.fdia || d.fcant) {
+      const id = d.fdia || d.fcant;
+      const todo = P.bolsaFijos || (P.bolsaFijos = {});
+      const f = todo[id] || (todo[id] = { dias: [], cantidad: 0 });
+      if (d.fdia) {
+        const i = Number(t.value);
+        const otros = (f.dias || []).filter((x) => x !== i);
+        f.dias = (t.checked ? [...otros, i] : otros).sort((a, b) => a - b);
+      } else {
+        f.cantidad = Math.max(0, Math.round(num(v, 0)));
+      }
+      /* Se guarda a medias —primero los días, después la cantidad— y sólo
+         llena hace algo; vacía del todo, se borra. */
+      if (!f.dias.length && !f.cantidad) delete todo[id];
+      D.guardarParams(); pintarBolsaFijos(); pintarBolsa(); return true;
     }
     else if (d.tmom) {
       P.turnos[d.tmom].momento = t.value === 'PM' ? 'PM' : 'AM';

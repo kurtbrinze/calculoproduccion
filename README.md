@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.36';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.36';`
+1. `js/ui.js` → `const VERSION = 'V.2026.37';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.37';`
 
 ## Plantas, claves y productos nuevos
 
@@ -376,8 +376,15 @@ que tenga puesta. Un domingo sin nada capturado no cuenta como cero: se salta y 
 anterior. La pestaña dice cuántos quintales sumó y de qué domingos salieron. Se apaga, se cambia
 la planta o el número de domingos en Parámetros → Impresión de bolsa.
 
+**Cantidades fijas por día de la semana.** Una clave de cálculo manual puede llevar una
+cantidad fija en ciertos días: bolsa que se manda a imprimir sin esperar producción, porque el
+dato se sabe de antemano. En Parámetros → Impresión de bolsa se marcan los días y se escribe la
+cantidad; sin las dos cosas la regla no hace nada. De fábrica viene `10WY1 M` con **960 los
+martes y jueves**. En la hoja el número sale en gris, como todo lo que el app pone solo, y lo
+que se escriba encima manda ese día; al borrar lo escrito vuelve el fijo.
+
 **Esta hoja no se sincroniza.** Se guarda aparte de los días, en el equipo donde se imprime.
-Sí entra en el respaldo.
+Sí entra en el respaldo. Las cantidades fijas sí viajan: son parámetros.
 
 ### Los dos papeles que salen de aquí
 
@@ -396,7 +403,12 @@ de la unión— y nada más que seis columnas:
 
 Las tres últimas van vacías a propósito: ahí se anota a mano lo que de verdad salió en cada
 turno. Por eso no están en la tabla de trabajo —no son cálculo, son lo que se escribe en el
-papel—. Una clave que hoy no lleva nada ni tiene OH no aparece.
+papel—.
+
+**Sale la clave que hoy produce**, y nada más. El OH no entra en el filtro: llega en la mañana
+y se anota encima del papel, así que una clave con producción aparece aunque todavía no lo
+tenga, y una clave sin producción no se cuela sólo por tener OH escrito. Una clave que produce
+pero cuyo OH se come todo lo que iba a imprimirse sigue saliendo, con el cero a la vista.
 
 Sale de dos formas, con el mismo contenido: **Orden en ¼ de carta** da el PDF vertical, del
 tamaño que se lleva en la mano, con los renglones altos para poder escribir; **Orden para
