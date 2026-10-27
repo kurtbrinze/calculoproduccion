@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.34';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.34';`
+1. `js/ui.js` → `const VERSION = 'V.2026.35';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.35';`
 
 ## Plantas, claves y productos nuevos
 
@@ -378,6 +378,34 @@ la planta o el número de domingos en Parámetros → Impresión de bolsa.
 
 **Esta hoja no se sincroniza.** Se guarda aparte de los días, en el equipo donde se imprime.
 Sí entra en el respaldo.
+
+### Los dos papeles que salen de aquí
+
+**La orden de impresión** es el papel corto que se manda a imprimir bolsa. Lleva una línea por
+cosa que se imprime —las filas de detalle por planta no salen, porque su bolsa la pide la fila
+de la unión— y nada más que seis columnas:
+
+| Columna | Qué lleva |
+|---|---|
+| CLAVE | La clave |
+| A IMPRIMIR | Lo calculado |
+| OH | Lo que ya hay impreso, de referencia |
+| IMPRIMIR AM | En blanco |
+| IMPRIMIR PM | En blanco |
+| TOTAL | En blanco |
+
+Las tres últimas van vacías a propósito: ahí se anota a mano lo que de verdad salió en cada
+turno. Por eso no están en la tabla de trabajo —no son cálculo, son lo que se escribe en el
+papel—. Una clave que hoy no lleva nada ni tiene OH no aparece.
+
+Sale de dos formas, con el mismo contenido: **Orden en ¼ de carta** da el PDF vertical, del
+tamaño que se lleva en la mano, con los renglones altos para poder escribir; **Orden para
+WhatsApp** da la imagen, que el teléfono manda directo y los demás equipos descargan.
+
+**La hoja completa** es la tabla entera en PDF, en **carta acostada** y de margen a margen.
+Como son trece columnas y el catálogo entero, la letra se parte en hojas antes que achicarse:
+si los renglones no caben cómodos en una, salen dos con el encabezado repetido y el total al
+pie de la última. En la pantalla dice cuántas hojas salieron.
 
 ## Pedidos y preventa
 

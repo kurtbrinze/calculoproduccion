@@ -173,7 +173,11 @@
           <input class="inqq" inputmode="decimal" id="inMu1" style="width:140px"></div>
         <div class="campo" style="margin-left:auto;align-items:flex-end">
           <label>&nbsp;</label>
-          <button class="btn" id="btnBolsaPdf" type="button">PDF para imprimir</button></div>
+          <div class="fila" style="gap:8px;margin:0">
+            <button class="btn" id="btnOrdenImg" type="button">Orden para WhatsApp</button>
+            <button class="btn sec" id="btnOrdenPdf" type="button">Orden en ¼ de carta</button>
+            <button class="btn ghost" id="btnBolsaPdf" type="button">Hoja completa PDF</button>
+          </div></div>
       </div>
       <p class="sub" style="margin-bottom:0">
         Los quintales salen solos del reparto. Cada clave dice, turno por turno, si cuentan para
@@ -182,6 +186,12 @@
         <b>A IMPRIMIR</b> los suma. Lo único que se escribe acá es el OH, las claves que se
         cuentan a mano y las unidades de MU1. Enter y Tab bajan por la misma columna. Esta hoja
         <b>no se sincroniza</b>: se queda en este equipo.
+      </p>
+      <p class="sub" style="margin:9px 0 0">
+        La <b>orden</b> es el papel corto que se manda a imprimir: una línea por clave con lo que
+        va y el OH, y las casillas <b>IMPRIMIR AM</b>, <b>IMPRIMIR PM</b> y <b>TOTAL</b> en blanco
+        para anotar a mano lo que de verdad salió. Sale en ¼ de carta vertical o en imagen para
+        WhatsApp. La <b>hoja completa</b> es ésta de abajo, en carta acostada.
       </p>
     </div>
     <div class="kpis" id="kpisBolsa"></div>

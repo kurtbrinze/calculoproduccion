@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.34';
+  const VERSION = 'V.2026.35';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2572,11 +2572,31 @@
        para escribir encima sin tener que borrar. */
     $('#btnBolsaPdf').onclick = async () => {
       try {
-        const { blob, nombre } = window.Bolsa.pdf(ui.fechaBolsa);
+        const { blob, nombre, hojas } = window.Bolsa.pdf(ui.fechaBolsa);
         const r = await descargar(blob, nombre, window.Archivo.TIPO_PDF);
         if (r.modo === 'cancelado') return;
-        aviso(`PDF guardado${donde(r)}.`);
+        aviso(`Hoja completa guardada${donde(r)}: carta acostada`
+          + (hojas > 1 ? `, ${hojas} hojas.` : '.'));
       } catch (err) { aviso('No se pudo armar el PDF: ' + err.message, 'err'); }
+    };
+    $('#btnOrdenPdf').onclick = async () => {
+      try {
+        const { blob, nombre, lineas } = window.Bolsa.ordenPdf(ui.fechaBolsa);
+        if (!lineas) { aviso('Todavía no hay nada que imprimir ese día.', 'warn'); return; }
+        const r = await descargar(blob, nombre, window.Archivo.TIPO_PDF);
+        if (r.modo === 'cancelado') return;
+        aviso(`Orden guardada${donde(r)}: ${lineas} claves en ¼ de carta.`);
+      } catch (err) { aviso('No se pudo armar la orden: ' + err.message, 'err'); }
+    };
+    $('#btnOrdenImg').onclick = async () => {
+      try {
+        const R = window.Resumen;
+        const { cv, nombre, lineas } = window.Bolsa.ordenImagen(ui.fechaBolsa);
+        if (!lineas) { aviso('Todavía no hay nada que imprimir ese día.', 'warn'); return; }
+        const res = await R.compartir(await R.aBlob(cv), nombre, 'Impresión de bolsa');
+        aviso(res === 'compartido' ? 'Orden compartida.'
+          : (res === 'cancelado' ? 'Cancelado.' : `Orden ${res}.`));
+      } catch (err) { aviso('No se pudo armar la imagen: ' + err.message, 'err'); }
     };
 
     // cálculos secundarios
