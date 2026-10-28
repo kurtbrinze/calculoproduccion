@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.42';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.42';`
+1. `js/ui.js` → `const VERSION = 'V.2026.43';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.43';`
 
 ## Plantas, claves y productos nuevos
 
@@ -434,12 +434,19 @@ letra, y los totales ya están en la pantalla, arriba de la tabla.
 
 La pestaña **Pedidos** lleva la preventa del día y los pedidos especiales en la misma tabla.
 
-**Se captura en unidades y el app saca las bolsas.** El selector trae las 75 presentaciones con
-que llegan los pedidos —`20CZ5`, `15PL1U`, `CZ5Gr`…—, ordenadas por uso para que lo frecuente
-quede arriba. Cada una sabe cuántas unidades lleva su bolsa y cuántas bolsas su parrilla, y a
-qué clave del catálogo le pega. Debajo del formulario se ve en qué se convierte lo que se está
-pidiendo: *2,000 unidades de 20 = 100 bolsas · 16.67 parrillas · va a CZ3*. Las claves del
-catálogo que no tienen presentación salen al final del selector y se piden en bolsas.
+**Se captura como venga el pedido.** Un selector al lado de la cantidad dice en qué viene:
+**unidades**, **bolsas** o **parrillas**, y el app hace la conversión y guarda las tres lecturas.
+Sólo se ofrecen las que esa presentación puede convertir: las unidades si la bolsa lleva más de
+una, y las parrillas si el catálogo dice cuántas bolsas caben. Debajo del formulario se ve la
+cuenta hecha antes de agregar.
+
+El selector de producto trae las 75 presentaciones con que llegan los pedidos —`20CZ5`,
+`15PL1U`, `CZ5Gr`…—, ordenadas por uso para que lo frecuente quede arriba. Cada una sabe
+cuántas unidades lleva su bolsa y cuántas bolsas su parrilla, y a qué clave del catálogo le
+pega: *2.5 parrillas = 10 bolsas · 150 unidades · va a 15PL1*. Las claves del catálogo que no
+tienen presentación salen al final del selector y sólo se piden en bolsas, porque no hay nada
+con qué convertir. La **bolsa** es la que mueve el cálculo; la unidad queda guardada para
+cotejar contra la hoja del cliente.
 
 **Sólo lo marcado mueve el cálculo.** La preventa de todos los días ya está dentro del promedio
 de venta, así que sumarla otra vez haría producir de más. Por eso el pedido entra apagado y sólo
@@ -585,6 +592,17 @@ por parrilla y su regla, y los camiones con su capacidad, sus parrillas de arras
 que salen. Las **parrillas de arrastre** son las vacías que vienen de vuelta y se restan de la
 capacidad; en temporada no se usan y se apagan con una casilla. Un camión sin días marcados no
 entra en el plan: así están el `5` y el `7`, que son de apoyo.
+
+## La calculadora
+
+Un botón redondo abajo a la derecha, en **Producción**, **Inventario**, **Pedidos** e
+**Impresión bolsa**, que son las pestañas donde se captura. Es una calculadora de las de
+siempre —las cuatro operaciones, porcentaje y borrado— para sacar una cuenta sin salir del app
+ni buscar el teléfono. No toca ningún dato: el resultado se lee, o se copia con el botón ⧉ y se
+pega donde haga falta.
+
+Con la ventana abierta el teclado es suyo: números, `+ - * /`, `%`, Enter para el igual,
+Backspace para borrar un dígito y Escape para cerrar.
 
 ## Feriados
 

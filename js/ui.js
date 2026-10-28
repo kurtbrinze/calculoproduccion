@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.42';
+  const VERSION = 'V.2026.43';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -704,17 +704,52 @@
   }
 
   /** La pista bajo el formulario: en qué se convierte lo que se está pidiendo. */
+  /**
+   * En qué puede venir la cantidad de ese producto. Las unidades sólo si la
+   * bolsa lleva más de una, y las parrillas sólo si el catálogo dice cuántas
+   * bolsas caben: ofrecer una unidad que no se puede convertir sería mentir.
+   */
+  function unidadesPedido(el) {
+    const out = [];
+    if (el && el.pres && el.uxb > 1) out.push(['uni', 'Unidades']);
+    out.push(['bol', 'Bolsas']);
+    if (el && el.pres && el.pres.bxp > 0) out.push(['parr', 'Parrillas']);
+    return out;
+  }
+
+  /** La cantidad escrita, pasada a bolsas y unidades. */
+  function convertirPedido(el, cant, unidad) {
+    const uxb = el && el.pres ? Math.max(1, Number(el.pres.uxb) || 1) : 1;
+    const bxp = el && el.pres ? Number(el.pres.bxp) || 0 : 0;
+    let bolsas;
+    if (unidad === 'uni') bolsas = Math.ceil(cant / uxb);
+    else if (unidad === 'parr' && bxp > 0) bolsas = Math.round(cant * bxp);
+    else bolsas = Math.round(cant);
+    return { bolsas, unidades: unidad === 'uni' ? Math.round(cant) : bolsas * uxb, uxb, bxp };
+  }
+
   function pistaPedido() {
     const el = elegidoPedido();
-    const cant = Math.max(0, Math.round(Number($('#pdBolsas').value) || 0));
-    $('#pdLblCant').textContent = el && el.pres && el.uxb > 1 ? 'Unidades' : 'Bolsas';
+    const cant = Math.max(0, Number($('#pdBolsas').value) || 0);
+    const ops = unidadesPedido(el);
+    const antes = $('#pdUnidad').value;
+    $('#pdUnidad').innerHTML = ops.map(([id, t]) => `<option value="${id}">${t}</option>`).join('');
+    /* Se respeta lo elegido si ese producto lo admite; si no, la primera. */
+    $('#pdUnidad').value = ops.some(([id]) => id === antes) ? antes : ops[0][0];
+    const unidad = $('#pdUnidad').value;
+
     if (!el) { $('#pdPista').textContent = 'Elegí un producto.'; return; }
+    const c = convertirPedido(el, cant, unidad);
     const partes = [];
-    if (el.pres && el.uxb > 1) {
-      const bolsas = cant ? Math.ceil(cant / el.uxb) : 0;
-      partes.push(`${n0(cant)} unidades de ${el.uxb} = <b>${n0(bolsas)} bolsas</b>`);
-      if (el.pres.bxp) partes.push(`${n2(C.redondea(bolsas / el.pres.bxp, 2))} parrillas`);
-    } else if (cant) partes.push(`<b>${n0(cant)} bolsas</b>`);
+    if (cant) {
+      const dicho = { uni: `${n0(cant)} unidades`, bol: `${n0(cant)} bolsas`,
+        parr: `${n2(cant)} parrillas` }[unidad];
+      const resto = [];
+      if (unidad !== 'bol') resto.push(`<b>${n0(c.bolsas)} bolsas</b>`);
+      if (unidad !== 'uni' && c.uxb > 1) resto.push(`${n0(c.unidades)} unidades`);
+      if (unidad !== 'parr' && c.bxp > 0) resto.push(`${n2(C.redondea(c.bolsas / c.bxp, 2))} parrillas`);
+      partes.push(resto.length ? `${dicho} = ${resto.join(' · ')}` : `<b>${dicho}</b>`);
+    }
     partes.push(el.clave
       ? `va a <b>${esc(el.clave)}</b>`
       : '<b>no entra al cálculo de producción</b>');
@@ -899,6 +934,91 @@
         Las bolsas por parrilla salen del catálogo de presentaciones, en Parámetros.
       </p>`;
   }
+
+  // ================= CALCULADORA =================
+  /* Una calculadora de las de toda la vida, a mano en las pestañas donde se
+     captura. No toca nada del app: es para sacar una cuenta y escribirla. */
+  const TABS_CALC = ['prod', 'inv', 'ped', 'bolsa'];
+  const maq = { acc: null, op: null, actual: '0', recien: false };
+
+  const calcNum = (s) => Number(String(s).replace(',', '.')) || 0;
+  const calcMuestra = (v) => {
+    if (!isFinite(v)) return 'error';
+    const r = Math.round(v * 1e10) / 1e10;
+    return Number.isInteger(r) ? r.toLocaleString('es-GT')
+      : r.toLocaleString('es-GT', { maximumFractionDigits: 6 });
+  };
+
+  function calcPintar() {
+    const SIG = { '+': '+', '-': '−', '*': '×', '/': '÷' };
+    $('#calcValor').textContent = maq.error ? 'error'
+      : (maq.actual === '0' || /[.]$/.test(maq.actual)
+        ? maq.actual : calcMuestra(calcNum(maq.actual)));
+    $('#calcCuenta').textContent = maq.op
+      ? `${calcMuestra(maq.acc)} ${SIG[maq.op]}` : '';
+  }
+
+  function calcOpera(a, op, b) {
+    if (op === '+') return a + b;
+    if (op === '-') return a - b;
+    if (op === '*') return a * b;
+    if (op === '/') return b === 0 ? NaN : a / b;
+    return b;
+  }
+
+  function calcTecla(k) {
+    /* Tras un error no se sigue sumando sobre basura: la primera tecla que se
+       toque arranca de cero, como en cualquier calculadora. */
+    if (maq.error) {
+      maq.error = false; maq.acc = null; maq.op = null; maq.actual = '0'; maq.recien = false;
+      if (k === 'C' || k === 'back' || k === '=') { calcPintar(); return; }
+    }
+    if (/^[0-9]$/.test(k)) {
+      maq.actual = maq.actual === '0' || maq.recien ? k : maq.actual + k;
+      maq.recien = false;
+    } else if (k === '.') {
+      if (maq.recien) { maq.actual = '0.'; maq.recien = false; }
+      else if (!maq.actual.includes('.')) maq.actual += '.';
+    } else if (k === 'C') {
+      maq.acc = null; maq.op = null; maq.actual = '0'; maq.recien = false; maq.error = false;
+    } else if (k === 'back') {
+      if (maq.recien) { maq.actual = '0'; maq.recien = false; }
+      else maq.actual = maq.actual.length > 1 ? maq.actual.slice(0, -1) : '0';
+    } else if (k === '%') {
+      /* Como las calculadoras de mano: el porcentaje se toma del acumulado
+         si hay una operación en curso, y si no, del número tal cual. */
+      const n = calcNum(maq.actual);
+      maq.actual = String(maq.op != null ? (maq.acc * n) / 100 : n / 100);
+      maq.recien = true;
+    } else if (['+', '-', '*', '/'].includes(k)) {
+      const n = calcNum(maq.actual);
+      const r = maq.op != null && !maq.recien ? calcOpera(maq.acc, maq.op, n) : n;
+      if (!isFinite(r)) { maq.error = true; maq.acc = null; maq.op = null; calcPintar(); return; }
+      maq.acc = r; maq.op = k; maq.recien = true;
+      maq.actual = String(r);
+    } else if (k === '=') {
+      if (maq.op != null) {
+        const r = calcOpera(maq.acc, maq.op, calcNum(maq.actual));
+        maq.acc = null; maq.op = null; maq.recien = true;
+        if (!isFinite(r)) { maq.error = true; calcPintar(); return; }
+        maq.actual = String(r);
+      }
+    }
+    calcPintar();
+  }
+
+  async function calcCopiar() {
+    const txt = String(calcMuestra(calcNum(maq.actual))).replace(/[^0-9.,-]/g, '');
+    try { await navigator.clipboard.writeText(txt); aviso(`Copiado: ${txt}`); }
+    catch (_) { aviso('Este equipo no deja copiar solo; el número está a la vista.', 'warn'); }
+  }
+
+  function calcAbrir() {
+    $('#calc').style.display = 'grid';
+    calcPintar();
+  }
+  const calcCerrar = () => { $('#calc').style.display = 'none'; };
+  const calcAbierta = () => $('#calc').style.display === 'grid';
 
   // ================= TRASLADOS A ZONA 2 =================
   /**
@@ -2682,6 +2802,10 @@
         $(tabs[x]).setAttribute('aria-selected', String(x === k));
       });
       try { localStorage.setItem('panprod_tab', k); } catch (_) {}
+      /* La calculadora sólo asoma donde se captura; en Historial o Parámetros
+         no hay nada que sumar y sólo taparía la pantalla. */
+      $('#btnCalc').hidden = !TABS_CALC.includes(k);
+      if ($('#btnCalc').hidden) calcCerrar();
       if (k === 'prod') pintarProduccion();
       if (k === 'inv') pintarInventario();
       if (k === 'ped') pintarPedidos();
@@ -2725,15 +2849,20 @@
       if (!cant || Number.isNaN(cant) || cant <= 0) {
         aviso('La cantidad tiene que ser un número mayor que cero.', 'err'); $('#pdBolsas').focus(); return;
       }
-      /* Con presentación se captura en unidades y el app saca las bolsas; una
-         clave suelta se pide en bolsas y no hay nada que convertir. */
-      const enUnidades = !!(el.pres && el.uxb > 1);
+      /* El pedido viene como viene —unidades, bolsas o parrillas— y acá se
+         pasa a las dos que se guardan: la bolsa, que es con la que calcula el
+         app, y la unidad, que es con la que se coteja la hoja del cliente. */
+      const unidad = $('#pdUnidad').value;
+      const c = convertirPedido(el, cant, unidad);
+      if (!c.bolsas) {
+        aviso('Esa cantidad no llega ni a una bolsa.', 'err'); $('#pdBolsas').focus(); return;
+      }
       const p = D.nuevoPedido({
         fecha, cliente: $('#pdCliente').value,
         codigo: el.pres ? el.pres.cod : '',
         clave: el.clave,
-        unidades: enUnidades ? cant : 0,
-        bolsas: enUnidades ? null : cant,
+        unidades: c.unidades,
+        bolsas: c.bolsas,
         cuenta: $('#pdCuenta').checked,
       });
       D.guardarPedidos();
@@ -2741,11 +2870,12 @@
       $('#pdBolsas').value = '';
       pintarPedidos(); pintarProduccion();
       const quien = el.pres ? el.pres.cod : el.clave;
-      aviso(`${quien}: ${enUnidades ? `${n0(cant)} unidades = ` : ''}${n0(p.bolsas)} bolsas `
+      const dicho = { uni: `${n0(cant)} unidades = `, parr: `${n2(cant)} parrillas = `, bol: '' }[unidad];
+      aviso(`${quien}: ${dicho}${n0(p.bolsas)} bolsas `
         + `para ${D.fechaCorta(fecha)}${p.cuenta ? ', suman al sugerido' : ''}.`);
       $('#pdBolsas').focus();
     };
-    ['#pdClave', '#pdBolsas'].forEach((s) => {
+    ['#pdClave', '#pdBolsas', '#pdUnidad'].forEach((s) => {
       $(s).addEventListener('input', pistaPedido);
       $(s).addEventListener('change', pistaPedido);
     });
@@ -2755,6 +2885,32 @@
 
     $('#btnResumen').onclick = () => window.Resumen.abrir(ui.fecha, aviso);
     $('#btnTraslado').onclick = () => abrirTraslado(ui.fecha);
+
+    $('#btnCalc').onclick = calcAbrir;
+    $('#calcCerrar').onclick = calcCerrar;
+    $('#calc').addEventListener('click', (e) => { if (e.target.id === 'calc') calcCerrar(); });
+    $('#calcTec').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-k]');
+      if (!b) return;
+      if (b.dataset.k === 'copiar') calcCopiar(); else calcTecla(b.dataset.k);
+    });
+    /* Con la calculadora abierta el teclado es suyo: así se teclea la cuenta
+       de corrido sin tener que apuntarle a los botones. */
+    document.addEventListener('keydown', (e) => {
+      if (!calcAbierta()) return;
+      const k = e.key;
+      if (k === 'Escape') { calcCerrar(); return; }
+      let t = null;
+      if (/^[0-9.]$/.test(k)) t = k;
+      else if (k === ',') t = '.';
+      else if (['+', '-', '*', '/', '%'].includes(k)) t = k;
+      else if (k === 'Enter' || k === '=') t = '=';
+      else if (k === 'Backspace') t = 'back';
+      else if (k === 'Delete' || k.toLowerCase() === 'c') t = 'C';
+      if (!t) return;
+      e.preventDefault();
+      calcTecla(t);
+    });
     $('#btnLimpiar').onclick = () => {
       C.limpiarReparto(reg()); ui.sinCupo = null; ui.sinTurnoHoy = null; D.guardarDias(); pintarProduccion(); aviso('Reparto borrado.');
     };

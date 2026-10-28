@@ -123,7 +123,8 @@
     <div class="card" style="margin-bottom:14px">
       <h3>Pedidos y preventa</h3>
       <p class="sub">
-        Se captura en unidades, como lo pide el cliente, y el app saca las bolsas. La preventa de
+        Se captura como venga el pedido —en unidades, en bolsas o en parrillas— y el app hace la
+        conversión. La preventa de
         todos los días ya está dentro del promedio de venta, así que <b>no mueve el cálculo</b>:
         sólo lo que marques con «Suma al sugerido» se cuenta de más. Eso se suma al consumo del
         día de entrega y entra al sugerido cuando la próxima corrida ya no alcanzaría a
@@ -137,8 +138,10 @@
           <datalist id="pdClientes"></datalist></div>
         <div class="campo"><label for="pdClave">Producto</label>
           <select id="pdClave" style="min-width:230px"></select></div>
-        <div class="campo"><label for="pdBolsas" id="pdLblCant">Unidades</label>
-          <input type="number" id="pdBolsas" inputmode="numeric" min="1" step="1" style="width:120px"></div>
+        <div class="campo"><label for="pdBolsas" id="pdLblCant">Cantidad</label>
+          <input type="number" id="pdBolsas" inputmode="decimal" min="0" step="any" style="width:120px"></div>
+        <div class="campo"><label for="pdUnidad">En</label>
+          <select id="pdUnidad" style="min-width:120px"></select></div>
         <div class="campo"><label>&nbsp;</label>
           <label class="sw" style="height:36px" title="Sólo los marcados suman al sugerido de producción">
             <input type="checkbox" id="pdCuenta"> Suma al sugerido</label></div>
@@ -299,12 +302,50 @@
   </section>
 </div>
 
+<button class="btn calcbtn" id="btnCalc" type="button" title="Calculadora"
+  aria-label="Abrir la calculadora" hidden>=</button>
+
 <div class="bar">
   <div class="in">
     <span class="info" id="barInfo"></span>
     <button class="btn sec" id="btnSync" type="button" hidden>Sincronizar</button>
     <button class="btn sec" id="btnReiniciar" type="button">Empezar de nuevo</button>
     <button class="btn" id="btnGuardarDia" type="button">Guardar el día</button>
+  </div>
+</div>
+
+<div class="modal" id="calc" role="dialog" aria-modal="true" aria-label="Calculadora">
+  <div class="caja calcaja">
+    <div class="fila" style="align-items:center;margin-bottom:10px">
+      <h3 style="margin:0">Calculadora</h3>
+      <button class="btn sec mini" type="button" id="calcCerrar" style="margin-left:auto">Cerrar</button>
+    </div>
+    <div class="calcvista">
+      <span class="cuenta" id="calcCuenta"></span>
+      <span class="valor" id="calcValor">0</span>
+    </div>
+    <div class="calctec" id="calcTec">
+      <button type="button" class="sec2" data-k="C">C</button>
+      <button type="button" class="sec2" data-k="back">⌫</button>
+      <button type="button" class="sec2" data-k="%">%</button>
+      <button type="button" class="op" data-k="/">÷</button>
+      <button type="button" data-k="7">7</button>
+      <button type="button" data-k="8">8</button>
+      <button type="button" data-k="9">9</button>
+      <button type="button" class="op" data-k="*">×</button>
+      <button type="button" data-k="4">4</button>
+      <button type="button" data-k="5">5</button>
+      <button type="button" data-k="6">6</button>
+      <button type="button" class="op" data-k="-">−</button>
+      <button type="button" data-k="1">1</button>
+      <button type="button" data-k="2">2</button>
+      <button type="button" data-k="3">3</button>
+      <button type="button" class="op" data-k="+">+</button>
+      <button type="button" data-k="0">0</button>
+      <button type="button" data-k=".">.</button>
+      <button type="button" class="sec2" data-k="copiar" title="Copiar el resultado">⧉</button>
+      <button type="button" class="ig" data-k="=">=</button>
+    </div>
   </div>
 </div>
 

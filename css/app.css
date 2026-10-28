@@ -424,6 +424,27 @@ td.conped{color:var(--accent-2)}
 .fuente.apagada>span{color:var(--muted)}
 /* El cruce de pedidos por día y clave: la columna de la clave se queda fija
    al desplazar de lado, que con muchos días la tabla se va a la derecha. */
+/* ---------- calculadora ---------- */
+/* Botón flotante encima de la barra, a la mano del pulgar en la tablet. */
+.calcbtn{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));z-index:25;
+  width:52px;height:52px;padding:0;border-radius:50%;font-size:1.35rem;font-weight:700;
+  box-shadow:0 8px 22px rgba(0,0,0,.45)}
+.calcaja{width:min(330px,calc(100vw - 32px))}
+.calcvista{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-lg);
+  padding:12px 14px;margin-bottom:12px;text-align:right;overflow:hidden}
+.calcvista .cuenta{display:block;min-height:1.1em;font-size:.84rem;color:var(--muted);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calcvista .valor{display:block;font-size:1.9rem;font-weight:700;line-height:1.25;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calctec{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.calctec button{height:50px;border-radius:12px;border:1px solid var(--line-2);
+  background:var(--surface-2);color:var(--ink);font-size:1.05rem;font-weight:600;cursor:pointer}
+.calctec button:hover{background:var(--surface-3)}
+.calctec button.op{color:var(--accent)}
+.calctec button.ig{background:linear-gradient(135deg,var(--accent),var(--accent-2,var(--accent)));
+  color:#0c1420;border-color:transparent}
+.calctec button.sec2{color:var(--muted)}
+
 table.resped td:first-child{position:sticky;left:0;background:var(--surface);z-index:1}
 table.resped th:first-child{left:0;z-index:3}
 table.resped tfoot td:first-child{background:var(--surface)}
