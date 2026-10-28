@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.43';
+  const VERSION = 'V.2026.44';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -678,28 +678,35 @@
    * claves del catálogo que no tienen presentación, para que nada quede sin
    * poder pedirse. El valor lleva el prefijo que dice cuál de las dos es.
    */
+  /**
+   * La lista del campo de clave: sólo la clave, nada más. La descripción y a
+   * qué clave madre va salen debajo una vez elegida, que es cuando sirven; en
+   * la lista sólo estorbaban para encontrar lo que se busca.
+   */
   function opcionesPedido() {
     const conPres = new Set();
-    const pres = D.presentaciones().map((p) => {
+    const pres = D.presentacionesPorUso().map((p) => {
       if (p.clave) conPres.add(p.clave);
-      const dest = p.clave ? p.clave : 'no entra al cálculo';
-      return `<option value="c:${esc(p.cod)}">${esc(p.cod)} · ${esc(p.desc)} — ${esc(dest)}</option>`;
+      return `<option value="${esc(p.cod)}"></option>`;
     }).join('');
     const sueltas = D.activos().filter((p) => !conPres.has(p.clave))
-      .map((p) => `<option value="k:${esc(p.clave)}">${esc(p.clave)}${p.alias ? ` · ${esc(p.alias)}` : ''} — en bolsas</option>`)
-      .join('');
-    return `<optgroup label="Presentaciones de preventa">${pres}</optgroup>`
-      + (sueltas ? `<optgroup label="Otras claves, en bolsas">${sueltas}</optgroup>` : '');
+      .map((p) => `<option value="${esc(p.clave)}"></option>`).join('');
+    return pres + sueltas;
   }
 
   /** Lo elegido en el formulario, ya resuelto a presentación o clave suelta. */
+  /**
+   * Lo escrito en el campo de clave, resuelto. Se compara sin distinguir
+   * mayúsculas —nadie va a teclear `CZ5Gr` con la G grande— y primero contra
+   * las presentaciones, que son las que se piden; si no, contra el catálogo.
+   */
   function elegidoPedido() {
-    const v = $('#pdClave').value || '';
-    if (v.startsWith('c:')) {
-      const p = D.presentacionDe(v.slice(2));
-      return p ? { pres: p, clave: p.clave, uxb: p.uxb || 1 } : null;
-    }
-    if (v.startsWith('k:')) return { pres: null, clave: v.slice(2), uxb: 1 };
+    const v = String($('#pdClave').value || '').trim().toLowerCase();
+    if (!v) return null;
+    const p = D.presentaciones().find((x) => String(x.cod).toLowerCase() === v);
+    if (p) return { pres: p, clave: p.clave, uxb: p.uxb || 1 };
+    const c = D.activos().find((x) => String(x.clave).toLowerCase() === v);
+    if (c) return { pres: null, clave: c.clave, uxb: 1 };
     return null;
   }
 
@@ -738,9 +745,24 @@
     $('#pdUnidad').value = ops.some(([id]) => id === antes) ? antes : ops[0][0];
     const unidad = $('#pdUnidad').value;
 
-    if (!el) { $('#pdPista').textContent = 'Elegí un producto.'; return; }
+    if (!el) {
+      const esc0 = String($('#pdClave').value || '').trim();
+      $('#pdPista').textContent = esc0
+        ? `No encuentro la clave «${esc0}». Desplegá el listado para verlas.`
+        : 'Tecleá la clave o desplegá el listado.';
+      return;
+    }
+    /* Lo tecleado se endereza a como se llama de verdad la clave: se escribe
+       `cz5gr` y queda `CZ5Gr`, que es lo que después se lee en la tabla. */
+    const cod = el.pres ? el.pres.cod : el.clave;
+    if ($('#pdClave').value !== cod && document.activeElement !== $('#pdClave')) {
+      $('#pdClave').value = cod;
+    }
     const c = convertirPedido(el, cant, unidad);
+    /* La descripción salió del listado, así que acá es donde confirma que se
+       eligió lo que se quería. */
     const partes = [];
+    if (el.pres && el.pres.desc) partes.push(`<b>${esc(el.pres.desc)}</b>`);
     if (cant) {
       const dicho = { uni: `${n0(cant)} unidades`, bol: `${n0(cant)} bolsas`,
         parr: `${n2(cant)} parrillas` }[unidad];
@@ -759,9 +781,7 @@
 
   function pintarPedidos() {
     const lista = D.pedidosLista();
-    const antes = $('#pdClave').value;
-    $('#pdClave').innerHTML = opcionesPedido();
-    if (antes) $('#pdClave').value = antes;
+    $('#pdClaves').innerHTML = opcionesPedido();
     $('#pdClientes').innerHTML = D.clientes().map((c) => `<option value="${esc(c)}">`).join('');
     if (!$('#pdFecha').value) $('#pdFecha').value = D.sumarDias(D.hoyISO(), 1);
     pistaPedido();
@@ -2845,7 +2865,7 @@
       const el = elegidoPedido();
       const cant = D.num($('#pdBolsas').value);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) { aviso('Falta el día de entrega.', 'err'); $('#pdFecha').focus(); return; }
-      if (!el) { aviso('Falta el producto.', 'err'); $('#pdClave').focus(); return; }
+      if (!el) { aviso('Esa clave no existe. Desplegá el listado para verlas.', 'err'); $('#pdClave').focus(); return; }
       if (!cant || Number.isNaN(cant) || cant <= 0) {
         aviso('La cantidad tiene que ser un número mayor que cero.', 'err'); $('#pdBolsas').focus(); return;
       }
@@ -2867,17 +2887,28 @@
       });
       D.guardarPedidos();
       /* La fecha y el cliente se quedan: un pedido suele traer varias claves. */
+      /* La clave se limpia y queda el foco ahí: lo que sigue es otra clave del
+         mismo cliente, no la misma otra vez. */
       $('#pdBolsas').value = '';
+      $('#pdClave').value = '';
       pintarPedidos(); pintarProduccion();
       const quien = el.pres ? el.pres.cod : el.clave;
       const dicho = { uni: `${n0(cant)} unidades = `, parr: `${n2(cant)} parrillas = `, bol: '' }[unidad];
       aviso(`${quien}: ${dicho}${n0(p.bolsas)} bolsas `
         + `para ${D.fechaCorta(fecha)}${p.cuenta ? ', suman al sugerido' : ''}.`);
-      $('#pdBolsas').focus();
+      $('#pdClave').focus();
     };
     ['#pdClave', '#pdBolsas', '#pdUnidad'].forEach((s) => {
       $(s).addEventListener('input', pistaPedido);
       $(s).addEventListener('change', pistaPedido);
+    });
+    $('#pdClave').addEventListener('blur', pistaPedido);
+    /* Enter en la clave pasa a la cantidad, que es el orden de captura. */
+    $('#pdClave').addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      pistaPedido();
+      $('#pdBolsas').focus();
     });
     $('#pdBolsas').addEventListener('keydown', (e) => {
       if (e.key === 'Enter') { e.preventDefault(); $('#btnAgregarPed').click(); }

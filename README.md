@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.43';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.43';`
+1. `js/ui.js` → `const VERSION = 'V.2026.44';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.44';`
 
 ## Plantas, claves y productos nuevos
 
@@ -440,13 +440,22 @@ Sólo se ofrecen las que esa presentación puede convertir: las unidades si la b
 una, y las parrillas si el catálogo dice cuántas bolsas caben. Debajo del formulario se ve la
 cuenta hecha antes de agregar.
 
-El selector de producto trae las 75 presentaciones con que llegan los pedidos —`20CZ5`,
-`15PL1U`, `CZ5Gr`…—, ordenadas por uso para que lo frecuente quede arriba. Cada una sabe
-cuántas unidades lleva su bolsa y cuántas bolsas su parrilla, y a qué clave del catálogo le
-pega: *2.5 parrillas = 10 bolsas · 150 unidades · va a 15PL1*. Las claves del catálogo que no
-tienen presentación salen al final del selector y sólo se piden en bolsas, porque no hay nada
-con qué convertir. La **bolsa** es la que mueve el cálculo; la unidad queda guardada para
-cotejar contra la hoja del cliente.
+**La clave se teclea o se despliega.** El campo lleva las 75 presentaciones de preventa más
+las claves del catálogo que no tienen ninguna, y nada más que eso: la clave pelada, sin
+descripción y sin la clave madre. Con tres letras el listado ya se redujo a lo que se busca, y
+no distingue mayúsculas —`cz5gr` encuentra `CZ5Gr` y el campo se endereza solo—. Enter pasa a
+la cantidad.
+
+**El orden es el de uso**, contado sobre las 17,274 líneas de preventa del libro: `15PL1U`,
+`20CZ5`, `20CZ3`, `CZ5Gr`, `10PM3`… Las dos primeras son más de la mitad de los pedidos, así
+que abrir el listado casi siempre deja lo que se busca a la vista.
+
+Lo que la lista ya no dice sale debajo del formulario una vez elegida la clave, que es cuando
+sirve: *Pirujo de Leche Empacado 15 uni · 2.5 parrillas = 10 bolsas · 150 unidades · va a
+15PL1*. Las claves sin presentación sólo se piden en bolsas, porque no hay nada con qué
+convertir. La **bolsa** es la que mueve el cálculo; la unidad queda guardada para cotejar
+contra la hoja del cliente. Al agregar, la clave se limpia y el foco vuelve ahí: lo que sigue
+es otra clave del mismo cliente.
 
 **Sólo lo marcado mueve el cálculo.** La preventa de todos los días ya está dentro del promedio
 de venta, así que sumarla otra vez haría producir de más. Por eso el pedido entra apagado y sólo

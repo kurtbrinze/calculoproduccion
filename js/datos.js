@@ -1172,6 +1172,30 @@
   const pedidosQueCuentan = (hoy) => pedidosVivos(hoy)
     .filter((p) => p.cuenta && p.clave && estado.params.prod[p.clave]);
 
+  /* Las presentaciones ordenadas por cuánto se piden, contado sobre las 17,274
+     líneas de preventa del libro. Lo frecuente arriba: así el listado se abre
+     con lo de todos los días a la vista y teclear tres letras casi siempre
+     alcanza. Lo que no esté acá va después, en el orden del catálogo. */
+  const ORDEN_PREVENTA = [
+    '15PL1U', '20CZ5', '20CZ3', 'CZ5Gr', '10PM3', '10HM5', '15PL1', '15CZ5', 'S19M', '16CZ5',
+    '24CZ5T', 'EN1', '10HR3', '24CZ3T', '20CZ5T', 'S19', '5HG7', '12QU1', 'MGND', '6MU1Am',
+    '12WY1', 'CG2N5', 'S16', '12MU2', 'ME4Ch', 'ME4V', 'S32', '10MA5M', 'MG4', '12ES2T',
+    'PS3MhD', 'MG4D', 'S11', 'S26', '10CHD', '10HD7', '12BLL', '12WYK+P', 'S25', '6CG2N',
+    '6HD12', '16PA1', '10EN4', '10CZ4', 'PS3MaD', '6PC4', '24ES1', 'MG1', 'PS3SuD', 'PS1_Pañ',
+    'CZ5', 'CZ3', '5ST2', '12WYK', 'MGN', 'PS1_Cor', '6MU1Ta', '6CG2V', '5HM4', 'CG2',
+    '5HD8', '10FP8', 'CHO5', 'PS5', 'S11T',
+  ];
+
+  /** Las presentaciones en el orden en que se piden. */
+  function presentacionesPorUso() {
+    const puesto = new Map(ORDEN_PREVENTA.map((c, i) => [c, i]));
+    return presentaciones().slice().sort((a, b) => {
+      const pa = puesto.has(a.cod) ? puesto.get(a.cod) : 9999;
+      const pb = puesto.has(b.cod) ? puesto.get(b.cod) : 9999;
+      return pa - pb;
+    });
+  }
+
   /** Clientes ya usados, para no escribir el mismo nombre de tres maneras. */
   const clientes = () => [...new Set(pedidosLista().map((p) => p.cliente).filter(Boolean))].sort();
 
@@ -1247,7 +1271,7 @@
     estado, guardarParams, guardarProm, guardarDias, guardarPedidos, guardarBolsa, leer, grabar,
     nuevoPedido, pedidosLista, pedidosVivos, pedidosQueCuentan, estadoPedido,
     clientes, ANTICIPACION, migrarPedidos, archivarPedidos, pedidosViejos,
-    PRESENTACIONES, presentaciones, presentacionDe, DIAS_ARCHIVO,
+    PRESENTACIONES, presentaciones, presentacionDe, presentacionesPorUso, ORDEN_PREVENTA, DIAS_ARCHIVO,
     misDefecto, fijarDefecto, borrarDefecto, hayDefecto, ESQUEMA,
     hoyISO, desdeISO, aISO, sumarDias, indiceDia, nombreDia, fechaCorta,
     registro, registroVacio, migrar, diaPrevio, produccionDe, turnosDe, porTurnoDe, porPlantaDe,
