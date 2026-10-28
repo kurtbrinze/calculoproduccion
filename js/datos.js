@@ -346,7 +346,9 @@
           S11:     { viaja: true,  uxp: 15, regla: 'conteo' },
           S32:     { viaja: true,  uxp: 8,  regla: 'conteo' },
           '10HR3': { viaja: true,  uxp: 48, regla: 'conteo' },
-          '12BLL': { viaja: true,  uxp: 21, regla: 'produccionAyer' },
+          /* El 12BLL baja ya empacado: la parrilla lleva bolsas, no panes
+             sueltos, así que las parrillas salen del catálogo y no del UxPSE. */
+          '12BLL': { viaja: true,  uxp: 21, regla: 'produccionAyer', empacado: true },
           '10PM3': { viaja: false, uxp: 6,  regla: 'conteo' },
           '10HD7': { viaja: false, uxp: 7,  regla: 'conteo' },
           '15PL1': { viaja: false, uxp: 64, regla: 'conteo' },
@@ -529,6 +531,7 @@
       out.traslado.claves[c] = {
         viaja: !!f.viaja,
         uxp: Math.max(0, Math.round(Number(f.uxp) || 0)),
+        empacado: !!f.empacado,
         regla: ['conteo', 'produccionAyer', 'siempre'].includes(f.regla) ? f.regla : 'conteo',
       };
     });

@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.41';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.41';`
+1. `js/ui.js` → `const VERSION = 'V.2026.42';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.42';`
 
 ## Plantas, claves y productos nuevos
 
@@ -561,18 +561,24 @@ VENTA   = la venta de hoy, la del día siguiente a ese conteo
 FALTAN  = VENTA − CONTEO, cuando el conteo se queda corto
 ```
 
-Esas bolsas se pasan a unidades con la presentación de la clave, y de ahí a parrillas con las
-**unidades sin empacar** que cabe una. Ése es un dato aparte: lo que viaja va sin empaque, así
-que una parrilla no lleva lo mismo que cuando el producto ya está en bolsa.
+Esas bolsas se pasan a unidades con la presentación de la clave, y de ahí a parrillas. Cómo se
+llena la parrilla depende de si la clave baja suelta o ya empacada, y eso se marca por clave:
+
+- **Suelta**: la parrilla lleva panes, y cuántos es un dato aparte —las *unidades sin empacar*
+  por parrilla—, porque sin bolsa el pan no se acomoda igual. Así bajan los sándwiches y el
+  10HR3.
+- **Empacada**: la parrilla lleva bolsas, y cuántas ya lo dice el catálogo de presentaciones.
+  Así baja el `12BLL`: 15 bolsas de 12 unidades, 180 unidades por parrilla.
 
 **Las claves van por urgencia**, no por tamaño del hueco: primero la que se vacía antes, medida
 como la parte del día que aguanta lo que quedó. Una clave que baja por otra regla —el `12BLL`,
 que baja cuando se produjo la noche anterior— va después, porque su urgencia no se mide así.
 
 **Los camiones se cargan en el orden en que salen.** De fábrica se completan primero las claves
-que caben enteras, porque llegar con media clave no resuelve el empaque; se puede cambiar a
-orden estricto en Parámetros. Lo que no cabe queda anotado como **queda para Zona 18**, que es
-donde se decide el resto. Todo sale en una imagen para WhatsApp.
+que caben enteras, porque llegar con media clave no resuelve el empaque, y una clave que cabe
+entera en algún camión no se parte entre dos; se puede cambiar a orden estricto en Parámetros.
+Lo que no cabe queda anotado como **queda para Zona 18**, que es donde se decide el resto. Todo
+sale en una imagen para WhatsApp.
 
 En Parámetros → Traslados a Zona 2 se ponen las dos tablas: qué claves bajan, con sus unidades
 por parrilla y su regla, y los camiones con su capacidad, sus parrillas de arrastre y los días

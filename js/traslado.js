@@ -23,13 +23,20 @@
 
   const cfg = () => D.estado.params.traslado || { claves: {}, camiones: [] };
 
-  /** Unidades que lleva una bolsa de esa clave, de su presentación principal. */
-  function uxbDe(clave) {
+  /** La presentación principal de la clave: la que se llama igual que ella. */
+  function presDe(clave) {
     const ps = D.presentaciones().filter((p) => p.clave === clave);
-    /* La presentación que se llama igual que la clave es la del producto
-       suelto; si no hay, vale la primera que le pegue. */
-    const p = ps.find((x) => x.cod === clave) || ps[0];
+    return ps.find((x) => x.cod === clave) || ps[0] || null;
+  }
+  /** Unidades que lleva una bolsa de esa clave. */
+  function uxbDe(clave) {
+    const p = presDe(clave);
     return p ? Math.max(1, Number(p.uxb) || 1) : 1;
+  }
+  /** Bolsas que lleva una parrilla del producto ya empacado. */
+  function bxpDe(clave) {
+    const p = presDe(clave);
+    return p ? Math.max(0, Number(p.bxp) || 0) : 0;
   }
 
   /** Los camiones que salen ese día, en el orden de la tabla. */
@@ -80,9 +87,13 @@
       if (bolsas <= 0) return;
 
       const uxb = uxbDe(clave);
-      const uxp = Number(k.uxp) || 0;
       const unidades = bolsas * uxb;
-      const parrillas = uxp > 0 ? Math.ceil(unidades / uxp) : 0;
+      /* Dos formas de llenar la parrilla. Si la clave baja empacada, la
+         parrilla lleva bolsas y el número sale del catálogo; si baja suelta,
+         lleva panes y el número es el UxPSE, que es otro dato. */
+      const bxp = bxpDe(clave);
+      const porParrilla = k.empacado ? bxp * uxb : (Number(k.uxp) || 0);
+      const parrillas = porParrilla > 0 ? Math.ceil(unidades / porParrilla) : 0;
       /* Cobertura: qué parte del día aguanta lo que quedó. Cuanto menos,
          antes se vacía y antes tiene que subir al camión. */
       /* Sólo tiene sentido para la regla del conteo: una clave que baja porque
@@ -94,9 +105,10 @@
         alias: (D.fichaPorClave(clave) || {}).alias || clave,
         regla: k.regla, motivo,
         conteo: Math.round(f.stockAyer), venta: Math.round(f.ventaHoy),
-        bolsas, uxb, uxp, unidades, parrillas,
+        bolsas, uxb, unidades, parrillas,
+        empacado: !!k.empacado, bxp, porParrilla,
         cobertura: cob == null ? null : r2(cob),
-        sinUxp: !(uxp > 0),
+        sinUxp: !(porParrilla > 0),
       });
     });
 
@@ -134,16 +146,26 @@
       cola = [...caben, ...parten];
     }
 
-    let i = 0;
+    const hueco = (cam) => cam.capacidad - cam.usado;
+    const poner = (cam, x, parrillas, partida) => {
+      cam.carga.push({ clave: x.clave, alias: x.alias, parrillas, partida });
+      cam.usado += parrillas;
+    };
+
     cola.forEach((x) => {
       let queda = x.parrillas;
-      while (queda > 0 && i < camiones.length) {
-        const cam = camiones[i];
-        const hueco = cam.capacidad - cam.usado;
-        if (hueco <= 0) { i++; continue; }
-        const pone = Math.min(hueco, queda);
-        cam.carga.push({ clave: x.clave, alias: x.alias, parrillas: pone, partida: pone < x.parrillas });
-        cam.usado += pone;
+      /* Partir una clave entre dos camiones sin necesidad sólo complica la
+         carga: si cabe entera en alguno, va entera. */
+      if (c.carga !== 'orden') {
+        const cabe = camiones.find((cam) => hueco(cam) >= queda);
+        if (cabe) { poner(cabe, x, queda, false); x.queda = 0; return; }
+      }
+      for (const cam of camiones) {
+        if (queda <= 0) break;
+        const h = hueco(cam);
+        if (h <= 0) continue;
+        const pone = Math.min(h, queda);
+        poner(cam, x, pone, pone < x.parrillas);
         queda -= pone;
       }
       x.queda = queda;
@@ -246,5 +268,5 @@
     return { cv, nombre: `Traslados Zona 2 ${R.fechaArchivo(fecha)}.png`, plan: p };
   }
 
-  window.Traslado = { faltantes, plan, camionesDe, imagen, uxbDe, cfg };
+  window.Traslado = { faltantes, plan, camionesDe, imagen, uxbDe, bxpDe, cfg };
 })();

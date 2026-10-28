@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.41';
+  const VERSION = 'V.2026.42';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -955,15 +955,19 @@
               el de urgencia: primero el que se vacía antes.</p></div>
           <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0">
           <table><thead><tr><th class="l">Clave</th><th>Conteo</th><th>Venta hoy</th>
-            <th>Faltan bolsas</th><th>Unidades</th><th>Uni × parrilla</th><th>Parrillas</th>
-            <th class="l">Por qué</th></tr></thead>
+            <th>Faltan bolsas</th><th>Unidades</th><th class="l">Cómo llena la parrilla</th>
+            <th>Parrillas</th><th class="l">Por qué</th></tr></thead>
           <tbody>${p.lista.map((f) => `<tr>
             <td class="l clave">${esc(f.alias)}</td>
             <td class="num dim">${n0(f.conteo)}</td>
             <td class="num dim">${n0(f.venta)}</td>
             <td class="num">${n0(f.bolsas)}</td>
             <td class="num dim">${n0(f.unidades)}</td>
-            <td class="num dim">${f.uxp || '—'}</td>
+            <td class="l dim">${f.porParrilla
+              ? (f.empacado
+                ? `empacado · ${n0(f.bxp)} bolsas = ${n0(f.porParrilla)} uni`
+                : `suelto · ${n0(f.porParrilla)} uni`)
+              : 'falta el dato'}</td>
             <td class="num"><b>${f.parrillas ? n0(f.parrillas) : '—'}</b></td>
             <td class="l dim">${esc(f.motivo)}</td></tr>`).join('')}</tbody>
           </table></div></div>` : '')
@@ -1863,22 +1867,32 @@
     const claves = Object.keys(t.claves || {})
       .sort((a, b) => Number(!!t.claves[b].viaja) - Number(!!t.claves[a].viaja) || a.localeCompare(b));
     cont.innerHTML = `<div class="tablabox"><table>
-      <thead><tr><th class="l">Clave</th><th>Baja</th><th style="width:110px">Uni × parrilla</th>
+      <thead><tr><th class="l">Clave</th><th>Baja</th><th>Empacado</th>
+        <th style="width:110px">Uni × parrilla</th>
         <th class="l">Regla</th><th class="l" style="width:100%"></th></tr></thead>
       <tbody>${claves.map((c) => {
         const k = t.claves[c];
         const alias = (D.fichaPorClave(c) || {}).alias;
+        const uxb = window.Traslado.uxbDe(c), bxp = window.Traslado.bxpDe(c);
+        const cabe = k.empacado ? bxp * uxb : (k.uxp || 0);
         return `<tr>
           <td class="l clave">${esc(c)}${alias && alias !== c ? `<span class="mini">${esc(alias)}</span>` : ''}</td>
           <td><label class="sw"><input type="checkbox" data-trv="${esc(c)}" ${k.viaja ? 'checked' : ''}
             aria-label="${esc(c)} baja a Zona 2"></label></td>
-          <td><input class="inqq" inputmode="numeric" data-tru="${esc(c)}" value="${k.uxp || ''}"
+          <td><label class="sw"><input type="checkbox" data-tre="${esc(c)}" ${k.empacado ? 'checked' : ''}
+            aria-label="${esc(c)} baja ya empacado"></label></td>
+          <td><input class="inqq${k.empacado ? ' na' : ''}" inputmode="numeric" data-tru="${esc(c)}"
+            ${k.empacado ? 'disabled tabindex="-1"' : ''} value="${k.uxp || ''}"
             placeholder="—" aria-label="Unidades sin empacar por parrilla de ${esc(c)}"></td>
           <td class="l"><select data-trr="${esc(c)}" aria-label="Regla de ${esc(c)}">
             ${REGLAS_TRAS.map(([id, n]) =>
               `<option value="${id}" ${k.regla === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}
           </select></td>
-          <td class="l dim">${k.viaja ? (k.uxp ? `${n0(k.uxp)} unidades por parrilla` : 'falta el dato de parrilla') : 'no baja'}</td>
+          <td class="l dim">${!k.viaja ? 'no baja'
+            : (k.empacado
+              ? (bxp ? `${n0(bxp)} bolsas por parrilla, del catálogo = ${n0(cabe)} unidades`
+                     : 'el catálogo no dice bolsas por parrilla')
+              : (cabe ? `${n0(cabe)} unidades sueltas por parrilla` : 'falta el dato de parrilla'))}</td>
         </tr>`;
       }).join('')}</tbody></table></div>`;
 
@@ -2590,10 +2604,11 @@
       else tr.carga = t.value === 'orden' ? 'orden' : 'completos';
       D.guardarParams(); pintarTraslado(); return true;
     }
-    else if (d.trv || d.tru || d.trr) {
-      const c = d.trv || d.tru || d.trr;
+    else if (d.trv || d.tru || d.trr || d.tre) {
+      const c = d.trv || d.tru || d.trr || d.tre;
       const k = P.traslado.claves[c] || (P.traslado.claves[c] = { viaja: false, uxp: 0, regla: 'conteo' });
       if (d.trv) k.viaja = v;
+      else if (d.tre) k.empacado = v;
       else if (d.tru) k.uxp = Math.max(0, Math.round(num(v, 0)));
       else k.regla = ['conteo', 'produccionAyer', 'siempre'].includes(t.value) ? t.value : 'conteo';
       D.guardarParams(); pintarTraslado(); return true;
