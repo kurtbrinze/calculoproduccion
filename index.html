@@ -71,6 +71,10 @@
           <label>&nbsp;</label>
           <button class="btn ghost" id="btnResumen" type="button">Resumen del día</button>
         </div>
+        <div class="campo">
+          <label>&nbsp;</label>
+          <button class="btn ghost" id="btnTraslado" type="button">Traslados a Zona 2</button>
+        </div>
         <div class="campo" style="margin-left:auto;align-items:flex-end">
           <label id="lblDia">&nbsp;</label>
           <span class="dim" id="lblCubrir"></span>
@@ -154,13 +158,17 @@
     <div class="card" style="margin-top:14px">
       <div class="fila" style="align-items:center">
         <div>
-          <h3 style="margin:0 0 4px">Resumen por día y clave</h3>
+          <h3 style="margin:0 0 4px">Resumen de un día</h3>
           <p class="sub" style="margin:0">
-            Lo mismo de arriba, juntado: una fila por clave y una columna por día de entrega.
-            Sigue el filtro de la lista, así que lo que se ve en la tabla es lo que suma acá.
+            Lo pedido para ese día, junto: una fila por <b>presentación</b> tal como la compra el
+            cliente —15PL1U y 15PL1 van en líneas distintas— con sus bolsas y en cuántas parrillas
+            caben. Este día se elige acá y no depende del día a producir.
           </p>
         </div>
-        <div class="fila" style="margin-left:auto;gap:6px" id="pedResUnidad"></div>
+        <div class="campo" style="margin-left:auto;align-items:flex-end">
+          <label for="pedResFecha">Día de entrega</label>
+          <input type="date" id="pedResFecha" style="min-width:160px">
+        </div>
       </div>
       <div id="pedResumen"></div>
     </div>
@@ -178,9 +186,10 @@
         <div class="campo" style="margin-left:auto;align-items:flex-end">
           <label>&nbsp;</label>
           <div class="fila" style="gap:8px;margin:0">
-            <button class="btn" id="btnOrdenImg" type="button">Orden para WhatsApp</button>
-            <button class="btn sec" id="btnOrdenPdf" type="button">Orden en ¼ de carta</button>
-            <button class="btn ghost" id="btnBolsaPdf" type="button">Hoja completa PDF</button>
+            <button class="btn" id="btnOrdenImg" type="button">Orden imagen</button>
+            <button class="btn sec" id="btnOrdenPdf" type="button">Orden PDF</button>
+            <button class="btn" id="btnHojaImg" type="button">Hoja imagen</button>
+            <button class="btn sec" id="btnBolsaPdf" type="button">Hoja PDF</button>
           </div></div>
       </div>
       <p class="sub" style="margin-bottom:0">
@@ -211,18 +220,6 @@
   <!-- ============ CALCULOS SECUNDARIOS ============ -->
   <section class="panel" id="pSec" role="tabpanel" aria-labelledby="tabSec" hidden>
     <div class="card" style="margin-bottom:14px">
-      <h3>Conteo de CZ5</h3>
-      <p class="sub">
-        El CZ5 no se cuenta por clave sino por empaque, y no es un producto del catálogo: en
-        producción es CZ3 con empaque individual. Se anota lo que se empacó hoy y lo que quedó en
-        el conteo de la tarde, cada cosa en su empaque; el app lo pasa a unidades y saca la venta
-        del día. Lo que quedó anoche es lo que hay esta mañana, así que esa casilla no se escribe.
-        Va por el <b>día a producir</b> y sí se guarda en el día, al revés que las conversiones
-        de abajo.
-      </p>
-      <div id="cz5Cont"></div>
-    </div>
-    <div class="card" style="margin-bottom:14px">
       <div class="fila">
         <div>
           <h3 style="margin:0 0 4px">Cálculos secundarios</h3>
@@ -237,6 +234,18 @@
           <label>&nbsp;</label>
           <button class="btn sec" id="btnSecLimpiar" type="button">Limpiar todo</button></div>
       </div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <h3>Conteo de CZ5</h3>
+      <p class="sub">
+        El CZ5 no se cuenta por clave sino por empaque, y no es un producto del catálogo: en
+        producción es CZ3 con empaque individual. Se anota lo que se empacó hoy y lo que quedó en
+        el conteo de la tarde, cada cosa en su empaque; el app lo pasa a unidades y saca la venta
+        del día. Lo que quedó anoche es lo que hay esta mañana, así que esa casilla no se escribe.
+        Va por el <b>día a producir</b> y sí se guarda en el día, al revés que las conversiones
+        de abajo.
+      </p>
+      <div id="cz5Cont"></div>
     </div>
     <div id="secCont"></div>
   </section>
@@ -324,6 +333,7 @@
 <script src="js/archivo.js"></script>
 <script src="js/resumen.js"></script>
 <script src="js/venta.js"></script>
+<script src="js/traslado.js"></script>
 <script src="js/bolsa.js"></script>
 <script src="js/secundarios.js"></script>
 <script src="js/sync.js"></script>

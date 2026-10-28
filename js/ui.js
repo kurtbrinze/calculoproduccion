@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.40';
+  const VERSION = 'V.2026.41';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -17,7 +17,7 @@
     try { const f = localStorage.getItem('panprod_fecha'); return /^\d{4}-\d{2}-\d{2}$/.test(f || '') ? f : null; }
     catch (_) { return null; }
   })();
-  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5', pedResUnidad: 'bolsas' };
+  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5', pedResFecha: '' };
   const recordarFecha = () => { try { localStorage.setItem('panprod_fecha', ui.fecha); } catch (_) {} };
 
   // ---------- avisos ----------
@@ -206,16 +206,17 @@
       const ids = turnos.map((x) => x.id);
       const th = `<tr>
         ${th2('Clave', '', 'l')}
-        ${th2('Stock + prod', dAyer)}${th2('Teórico PM hoy', dHoy)}${th2('Sugerido QQ', dHoy)}
+        ${th2('Stock + prod', dAyer)}${th2('Teórico PM hoy', dHoy)}${th2('Sugerido QQ', 'hasta donde cabe')}
         ${turnos.map((x) => th2(x.nombre + (x.rota ? ` · ${D.momentoDeTurno(x.id, ui.fecha)}` : ''), dHoy)).join('')}
         ${th2('Decidido QQ', dHoy)}${th2('= Bolsas', dHoy)}
         ${th2('Teórico PM mañana', dMan)}${th2('Cobertura', '')}${th2('Alerta', '', 'l')}</tr>`;
-      const tb = filas.map((f) => filaProd(f, turnos, ids)).join('');
+      const tb = filas.map((f) => filaProd(f, turnos, ids, t.turnos)).join('');
       const sumArea = filas.reduce((a, f) => a + decididoEn(f, ids), 0);
       const bolsasArea = filas.reduce((a, f) => a + decididoEn(f, ids) * f.rend, 0);
       /* Fila de totales: el sugerido del área y lo que lleva cada turno. Es lo
-         que se mira para saber si la jornada cabe antes de guardar. */
-      const sugArea = filas.reduce((a, f) => a + f.sugeridoQQ, 0);
+         que se mira para saber si la jornada cabe antes de guardar. El sugerido
+         suma el que cabe, no la necesidad cruda: la cruda ya está arriba. */
+      const sugArea = filas.reduce((a, f) => a + sugeridoQueCabe(f, turnos, t.turnos), 0);
       const porTurno = turnos.map((x) =>
         C.redondea(filas.reduce((a, f) => a + (Number(f.asign[x.id]) || 0), 0), 2));
       /* La capacidad del área es la suma de los topes de sus turnos activos. */
@@ -317,8 +318,37 @@
     return C.redondea(ids.reduce((a, t) => a + (Number(f.asign[t]) || 0), 0), 2);
   }
 
-  function filaProd(f, turnos, ids) {
+  /**
+   * Lo más que esa clave podría producirse en esa área: la suma de los topes
+   * de sus turnos que trabajan ese día, y el máximo diario del producto si lo
+   * tiene. Un turno sin tope escrito no se cuenta como cero —sería apagar la
+   * clave por un parámetro en blanco— sino como sin límite.
+   */
+  function topeDeClave(clave, turnos, cupos) {
+    const cfg = D.estado.params.prod[clave] || {};
+    const suyos = turnos.filter((x) => D.puedeEnTurno(clave, x.id)
+      && C.turnoTrabaja(D.estado.params, x.id, ui.fecha));
+    let cap;
+    if (!suyos.length) cap = 0;
+    else if (suyos.some((x) => !(((cupos || {})[x.id] || {}).tope > 0))) cap = Infinity;
+    else cap = suyos.reduce((a, x) => a + cupos[x.id].tope, 0);
+    const md = Number(cfg.maxDia) > 0 ? Number(cfg.maxDia) : Infinity;
+    return Math.min(cap, md);
+  }
+
+  /** El sugerido ya recortado a lo que de verdad cabe, al múltiplo de abajo. */
+  function sugeridoQueCabe(f, turnos, cupos) {
+    const tope = topeDeClave(f.clave, turnos, cupos);
+    if (!isFinite(tope)) return f.sugeridoQQ;
+    let v = Math.min(f.sugeridoQQ, tope);
+    const m = Number((D.estado.params.prod[f.clave] || {}).mult) || 0;
+    if (m > 0) v = Math.floor(v / m + 1e-9) * m;
+    return C.redondea(Math.max(0, v), 2);
+  }
+
+  function filaProd(f, turnos, ids, cupos) {
     const cfg = D.estado.params.prod[f.clave];
+    const sugCabe = sugeridoQueCabe(f, turnos, cupos);
     const cob = f.cobertura;
     const cobCls = cob == null ? '' : (cob < 1 ? 'baja' : (cob > f.cobMax ? 'alta' : ''));
     const chip = { OK: 'ok', FALTANTE: 'falta', EXCESO: 'exceso', 'TOPE VIDA UTIL': 'vida',
@@ -346,7 +376,9 @@
           <span class="mini">${n0(f.rend)} bolsas/QQ</span></button></td>
       <td class="num">${n0(f.disponible)}</td>
       <td class="num">${n0(f.teoricoHoy)}</td>
-      <td class="num sug ${f.sugeridoQQ ? '' : 'cero'}">${f.sugeridoQQ ? n2(f.sugeridoQQ) : '—'}</td>
+      <td class="num sug ${sugCabe ? '' : 'cero'}">${sugCabe ? n2(sugCabe) : '—'}
+        ${sugCabe < f.sugeridoQQ - 1e-9
+          ? `<span class="mini">de ${n2(f.sugeridoQQ)} que hacen falta</span>` : ''}</td>
       ${inputs}
       <td class="num"><b>${dec ? n2(dec) : '—'}</b>${otras}</td>
       <td class="num bolsas">${dec ? n0(dec * f.rend) : '—'}</td>
@@ -558,7 +590,44 @@
       </div>
       ${d.venta != null && d.venta < 0 ? `<div class="aviso warn" style="margin-top:10px">
         <h4>La venta sale negativa</h4><p>Quedó más de lo que había disponible. Suele ser que
-        falte anotar lo que se empacó hoy, o que el conteo de ayer haya quedado corto.</p></div>` : ''}`;
+        falte anotar lo que se empacó hoy, o que el conteo de ayer haya quedado corto.</p></div>` : ''}
+      ${bloqueCz3Cz5()}`;
+  }
+
+  /* El CZ3 / CZ5 de perchas va pegado al conteo: es la misma conversación
+     —cuánto CZ3 hay y cuánto se vuelve CZ5— y separarlos obligaba a bajar. */
+  function bloqueCz3Cz5() {
+    const S = window.Secundarios;
+    const datos = S.leer();
+    const cz = S.calcCz(datos.cz || {}, ui.fecha);
+    const inCz = (k, lbl) => `<input class="inqq" inputmode="decimal" enterkeyhint="next"
+      data-scz="${k}" value="${esc((datos.cz || {})[k] ?? '')}" aria-label="${esc(lbl)}">`;
+    const lineas = [
+      ['20CZ3', inCz('parr20', 'Parrillas de 20CZ3'), 'parrillas', `${n2(cz.b20)} bolsas`, ''],
+      ['CZ3 perchas (OH)', inCz('ohBolsas', 'Perchas OH'), 'perchas', `${n2(cz.ohParr)} parrillas`, ''],
+      [`Producción PM${cz.turnoPM ? ` · ${cz.turnoPM}` : ''}`, inCz('prodQQ', 'Quintales producidos PM'), 'QQ',
+        `${n2(cz.prodBolsas)} perchas`,
+        cz.manual ? 'escrito a mano' : (cz.prodQQauto ? `del reparto: ${n2(cz.prodQQauto)} QQ` : 'sin reparto ese día')],
+      ['CZ5', inCz('cz5Bolsas', 'Perchas de CZ5'), 'perchas', `${n2(cz.cz5Parr)} parrillas`, ''],
+      ['Empacar', inCz('empacar', 'A empacar'), 'perchas', '', ''],
+    ];
+    return `<h4 class="subrot" style="margin-top:18px">CZ3 / CZ5 (0134)</h4>
+      <p class="dim" style="font-size:.84rem;margin:0 2px 10px">
+        Una percha son ${S.PERCHA} parrillas; un quintal de CZ3 da ${n0(cz.rend)} bolsas y
+        ${S.CZ3_POR_PERCHA} bolsas hacen una percha.
+      </p>
+      <div class="tablabox"><table>
+        <thead><tr><th class="l">Fila</th><th>OH</th><th class="l">Unidad</th>
+          <th class="l">Equivale a</th><th class="l">De dónde</th></tr></thead>
+        <tbody>${lineas.map(([n, inp, u, eq, de]) => `<tr>
+          <td class="l clave">${esc(n)}</td><td>${inp}</td><td class="l dim">${esc(u)}</td>
+          <td class="l dim">${esc(eq)}</td><td class="l dim">${esc(de)}</td></tr>`).join('')}
+        </tbody></table></div>
+      <div class="kpis" style="margin-top:12px">
+        ${kpi('Total perchas CZ3', n2(cz.total))}
+        ${kpi('Quedan tras CZ5', n2(cz.quedan), cz.quedan < 0 ? 'alerta' : '')}
+        ${kpi('Libres tras empacar', n2(cz.libres), cz.libres < 0 ? 'alerta' : 'bien')}
+      </div>`;
   }
 
   /** Mete en el día lo que vino de la foto o del Excel del inventario. */
@@ -697,7 +766,7 @@
       <th>Unidades</th><th>Bolsas</th><th>QQ</th><th class="l">Suma</th>
       <th class="l">Producir antes de</th><th class="l">Estado</th><th class="l"></th></tr>`;
 
-    pintarResumenPed(visibles);
+    pintarResumenPed();
 
     if (!visibles.length) {
       $('#tbodyPed').innerHTML = `<tr><td colspan="10" class="l dim" style="padding:18px">`
@@ -742,83 +811,198 @@
     }).join('');
   }
 
+  /** El primer día de entrega que todavía tiene pedidos vivos, o mañana. */
+  function diaResumenPed() {
+    if (ui.pedResFecha) return ui.pedResFecha;
+    const hoy = D.hoyISO();
+    const f = D.pedidosLista()
+      .filter((p) => { const e = D.estadoPedido(p); return e === 'pendiente' || e === 'vencido'; })
+      .map((p) => p.fecha).filter((x) => x >= hoy).sort()[0];
+    ui.pedResFecha = f || D.sumarDias(hoy, 1);
+    return ui.pedResFecha;
+  }
+
   /**
-   * El cruce de los mismos pedidos: una fila por clave, una columna por día
-   * de entrega. Es la vista que se mira para decidir —cuánto de cada cosa y
-   * para cuándo—, que en la lista fila por fila hay que ir sumando a ojo.
-   * Las claves van de mayor a menor, que es el orden en que se decide.
+   * Lo pedido para un día, junto. La fila es la PRESENTACIÓN tal como la
+   * compra el cliente, no la clave madre: 15PL1U y 15PL1 llevan línea aparte
+   * aunque las dos se produzcan como 15PL1, y el 20CZ5 va por su cuenta
+   * aunque salga del CZ3. Lo que acá se mira es qué hay que empacar y en
+   * cuántas parrillas cabe, no qué hay que producir.
    */
-  function pintarResumenPed(visibles) {
+  function pintarResumenPed() {
     const cont = $('#pedResumen');
     if (!cont) return;
-    const enUni = ui.pedResUnidad === 'unidades';
-    $('#pedResUnidad').innerHTML = [['bolsas', 'Bolsas'], ['unidades', 'Unidades']]
-      .map(([id, t]) => `<button class="btn ${ui.pedResUnidad === id ? '' : 'sec'} mini"
-        type="button" data-pedres="${id}">${t}</button>`).join('');
+    const fecha = diaResumenPed();
+    $('#pedResFecha').value = fecha;
 
-    if (!visibles.length) {
-      cont.innerHTML = '<p class="dim" style="margin:12px 2px 0;font-size:.9rem">'
-        + 'Sin pedidos que resumir con este filtro.</p>';
+    const delDia = D.pedidosLista().filter((p) => p.fecha === fecha
+      && !['entregado', 'cancelado'].includes(D.estadoPedido(p)));
+
+    if (!delDia.length) {
+      cont.innerHTML = `<p class="dim" style="margin:12px 2px 0;font-size:.9rem">`
+        + `Sin pedidos pendientes para el ${esc(D.fechaCorta(fecha))}.</p>`;
       return;
     }
 
-    const dias = [...new Set(visibles.map((p) => p.fecha))].sort();
     const filas = new Map();
-    const porDia = {}, sumaDia = {};
-    let faltanUni = 0;
-
-    visibles.forEach((p) => {
-      const ficha = D.fichaPorClave(p.clave) || {};
-      const sinCalc = !p.clave || !D.estado.params.prod[p.clave];
-      const llave = p.clave || p.codigo || '—';
-      if (!filas.has(llave)) {
-        const alias = ficha.alias && ficha.alias !== llave ? ficha.alias : '';
-        filas.set(llave, { llave, alias, sinCalc, por: {}, total: 0, suma: 0 });
+    delDia.forEach((p) => {
+      /* La presentación manda. Un pedido capturado directo en bolsas, sin
+         presentación, se agrupa por su clave y lo dice. */
+      const cod = p.codigo || p.clave || '—';
+      if (!filas.has(cod)) {
+        const pres = p.codigo ? D.presentacionDe(p.codigo) : null;
+        filas.set(cod, {
+          cod, desc: pres ? pres.desc : '', bxp: pres ? Number(pres.bxp) || 0 : 0,
+          sinPres: !pres, bolsas: 0, unidades: 0,
+        });
       }
-      const f = filas.get(llave);
-      const v = enUni ? (Number(p.unidades) || 0) : (Number(p.bolsas) || 0);
-      if (enUni && !p.unidades) faltanUni++;
-      f.por[p.fecha] = (f.por[p.fecha] || 0) + v;
-      f.total += v;
-      porDia[p.fecha] = (porDia[p.fecha] || 0) + v;
-      if (p.cuenta && !sinCalc) {
-        f.suma += v;
-        sumaDia[p.fecha] = (sumaDia[p.fecha] || 0) + v;
-      }
+      const f = filas.get(cod);
+      f.bolsas += Number(p.bolsas) || 0;
+      f.unidades += Number(p.unidades) || 0;
     });
 
-    const orden = [...filas.values()].sort((a, b) => b.total - a.total || a.llave.localeCompare(b.llave));
-    const total = orden.reduce((a, f) => a + f.total, 0);
-    const haySuma = orden.some((f) => f.suma);
+    const orden = [...filas.values()].sort((a, b) => b.bolsas - a.bolsas || a.cod.localeCompare(b.cod));
+    orden.forEach((f) => {
+      f.parr = f.bxp ? Math.floor(f.bolsas / f.bxp) : 0;
+      f.sueltas = f.bxp ? f.bolsas - f.parr * f.bxp : f.bolsas;
+    });
+    const totB = orden.reduce((a, f) => a + f.bolsas, 0);
+    const totU = orden.reduce((a, f) => a + f.unidades, 0);
+    const totP = orden.reduce((a, f) => a + f.parr, 0);
 
-    const cel = (v) => `<td class="num${v ? '' : ' dim'}">${v ? n0(v) : ''}</td>`;
-    const cuerpo = orden.map((f) => `<tr>
-      <td class="l clave">${esc(f.llave)}${f.alias || f.sinCalc
-        ? `<span class="mini">${esc(f.sinCalc ? 'no entra al cálculo' : f.alias)}</span>` : ''}</td>
-      ${dias.map((d) => cel(f.por[d])).join('')}
-      <td class="num"><b>${n0(f.total)}</b></td></tr>`).join('');
+    const parrilla = (f) => {
+      if (!f.bxp) return '<span class="dim">sin parrilla</span>';
+      return `<b>${n0(f.parr)}</b> <span class="dim">parr</span>`
+        + (f.sueltas ? ` + <b>${n0(f.sueltas)}</b> <span class="dim">b</span>` : '');
+    };
 
     cont.innerHTML = `<div class="tablabox" style="margin-top:12px">
       <table class="resped">
-        <thead><tr><th class="l">Clave</th>
-          ${dias.map((d) => `<th>${esc(D.fechaCorta(d))}</th>`).join('')}
-          <th>Total</th></tr></thead>
-        <tbody>${cuerpo}</tbody>
-        <tfoot>
-          <tr class="totales"><td class="l">TOTAL</td>
-            ${dias.map((d) => `<td class="num"><b>${n0(porDia[d] || 0)}</b></td>`).join('')}
-            <td class="num"><b>${n0(total)}</b></td></tr>
-          ${haySuma ? `<tr><td class="l dim">de esos, suman al sugerido</td>
-            ${dias.map((d) => `<td class="num dim">${sumaDia[d] ? n0(sumaDia[d]) : ''}</td>`).join('')}
-            <td class="num dim">${n0(orden.reduce((a, f) => a + f.suma, 0))}</td></tr>` : ''}
-        </tfoot>
+        <thead><tr><th class="l">Clave</th><th>Unidades</th><th>Bolsas</th>
+          <th class="l">Parrillas + bolsa</th><th class="l">Bolsas por parrilla</th></tr></thead>
+        <tbody>${orden.map((f) => `<tr>
+          <td class="l clave">${esc(f.cod)}${f.desc || f.sinPres
+            ? `<span class="mini">${esc(f.sinPres ? 'capturado en bolsas, sin presentación' : f.desc)}</span>` : ''}</td>
+          <td class="num dim">${f.unidades ? n0(f.unidades) : ''}</td>
+          <td class="num"><b>${n0(f.bolsas)}</b></td>
+          <td class="l">${parrilla(f)}</td>
+          <td class="l dim">${f.bxp ? n0(f.bxp) : ''}</td></tr>`).join('')}</tbody>
+        <tfoot><tr class="totales"><td class="l">TOTAL</td>
+          <td class="num dim">${totU ? n0(totU) : ''}</td>
+          <td class="num"><b>${n0(totB)}</b></td>
+          <td class="l"><b>${n0(totP)}</b> <span class="dim">parr</span></td>
+          <td></td></tr></tfoot>
       </table></div>
       <p class="dim" style="font-size:.85rem;margin:10px 2px 0">
-        ${visibles.length} pedido${visibles.length === 1 ? '' : 's'} ·
-        ${orden.length} clave${orden.length === 1 ? '' : 's'} ·
-        ${dias.length} día${dias.length === 1 ? '' : 's'} de entrega, en ${enUni ? 'unidades' : 'bolsas'}.
-        ${faltanUni ? `${faltanUni} de ellos se capturaron directo en bolsas y no tienen unidades que sumar.` : ''}
+        ${delDia.length} pedido${delDia.length === 1 ? '' : 's'} para el
+        ${esc(D.fechaCorta(fecha))} · ${orden.length} ${orden.length === 1 ? 'presentación' : 'presentaciones'}.
+        Las bolsas por parrilla salen del catálogo de presentaciones, en Parámetros.
       </p>`;
+  }
+
+  // ================= TRASLADOS A ZONA 2 =================
+  /**
+   * El papel de la mañana: qué baja de Zona 18 a Zona 2 y en qué camión. Va en
+   * una ventana aparte, como el resumen, porque se arma una vez al día y se
+   * manda; tenerlo siempre abierto en Producción sólo alargaría la pestaña.
+   */
+  function abrirTraslado(fecha) {
+    const T = window.Traslado;
+    const m = document.createElement('div');
+    m.className = 'lector resumen';
+    m.innerHTML = `<div class="lcaja" style="max-width:1000px">
+      <div class="lbar">
+        <h3>Traslados a Zona 2</h3>
+        <span class="dim" id="trFecha"></span>
+        <button class="btn sec mini" type="button" id="trCerrar" style="margin-left:auto">Cerrar</button>
+      </div>
+      <div class="lcuerpo rescuerpo">
+        <div class="card rescard">
+          <div class="fila" style="align-items:center">
+            <button class="btn mini" type="button" id="trImg">Imagen para WhatsApp</button>
+            <span class="dim" style="font-size:.84rem" id="trNota"></span>
+          </div>
+        </div>
+        <div id="trVista"></div>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+    document.body.style.overflow = 'hidden';
+    const q = (s) => m.querySelector(s);
+    const cerrar = () => { document.body.style.overflow = ''; m.remove(); };
+
+    function pintar() {
+      const p = T.plan(fecha);
+      q('#trFecha').textContent = D.fechaCorta(fecha);
+      q('#trNota').innerHTML = p.sinCamiones
+        ? 'No hay camiones puestos para este día en Parámetros.'
+        : `<b>${n0(p.pedido)}</b> parrillas hacen falta · caben <b>${n0(p.capacidad)}</b> `
+          + `en ${p.camiones.length} ${p.camiones.length === 1 ? 'camión' : 'camiones'}`
+          + (p.sobraParrillas ? ` · quedan <b>${n0(p.sobraParrillas)}</b> para Zona 18` : ' · entra todo');
+
+      const avisos = [];
+      if (p.sinUxp.length) avisos.push(['warn', 'Faltan unidades por parrilla',
+        `${p.sinUxp.join(', ')} no tiene${p.sinUxp.length === 1 ? '' : 'n'} cuántas unidades sin `
+        + 'empacar lleva una parrilla, así que no se pueden pasar a camión. Se pone en Parámetros.']);
+      if (!p.lista.length) avisos.push(['', 'Hoy no hay que bajar nada',
+        'El conteo de anoche cubre la venta de hoy en todas las claves que viajan.']);
+
+      q('#trVista').innerHTML = avisos.map(([c, h, t]) =>
+        `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(t)}</p></div>`).join('')
+        + (p.lista.length ? `<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
+          <div style="padding:12px 16px"><h3 style="margin:0 0 3px;font-size:.95rem">Lo que falta</h3>
+            <p class="sub" style="margin:0">El conteo de anoche contra la venta de hoy. El orden es
+              el de urgencia: primero el que se vacía antes.</p></div>
+          <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0">
+          <table><thead><tr><th class="l">Clave</th><th>Conteo</th><th>Venta hoy</th>
+            <th>Faltan bolsas</th><th>Unidades</th><th>Uni × parrilla</th><th>Parrillas</th>
+            <th class="l">Por qué</th></tr></thead>
+          <tbody>${p.lista.map((f) => `<tr>
+            <td class="l clave">${esc(f.alias)}</td>
+            <td class="num dim">${n0(f.conteo)}</td>
+            <td class="num dim">${n0(f.venta)}</td>
+            <td class="num">${n0(f.bolsas)}</td>
+            <td class="num dim">${n0(f.unidades)}</td>
+            <td class="num dim">${f.uxp || '—'}</td>
+            <td class="num"><b>${f.parrillas ? n0(f.parrillas) : '—'}</b></td>
+            <td class="l dim">${esc(f.motivo)}</td></tr>`).join('')}</tbody>
+          </table></div></div>` : '')
+        + (p.camiones.length ? `<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden">
+          <div style="padding:12px 16px"><h3 style="margin:0 0 3px;font-size:.95rem">La carga</h3>
+            <p class="sub" style="margin:0">Los camiones del día, en el orden en que salen.</p></div>
+          <div class="tablabox" style="border:0;border-top:1px solid var(--line);border-radius:0">
+          <table><thead><tr><th class="l">Camión</th><th>Capacidad</th><th>Cargado</th>
+            <th class="l">Qué lleva</th></tr></thead>
+          <tbody>${p.camiones.map((c) => `<tr>
+            <td class="l clave">${esc(c.id)}${c.resta
+              ? `<span class="mini">${n0(c.total)} − ${n0(c.resta)} de arrastre</span>` : ''}</td>
+            <td class="num dim">${n0(c.capacidad)}</td>
+            <td class="num"><b>${n0(c.usado)}</b></td>
+            <td class="l">${c.carga.length
+              ? c.carga.map((x) => `<span class="chip ${x.partida ? 'vida' : 'ok'}">`
+                + `${esc(x.alias)} ${n0(x.parrillas)}</span>`).join(' ')
+              : '<span class="dim">vacío</span>'}</td></tr>`).join('')}</tbody>
+          ${p.sobra.length ? `<tfoot><tr class="totales">
+            <td class="l">QUEDA PARA ZONA 18</td><td></td>
+            <td class="num"><b>${n0(p.sobraParrillas)}</b></td>
+            <td class="l">${p.sobra.map((x) => `<span class="chip falta">`
+              + `${esc(x.alias)} ${n0(x.parrillas)}</span>`).join(' ')}</td></tr></tfoot>` : ''}
+          </table></div></div>` : '');
+    }
+
+    pintar();
+    q('#trCerrar').onclick = cerrar;
+    m.addEventListener('click', (e) => { if (e.target === m) cerrar(); });
+    q('#trImg').onclick = async () => {
+      try {
+        const R = window.Resumen;
+        const { cv, nombre, plan: p } = T.imagen(fecha);
+        if (!p.lista.length) { aviso('Hoy no hay nada que bajar.', 'warn'); return; }
+        const res = await R.compartir(await R.aBlob(cv), nombre, 'Traslados a Zona 2');
+        aviso(res === 'compartido' ? 'Traslados compartidos.'
+          : (res === 'cancelado' ? 'Cancelado.' : `Traslados ${res}.`));
+      } catch (err) { aviso('No se pudo armar la imagen: ' + err.message, 'err'); }
+    };
   }
 
   // ================= IMPRESIÓN BOLSA =================
@@ -882,11 +1066,9 @@
       </tr>`;
     }).join('');
 
-    $('#tfootBolsa').innerHTML = `<tr>
-      <td></td><td class="l">TOTAL</td><td></td><td></td><td></td><td></td><td></td>
-      <td class="num"><b>${n0(t.prodAM)}</b></td><td class="num"><b>${n0(t.prodPM)}</b></td><td></td>
-      <td class="num"><b>${n0(t.empAM)}</b></td><td class="num"><b>${n0(t.empPM)}</b></td>
-      <td class="num"><b>${n0(t.total)}</b></td></tr>`;
+    /* Sin fila de totales: los mismos números están en las tarjetas de arriba
+       y abajo de la tabla sólo estorban a la hora de leer las claves. */
+    $('#tfootBolsa').innerHTML = '';
 
     $('#kpisBolsa').innerHTML =
       kpi('Bolsas a imprimir', n0(t.total)) +
@@ -983,43 +1165,19 @@
       <td class="num ${f.falta ? 'neg' : ''}"><b>${f.falta ? n2(f.falta) : '—'}</b></td>
       <td class="num dim">${f.falta ? `${n2(f.parrFalta)} + ${n2(f.sueltasFalta)}` : ''}</td>
       <td class="num"><b>${f.pedir ? n2(f.pedir) : '—'}</b></td></tr>`).join('');
-    partes.push(tarjetaSec('BELCA', 'Lo preparado se cuenta en parrillas del cliente; lo que falta se'
+    const belcaCard = tarjetaSec('BELCA', 'Lo preparado se cuenta en parrillas del cliente; lo que falta se'
       + ' convierte a parrillas de bodega, que son las que hay que bajar.',
       `<table><thead><tr>
         <th class="l">Clave</th>${th2('Parrillas', 'listas')}${th2('Bolsas', 'sueltas')}
         ${th2('Preparado', 'bolsas')}${th2('Pedido', 'bolsas')}${th2('Falta', 'bolsas')}
         ${th2('Falta', 'parr + sueltas')}${th2('Bajar', 'parrillas')}
-      </tr></thead><tbody>${filasB}</tbody></table>`));
+      </tr></thead><tbody>${filasB}</tbody></table>`);
 
-    // --- CZ3 / CZ5 ---
-    const cz = S.calcCz(datos.cz || {}, ui.fecha);
-    const inCz = (k, lbl) => `<input class="inqq" inputmode="decimal" enterkeyhint="next"
-      data-scz="${k}" value="${esc((datos.cz || {})[k] ?? '')}" aria-label="${esc(lbl)}">`;
-    const lineas = [
-      ['20CZ3', inCz('parr20', 'Parrillas de 20CZ3'), 'parrillas', `${n2(cz.b20)} bolsas`, ''],
-      ['CZ3 perchas (OH)', inCz('ohBolsas', 'Perchas OH'), 'perchas', `${n2(cz.ohParr)} parrillas`, ''],
-      [`Producción PM${cz.turnoPM ? ` · ${cz.turnoPM}` : ''}`, inCz('prodQQ', 'Quintales producidos PM'), 'QQ',
-        `${n2(cz.prodBolsas)} perchas`,
-        cz.manual ? 'escrito a mano' : (cz.prodQQauto ? `del reparto: ${n2(cz.prodQQauto)} QQ` : 'sin reparto ese día')],
-      ['CZ5', inCz('cz5Bolsas', 'Perchas de CZ5'), 'perchas', `${n2(cz.cz5Parr)} parrillas`, ''],
-      ['Empacar', inCz('empacar', 'A empacar'), 'perchas', '', ''],
-    ];
-    partes.push(tarjetaSec('CZ3 / CZ5 (0134)',
-      `Una percha son ${S.PERCHA} parrillas; un quintal de CZ3 da ${n0(cz.rend)} bolsas y `
-      + `${S.CZ3_POR_PERCHA} bolsas hacen una percha.`,
-      `<table><thead><tr><th class="l">Fila</th><th>OH</th><th class="l">Unidad</th>
-        <th class="l">Equivale a</th><th class="l">De dónde</th></tr></thead><tbody>
-        ${lineas.map(([n, inp, u, eq, de]) => `<tr>
-          <td class="l clave">${esc(n)}</td><td>${inp}</td><td class="l dim">${esc(u)}</td>
-          <td class="l dim">${esc(eq)}</td><td class="l dim">${esc(de)}</td></tr>`).join('')}
-      </tbody></table>`,
-      `<div class="kpis" style="margin:0;padding:12px 14px 14px">
-        ${kpi('Total perchas CZ3', n2(cz.total))}
-        ${kpi('Quedan tras CZ5', n2(cz.quedan), cz.quedan < 0 ? 'alerta' : '')}
-        ${kpi('Libres tras empacar', n2(cz.libres), cz.libres < 0 ? 'alerta' : 'bien')}
-      </div>`));
-
-    $('#secCont').innerHTML = partes.join('');
+    /* El orden de las tarjetas es el de la jornada, no el del código: el CZ3 /
+       CZ5 ya salió arriba pegado al conteo, y el PL1 cierra. */
+    const porId = Object.fromEntries(partes.map((h, i) => [S.TABLAS[i].id, h]));
+    $('#secCont').innerHTML = [porId.esp, porId.s16, belcaCard, porId.mg, porId.pl1]
+      .filter(Boolean).join('');
     pintarCz5();
   }
 
@@ -1543,6 +1701,39 @@
       </div>
 
       <div class="card" style="margin-bottom:14px">
+        <h3>Traslados a Zona 2</h3>
+        <p class="sub">
+          El pan que se hornea en Zona 18 y se empaca en Zona 2. Cada mañana se compara el
+          <b>conteo de anoche</b> contra la <b>venta de hoy</b>: lo que falta baja. Las bolsas se
+          pasan a unidades y de ahí a parrillas con las <b>unidades sin empacar</b> que cabe una,
+          que no es lo mismo que las bolsas por parrilla del producto ya empacado.
+        </p>
+        <div class="fila" style="align-items:flex-end;margin:0 2px 4px">
+          <label class="sw"><input type="checkbox" id="chkTrasArrastre">
+            Descontar las parrillas de arrastre</label>
+          <div class="campo"><label for="inTrasCarga">Cómo se carga</label>
+            <select id="inTrasCarga" style="min-width:230px">
+              <option value="completos">Completar a los que caben enteros</option>
+              <option value="orden">Por orden estricto de urgencia</option>
+            </select></div>
+        </div>
+        <h4 class="subrot" style="margin-top:18px">Claves que bajan</h4>
+        <p class="dim" style="font-size:.84rem;margin:0 2px 10px">
+          <b>Uni × parrilla</b> son las unidades sin empacar que lleva una parrilla. La
+          <b>regla</b> dice cómo entra la clave: por el conteo contra la venta, porque se produjo
+          el día anterior —el caso del 12BLL— o todos los días.
+        </p>
+        <div id="trasClaves"></div>
+        <h4 class="subrot" style="margin-top:18px">Camiones</h4>
+        <p class="dim" style="font-size:.84rem;margin:0 2px 10px">
+          En el orden en que salen. <b>Total</b> es la capacidad del furgón y <b>arrastre</b> las
+          parrillas vacías que vienen de vuelta; lo que queda es lo que puede llevar producto.
+          Un camión sin días marcados no entra en el plan.
+        </p>
+        <div id="trasCamiones"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
         <h3>Lector de fotos</h3>
         <p class="sub">Leer letra manuscrita necesita una llave de la API de Anthropic. Elige dónde guardarla; los pasos están en LECTOR.md.</p>
         <div class="fila" style="gap:16px">
@@ -1638,6 +1829,7 @@
     pintarBolsaClaves();
     pintarBolsaFuentes();
     pintarBolsaFijos();
+    pintarTraslado();
     const bd = D.estado.params.bolsaDomingo;
     $('#chkBolsaDom').checked = bd.activo !== false;
     $('#inBolsaDomPlanta').value = bd.planta;
@@ -1652,6 +1844,61 @@
      Son las de la hoja que no salen del reparto: los manuales y el 12MU1. */
   function clavesFijables() {
     return window.Bolsa.EXTRAS.filter((e) => e.tipo === 'manual');
+  }
+
+  const REGLAS_TRAS = [
+    ['conteo', 'El conteo no cubre la venta'],
+    ['produccionAyer', 'Se produjo el día anterior'],
+    ['siempre', 'Todos los días'],
+  ];
+
+  /** Las dos tablas del traslado: qué baja y en qué camión cabe. */
+  function pintarTraslado() {
+    const cont = $('#trasClaves');
+    if (!cont) return;
+    const t = D.estado.params.traslado || { claves: {}, camiones: [] };
+    $('#chkTrasArrastre').checked = t.arrastre !== false;
+    $('#inTrasCarga').value = t.carga === 'orden' ? 'orden' : 'completos';
+
+    const claves = Object.keys(t.claves || {})
+      .sort((a, b) => Number(!!t.claves[b].viaja) - Number(!!t.claves[a].viaja) || a.localeCompare(b));
+    cont.innerHTML = `<div class="tablabox"><table>
+      <thead><tr><th class="l">Clave</th><th>Baja</th><th style="width:110px">Uni × parrilla</th>
+        <th class="l">Regla</th><th class="l" style="width:100%"></th></tr></thead>
+      <tbody>${claves.map((c) => {
+        const k = t.claves[c];
+        const alias = (D.fichaPorClave(c) || {}).alias;
+        return `<tr>
+          <td class="l clave">${esc(c)}${alias && alias !== c ? `<span class="mini">${esc(alias)}</span>` : ''}</td>
+          <td><label class="sw"><input type="checkbox" data-trv="${esc(c)}" ${k.viaja ? 'checked' : ''}
+            aria-label="${esc(c)} baja a Zona 2"></label></td>
+          <td><input class="inqq" inputmode="numeric" data-tru="${esc(c)}" value="${k.uxp || ''}"
+            placeholder="—" aria-label="Unidades sin empacar por parrilla de ${esc(c)}"></td>
+          <td class="l"><select data-trr="${esc(c)}" aria-label="Regla de ${esc(c)}">
+            ${REGLAS_TRAS.map(([id, n]) =>
+              `<option value="${id}" ${k.regla === id ? 'selected' : ''}>${esc(n)}</option>`).join('')}
+          </select></td>
+          <td class="l dim">${k.viaja ? (k.uxp ? `${n0(k.uxp)} unidades por parrilla` : 'falta el dato de parrilla') : 'no baja'}</td>
+        </tr>`;
+      }).join('')}</tbody></table></div>`;
+
+    $('#trasCamiones').innerHTML = `<div class="tablabox"><table>
+      <thead><tr><th class="l">Camión</th><th style="width:90px">Total</th>
+        <th style="width:90px">Arrastre</th><th>Producto</th><th class="l">Días</th></tr></thead>
+      <tbody>${(t.camiones || []).map((c, i) => {
+        const neto = Math.max(0, (c.total || 0) - (t.arrastre !== false ? (c.arrastre || 0) : 0));
+        return `<tr>
+          <td class="l clave">${esc(c.id)}</td>
+          <td><input class="inqq" inputmode="numeric" data-trct="${i}" value="${c.total || ''}"
+            aria-label="Parrillas totales del ${esc(c.id)}"></td>
+          <td><input class="inqq" inputmode="numeric" data-trca="${i}" value="${c.arrastre || ''}"
+            aria-label="Parrillas de arrastre del ${esc(c.id)}"></td>
+          <td class="num"><b>${n0(neto)}</b></td>
+          <td class="l"><div class="fila diasf">${LETRA_DIA.map((l, j) => `<label class="sw diaf">
+            <input type="checkbox" data-trcd="${i}" value="${j}" ${(c.dias || []).includes(j) ? 'checked' : ''}
+              aria-label="${NOMBRE_DIA[j]} del ${esc(c.id)}"> ${l}</label>`).join('')}</div></td>
+        </tr>`;
+      }).join('')}</tbody></table></div>`;
   }
 
   /** Cantidad fija por día de la semana para las claves de cálculo manual. */
@@ -2337,6 +2584,33 @@
       fila[d.bturno] = { ...actual, [d.bdia]: ['AM', 'PM'].includes(t.value) ? t.value : '' };
       D.guardarParams(); pintarBolsaFuentes(); pintarBolsaClaves(); pintarBolsa(); return true;
     }
+    else if (t.id === 'chkTrasArrastre' || t.id === 'inTrasCarga') {
+      const tr = P.traslado;
+      if (t.id === 'chkTrasArrastre') tr.arrastre = v;
+      else tr.carga = t.value === 'orden' ? 'orden' : 'completos';
+      D.guardarParams(); pintarTraslado(); return true;
+    }
+    else if (d.trv || d.tru || d.trr) {
+      const c = d.trv || d.tru || d.trr;
+      const k = P.traslado.claves[c] || (P.traslado.claves[c] = { viaja: false, uxp: 0, regla: 'conteo' });
+      if (d.trv) k.viaja = v;
+      else if (d.tru) k.uxp = Math.max(0, Math.round(num(v, 0)));
+      else k.regla = ['conteo', 'produccionAyer', 'siempre'].includes(t.value) ? t.value : 'conteo';
+      D.guardarParams(); pintarTraslado(); return true;
+    }
+    else if (d.trct || d.trca || d.trcd) {
+      const i = Number(d.trct ?? d.trca ?? d.trcd);
+      const cam = (P.traslado.camiones || [])[i];
+      if (!cam) return true;
+      if (d.trct) cam.total = Math.max(0, Math.round(num(v, 0)));
+      else if (d.trca) cam.arrastre = Math.max(0, Math.round(num(v, 0)));
+      else {
+        const j = Number(t.value);
+        const otros = (cam.dias || []).filter((x) => x !== j);
+        cam.dias = (t.checked ? [...otros, j] : otros).sort((a, b) => a - b);
+      }
+      D.guardarParams(); pintarTraslado(); return true;
+    }
     else if (d.fdia || d.fcant) {
       const id = d.fdia || d.fcant;
       const todo = P.bolsaFijos || (P.bolsaFijos = {});
@@ -2465,6 +2739,7 @@
     });
 
     $('#btnResumen').onclick = () => window.Resumen.abrir(ui.fecha, aviso);
+    $('#btnTraslado').onclick = () => abrirTraslado(ui.fecha);
     $('#btnLimpiar').onclick = () => {
       C.limpiarReparto(reg()); ui.sinCupo = null; ui.sinTurnoHoy = null; D.guardarDias(); pintarProduccion(); aviso('Reparto borrado.');
     };
@@ -2488,6 +2763,9 @@
         const p = D.estado.pedidos[d.pedb];
         if (p && v != null && !Number.isNaN(v) && v > 0) p.bolsas = Math.round(v);
         D.guardarPedidos(); pintarPedidos(); pintarProduccion();
+      } else if (e.target.id === 'pedResFecha') {
+        ui.pedResFecha = e.target.value || '';
+        pintarResumenPed();
       } else if (e.target.id === 'inVentaClave') {
         ui.ventaClave = e.target.value; pintarVenta();
       } else if (d.cz5) {
@@ -2533,8 +2811,6 @@
     document.addEventListener('click', (e) => {
       const fp = e.target.closest('[data-fped]');
       if (fp) { ui.filtroPed = fp.dataset.fped; pintarPedidos(); return; }
-      const ru = e.target.closest('[data-pedres]');
-      if (ru) { ui.pedResUnidad = ru.dataset.pedres; pintarPedidos(); return; }
       const pe = e.target.closest('[data-pedent]');
       if (pe) {
         D.estado.pedidos[pe.dataset.pedent].estado = 'entregado';
@@ -2734,6 +3010,15 @@
         aviso(`Orden guardada${donde(r)}: ${lineas} claves en ¼ de carta.`);
       } catch (err) { aviso('No se pudo armar la orden: ' + err.message, 'err'); }
     };
+    $('#btnHojaImg').onclick = async () => {
+      try {
+        const R = window.Resumen;
+        const { cv, nombre } = window.Bolsa.hojaImagen(ui.fechaBolsa);
+        const res = await R.compartir(await R.aBlob(cv), nombre, 'Impresión de bolsa');
+        aviso(res === 'compartido' ? 'Hoja compartida.'
+          : (res === 'cancelado' ? 'Cancelado.' : `Hoja ${res}.`));
+      } catch (err) { aviso('No se pudo armar la imagen: ' + err.message, 'err'); }
+    };
     $('#btnOrdenImg').onclick = async () => {
       try {
         const R = window.Resumen;
@@ -2746,10 +3031,15 @@
     };
 
     // cálculos secundarios
-    $('#secCont').addEventListener('change', (e) => {
+    /* Escucha toda la pestaña, no sólo la lista de tarjetas: el CZ3 / CZ5 vive
+       dentro de la tarjeta del conteo, que está fuera de `#secCont`. */
+    $('#pSec').addEventListener('change', (e) => {
       const t = e.target;
       if (!t.matches('input.inqq')) return;
       const S = window.Secundarios, d = t.dataset;
+      /* El conteo de CZ5 comparte tarjeta pero no hoja: lo suyo se guarda en
+         el día y lo atiende su propio manejador. */
+      if (d.cz5) return;
       const datos = S.leer();
       if (d.st) S.escribir(datos, d.st, d.sf, d.sc, t.value);
       else if (d.sb) {

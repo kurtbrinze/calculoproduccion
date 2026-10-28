@@ -18,7 +18,7 @@ dice de qué día habla. De cada clave se ve:
 |---|---|
 | Stock + prod | Cierre del día anterior más lo que se produjo ese día |
 | Teórico PM hoy | Lo anterior menos la venta de hoy |
-| Sugerido qq | Lo que el cálculo propone producir |
+| Sugerido qq | Lo que el cálculo propone producir, **hasta donde cabe** en los turnos de esa área y en el máximo diario del producto; si la necesidad es mayor, el número crudo va debajo en pequeño y entero en el total de arriba |
 | Turnos | Los quintales por turno, editables a mano |
 | Decidido qq | Lo que se decidió **en esa área** |
 | = Bolsas | Esos quintales por el rendimiento: lo que de verdad se empaca |
@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.40';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.40';`
+1. `js/ui.js` → `const VERSION = 'V.2026.41';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.41';`
 
 ## Plantas, claves y productos nuevos
 
@@ -451,12 +451,22 @@ Una presentación sin clave del catálogo —Encanelado, Mexicano, Espumilla, lo
 captura igual, porque sirve para decidir qué empacar, pero no toca el sugerido y su cheque sale
 deshabilitado.
 
-**El resumen por día y clave** cierra la pestaña: una fila por clave, una columna por día de
-entrega y, en el cruce, las bolsas. Es la vista con que se decide —cuánto de cada cosa y para
-cuándo—, que en la lista fila por fila hay que ir sumando a ojo. Las claves van de mayor a
-menor. Abajo, el total de cada día y, aparte, cuánto de ese total **suma al sugerido**, que no
-es lo mismo. Un botón cambia las bolsas por unidades. Sigue el filtro de la lista: lo que se ve
-en la tabla es lo que suma ahí.
+**El resumen de un día** cierra la pestaña: lo pedido para esa fecha, junto. La fila es la
+**presentación tal como la compra el cliente**, no la clave madre: `15PL1U` y `15PL1` van en
+líneas distintas aunque las dos se produzcan como 15PL1, y el `20CZ5` va por su cuenta aunque
+salga del CZ3. Lo que acá se mira es qué hay que empacar, no qué hay que producir.
+
+| Columna | Qué lleva |
+|---|---|
+| Clave | La presentación pedida |
+| Unidades | Lo que suman los pedidos, como los capturó el cliente |
+| Bolsas | Lo que suman en bolsas |
+| Parrillas + bolsa | Las parrillas enteras que se llenan y las bolsas que sobran |
+
+Las bolsas por parrilla salen del catálogo de presentaciones, en Parámetros: `15PL1U` va a 4
+por parrilla y `20CZ5` a 6. El día se elige en esa misma tarjeta y **no depende del día a
+producir**, que es el que manda en el resto del app; acá se mira un día a la vez, el de la
+entrega.
 
 **Los entregados viejos se archivan solos.** Un pedido entregado o cancelado hace más de ocho
 días ya no sirve para decidir nada y la preventa son miles de líneas al año, así que sale del
@@ -533,6 +543,42 @@ escribir encima.
 Quedaron fuera del libro las tablas que sólo servían para completar el conteo —«CZ3 FREDY»,
 «Massella Granda» y las filas de `Esp_Dulce` que salían de `Toma_Inv`—, porque eso ahora lo
 hace la lectura de la foto del INV PM.
+
+El orden de las tarjetas es el de la jornada: **Conteo de CZ5** arriba —con el `CZ3 / CZ5` de
+perchas pegado abajo, que es la misma conversación—, después **Especiales y dulces**, **S16
+total**, **BELCA**, **Magdalenas** y **PL1**.
+
+## Traslados a Zona 2
+
+El pan que se hornea en Zona 18 y se empaca en Zona 2 baja en camión de madrugada. Qué baja se
+decide con el conteo en la mano, y para eso está el botón **Traslados a Zona 2** en Producción.
+
+La cuenta es la que se hace a mano:
+
+```
+CONTEO  = el cierre de anoche, que es el STOCK AYER del día a producir
+VENTA   = la venta de hoy, la del día siguiente a ese conteo
+FALTAN  = VENTA − CONTEO, cuando el conteo se queda corto
+```
+
+Esas bolsas se pasan a unidades con la presentación de la clave, y de ahí a parrillas con las
+**unidades sin empacar** que cabe una. Ése es un dato aparte: lo que viaja va sin empaque, así
+que una parrilla no lleva lo mismo que cuando el producto ya está en bolsa.
+
+**Las claves van por urgencia**, no por tamaño del hueco: primero la que se vacía antes, medida
+como la parte del día que aguanta lo que quedó. Una clave que baja por otra regla —el `12BLL`,
+que baja cuando se produjo la noche anterior— va después, porque su urgencia no se mide así.
+
+**Los camiones se cargan en el orden en que salen.** De fábrica se completan primero las claves
+que caben enteras, porque llegar con media clave no resuelve el empaque; se puede cambiar a
+orden estricto en Parámetros. Lo que no cabe queda anotado como **queda para Zona 18**, que es
+donde se decide el resto. Todo sale en una imagen para WhatsApp.
+
+En Parámetros → Traslados a Zona 2 se ponen las dos tablas: qué claves bajan, con sus unidades
+por parrilla y su regla, y los camiones con su capacidad, sus parrillas de arrastre y los días
+que salen. Las **parrillas de arrastre** son las vacías que vienen de vuelta y se restan de la
+capacidad; en temporada no se usan y se apagan con una casilla. Un camión sin días marcados no
+entra en el plan: así están el `5` y el `7`, que son de apoyo.
 
 ## Feriados
 
@@ -616,6 +662,7 @@ equipo. La sincronización mantiene a los dos iguales, así que un borrado por e
 | `js/resumen.js` | Imágenes y PDF del resumen del día |
 | `js/bolsa.js` | Impresión de bolsa: la tabla y su PDF |
 | `js/venta.js` | Conteo de CZ5 y la venta real derivada |
+| `js/traslado.js` | Traslados de Zona 18 a Zona 2 y la carga de los camiones |
 | `js/secundarios.js` | Cálculos secundarios de inventario |
 | `js/ui.js` | Pantallas |
 | `api/extract.js` | El lector de inventario, para desplegar en Vercel |

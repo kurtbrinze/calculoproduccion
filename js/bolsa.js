@@ -383,20 +383,13 @@
     return { prodAM: s('prodAM'), prodPM: s('prodPM'), empAM: s('empAM'), empPM: s('empPM'), total: s('total') };
   }
 
-  // ---------- PDF ----------
-  /* Carta acostada y a toda la hoja: son trece columnas y de pie salían tan
-     apretadas que había que acercarse al papel para leerlas. Se arma con las
-     mismas piezas del resumen para no cargar ninguna librería. */
-  function pdf(fecha) {
-    const R = window.Resumen;
-    const ANCHO = 792, ALTO = 612;
-    const MX = 20, MY = 16;
-    const fs = enTotal(calcular(fecha));
-    const t = totales(fs);
+  // ---------- la hoja completa ----------
+  /* Las trece columnas de la hoja de trabajo, con su ancho relativo. Las
+     comparten el PDF y la imagen para que los dos digan lo mismo. */
+  function colsHoja(fecha) {
     const d0 = D.fechaCorta(fecha).toUpperCase();
     const d1 = D.fechaCorta(fechaPrevia(fecha)).toUpperCase();
-
-    const cols = [
+    return [
       { k: 'pprod', t: 'P PROD', w: 36 },
       { k: 'nombre', t: 'CLAVE', w: 58, alinear: 'left' },
       { k: 'rend', t: 'RENDIM', w: 36 },
@@ -411,6 +404,35 @@
       { k: 'empPM', lineas: ['EMPAQUE', 'PM'], w: 52 },
       { k: 'total', lineas: ['A', 'IMPRIMIR'], w: 52 },
     ];
+  }
+
+  const nHoja = (v) => (!v ? '' : Math.round(v).toLocaleString('es-GT'));
+  const n2Hoja = (v) => (!v ? '' : Number(v).toLocaleString('es-GT', { maximumFractionDigits: 2 }));
+
+  /** El texto de una celda de la hoja completa. */
+  function valorHoja(f, c) {
+    if (c.k === 'pprod') return f.pprod || '';
+    if (c.k === 'nombre') return f.nombre;
+    if (c.k === 'rend') return f.rend ? nHoja(f.rend) : '';
+    if (c.k === 'q1AM') return n2Hoja(f.qq[1].AM);
+    if (c.k === 'q1PM') return n2Hoja(f.qq[1].PM);
+    if (c.k === 'q0AM') return n2Hoja(f.qq[0].AM);
+    if (c.k === 'q0PM') return n2Hoja(f.qq[0].PM);
+    /* En las filas de detalle el cálculo lo lleva la de abajo. */
+    if (!f.final && ['oh', 'empAM', 'empPM', 'total'].includes(c.k)) return '';
+    return nHoja(f[c.k]);
+  }
+
+  // ---------- PDF ----------
+  /* Carta acostada y a toda la hoja: son trece columnas y de pie salían tan
+     apretadas que había que acercarse al papel para leerlas. Se arma con las
+     mismas piezas del resumen para no cargar ninguna librería. */
+  function pdf(fecha) {
+    const R = window.Resumen;
+    const ANCHO = 792, ALTO = 612;
+    const MX = 20, MY = 16;
+    const fs = enTotal(calcular(fecha));
+    const cols = colsHoja(fecha);
     /* La tabla se estira hasta los márgenes, encoja o crezca: el papel
        horizontal da de sobra y el espacio que quede en blanco es letra que
        se pudo haber hecho más grande. */
@@ -432,21 +454,7 @@
     const alCuerpo = ALTO - MY - yFilas - 4;
     const hFila = Math.min(24, alCuerpo / Math.max(1, fs.length));
 
-    const n0 = (v) => (!v ? '' : Math.round(v).toLocaleString('es-GT'));
-    const n2v = (v) => (!v ? '' : Number(v).toLocaleString('es-GT', { maximumFractionDigits: 2 }));
-    const valor = (f, c) => {
-      if (c.k === 'pprod') return f.pprod || '';
-      if (c.k === 'nombre') return f.nombre;
-      if (c.k === 'rend') return f.rend ? n0(f.rend) : '';
-      if (c.k === 'q1AM') return n2v(f.qq[1].AM);
-      if (c.k === 'q1PM') return n2v(f.qq[1].PM);
-      if (c.k === 'q0AM') return n2v(f.qq[0].AM);
-      if (c.k === 'q0PM') return n2v(f.qq[0].PM);
-      /* En las filas de detalle el cálculo lo lleva la de abajo. */
-      if (!f.final && ['oh', 'empAM', 'empPM', 'total'].includes(c.k)) return '';
-      return n0(f[c.k]);
-    };
-
+    const valor = valorHoja;
     const TAM_FILA = tamQueCabe(fs, cols, valor, hFila);
     const TAM_CAB = Math.min(8.5, Math.max(6, TAM_FILA));
 
@@ -505,6 +513,55 @@
       });
     });
     return Math.max(5, max);
+  }
+
+  /** La hoja completa en imagen, para mandarla por WhatsApp. */
+  function hojaImagen(fecha) {
+    const R = window.Resumen, COL = R.COL;
+    const fs = enTotal(calcular(fecha));
+    const cols = colsHoja(fecha);
+    const ESCALA = 1.55;
+    cols.forEach((c) => { c.w = Math.round(c.w * ESCALA); });
+    const ANCHO = cols.reduce((a, c) => a + c.w, 0);
+    const TIT = 36, CAB = 38, FILA = 22;
+    const { cv, g } = R.lienzo(ANCHO, TIT + CAB + fs.length * FILA);
+
+    const xs = [];
+    cols.reduce((x, c) => { xs.push(x); return x + c.w; }, 0);
+
+    R.celda(g, 0, 0, ANCHO, TIT, {
+      fondo: COL.naranja, texto: `IMPRESIÓN DE BOLSA · ${tituloOrden(fecha)}`,
+      color: COL.blanco, fuente: 'bold 15px system-ui, sans-serif', borde: COL.naranja,
+    });
+
+    cols.forEach((c, i) => {
+      R.celda(g, xs[i], TIT, c.w, CAB, { fondo: COL.verde, borde: COL.verde });
+      const ls = c.lineas || [c.t];
+      g.fillStyle = COL.blanco;
+      g.textAlign = 'center';
+      g.font = 'bold 10px system-ui, sans-serif';
+      ls.forEach((l, j) => {
+        g.fillText(l, xs[i] + c.w / 2, TIT + CAB / 2 + (j - (ls.length - 1) / 2) * 12);
+      });
+    });
+
+    let y = TIT + CAB;
+    fs.forEach((f) => {
+      cols.forEach((c, i) => {
+        const esClave = c.k === 'nombre';
+        const fuerte = f.final && (esClave || c.k === 'total');
+        R.celda(g, xs[i], y, c.w, FILA, {
+          fondo: esClave ? COL.verdeSuave : COL.blanco,
+          texto: valorHoja(f, c),
+          color: f.final ? COL.tinta : COL.grisTexto,
+          alinear: esClave ? 'left' : 'center',
+          fuente: `${fuerte ? 'bold ' : ''}11px system-ui, sans-serif`,
+        });
+      });
+      y += FILA;
+    });
+
+    return { cv, nombre: `Impresion Bolsa ${R.fechaArchivo(fecha)}.png`, filas: fs.length };
   }
 
   // ---------- La orden de impresión ----------
@@ -669,7 +726,7 @@
   }
 
   window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf, ignorados,
-    ordenLineas, ordenPdf, ordenImagen, COLS_ORDEN,
+    ordenLineas, ordenPdf, ordenImagen, hojaImagen, COLS_ORDEN,
     dentro, filaDentro, fechaPrevia, fuenteDe, fuentesDe, turnosDeClave, promDomingos, fijoDe,
     DESTINOS, DIAS, EXTRAS, alDiez };
 })();

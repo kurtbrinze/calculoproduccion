@@ -229,7 +229,7 @@
        4 = el catálogo se ordenó como la hoja de papel.
        5 = se separó la planta Zona 2 de la de dulces (Zona 2 CZ).
        6 = tope de quintales por producto y reparto por porcentaje. */
-  const ESQUEMA = 7;
+  const ESQUEMA = 8;
 
   /**
    * Mapa de plantas de un producto. Acepta la forma nueva (`plantas` como
@@ -329,6 +329,40 @@
          mano en la hoja manda sobre esto. */
       bolsaFijos: {
         'man:10WY1M': { dias: [1, 3], cantidad: 960 },
+      },
+      /* Lo que se baja de Zona 18 a Zona 2 para empacarse allá. `uxp` son las
+         unidades sin empacar que lleva una parrilla, que es distinto de las
+         bolsas por parrilla del producto ya empacado. `regla` dice cómo entra
+         la clave: por el conteo contra la venta, porque se produjo el día
+         anterior, o siempre. Los camiones van en el orden en que salen. */
+      traslado: {
+        activo: true,
+        arrastre: true,          // descontar las parrillas de arrastre vacías
+        carga: 'completos',      // o 'orden': estricto por prioridad
+        claves: {
+          S26:     { viaja: true,  uxp: 8,  regla: 'conteo' },
+          S19:     { viaja: true,  uxp: 10, regla: 'conteo' },
+          S16:     { viaja: true,  uxp: 10, regla: 'conteo' },
+          S11:     { viaja: true,  uxp: 15, regla: 'conteo' },
+          S32:     { viaja: true,  uxp: 8,  regla: 'conteo' },
+          '10HR3': { viaja: true,  uxp: 48, regla: 'conteo' },
+          '12BLL': { viaja: true,  uxp: 21, regla: 'produccionAyer' },
+          '10PM3': { viaja: false, uxp: 6,  regla: 'conteo' },
+          '10HD7': { viaja: false, uxp: 7,  regla: 'conteo' },
+          '15PL1': { viaja: false, uxp: 64, regla: 'conteo' },
+          '5HM4':  { viaja: false, uxp: 25, regla: 'conteo' },
+          MG1:     { viaja: false, uxp: 12, regla: 'conteo' },
+          MG4:     { viaja: false, uxp: 6,  regla: 'conteo' },
+          MGN:     { viaja: false, uxp: 9,  regla: 'conteo' },
+        },
+        camiones: [
+          { id: 'GMC',    total: 312, arrastre: 21, dias: [0, 1, 2, 3, 4, 5] },
+          { id: 'AXEL',   total: 327, arrastre: 21, dias: [0, 1, 2, 3, 4, 5] },
+          { id: 'Grande', total: 475, arrastre: 30, dias: [0, 1, 2, 3, 4, 5] },
+          { id: '304',    total: 306, arrastre: 21, dias: [0, 1, 2, 3, 4, 5] },
+          { id: '5',      total: 261, arrastre: 18, dias: [] },
+          { id: '7',      total: 238, arrastre: 16, dias: [] },
+        ],
       },
       /* El orden de las filas de la hoja de bolsa, si se cambió a mano. Lo que
          no está en la lista va después, en el orden de siempre: una clave
@@ -471,6 +505,34 @@
         if (dias.length || cantidad) out.bolsaFijos[id] = { dias: [...new Set(dias)].sort(), cantidad };
       });
     }
+    /* Antes del esquema 8 no existían los traslados: entra lo de fábrica. */
+    const gt = (viejoEsquema < 8 ? null : guardado.traslado) || {};
+    const bt = base.traslado;
+    const gtc = gt.claves && typeof gt.claves === 'object' ? gt.claves : bt.claves;
+    out.traslado = {
+      activo: gt.activo !== false,
+      arrastre: gt.arrastre !== false,
+      carga: gt.carga === 'orden' ? 'orden' : 'completos',
+      claves: {},
+      camiones: (Array.isArray(gt.camiones) && gt.camiones.length ? gt.camiones : bt.camiones)
+        .filter((c) => c && c.id)
+        .map((c) => ({
+          id: String(c.id),
+          total: Math.max(0, Math.round(Number(c.total) || 0)),
+          arrastre: Math.max(0, Math.round(Number(c.arrastre) || 0)),
+          dias: (Array.isArray(c.dias) ? c.dias : []).map((d) => Math.round(Number(d)))
+            .filter((d) => d >= 0 && d <= 6),
+        })),
+    };
+    Object.keys(gtc).forEach((c) => {
+      const f = gtc[c] || {};
+      out.traslado.claves[c] = {
+        viaja: !!f.viaja,
+        uxp: Math.max(0, Math.round(Number(f.uxp) || 0)),
+        regla: ['conteo', 'produccionAyer', 'siempre'].includes(f.regla) ? f.regla : 'conteo',
+      };
+    });
+
     out.bolsaFuentes = {};
     const gf = guardado.bolsaFuentes;
     if (gf && typeof gf === 'object') {

@@ -36,7 +36,6 @@
         { k: 'total', t: 'Total unidades', fuerte: true },
       ],
       filas: [
-        { id: 'S19M',  clave: 'S19M',        por: 12 },
         /* SR16 es la misma pieza que S16 con otra marca: va a 12 por parrilla
            igual, y se cuenta aparte porque de ahí sale cuánto empacar de esa
            marca. Se escribe acá y se ve también en la tarjeta de S16 total. */

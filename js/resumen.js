@@ -37,6 +37,25 @@
     { id: 'TODAS', nombre: 'Todas las plantas', corto: 'Todas', plantas: null },
   ];
 
+  /* El recorte de claves de cada planta: de la primera a la última, tal como
+     viene la hoja de papel. Fuera de ese tramo las claves sólo estorban, que
+     cada planta mira su pedazo del catálogo. Sin entrada acá, sale entero. */
+  const RECORTES = {
+    Z18:  ['S26', 'S32'],
+    Z2CZ: ['CZ3', '6QU1'],
+    Z2:   ['10FP8', 'WYK+P'],
+  };
+
+  /** El tramo del listado entre dos claves, inclusive. */
+  function recortar(filas, planta) {
+    const r = RECORTES[planta];
+    if (!r) return filas;
+    const i = filas.findIndex((f) => f.clave === r[0]);
+    const j = filas.findIndex((f) => f.clave === r[1]);
+    if (i < 0 || j < 0 || j < i) return filas;
+    return filas.slice(i, j + 1);
+  }
+
   function datos(fecha, planta) {
     const reg = D.registro(fecha);
     const t = C.calcularTodo(D.estado, reg, fecha);
@@ -49,9 +68,11 @@
     const nombrePlanta = g ? g.nombre.toUpperCase()
       : ((D.PLANTAS.find((p) => p.id === planta) || {}).nombre || planta).toUpperCase();
 
-    const suyas = g && g.soloSuyas && g.plantas
-      ? t.filas.filter((f) => g.plantas.some((p) => D.enPlanta(f.clave, p)))
-      : t.filas;
+    const suyas = g
+      ? (g.soloSuyas && g.plantas
+        ? t.filas.filter((f) => g.plantas.some((p) => D.enPlanta(f.clave, p)))
+        : t.filas)
+      : recortar(t.filas, planta);
 
     const filas = suyas.map((f) => {
       const porTurno = {};
