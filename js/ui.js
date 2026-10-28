@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.39';
+  const VERSION = 'V.2026.40';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -17,7 +17,7 @@
     try { const f = localStorage.getItem('panprod_fecha'); return /^\d{4}-\d{2}-\d{2}$/.test(f || '') ? f : null; }
     catch (_) { return null; }
   })();
-  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5' };
+  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5', pedResUnidad: 'bolsas' };
   const recordarFecha = () => { try { localStorage.setItem('panprod_fecha', ui.fecha); } catch (_) {} };
 
   // ---------- avisos ----------
@@ -472,7 +472,6 @@
     $('#pistaInv').innerHTML = 'Los números en gris de <b>STOCK AYER</b> y <b>PROD AYER</b> se toman solos del día anterior. '
       + 'Si escribes encima, ese valor manda y queda en blanco sobre el fondo.';
     pintarDiferenciados(r, P);
-    pintarCz5();
   }
 
   /** Las claves que se arman sumando varias presentaciones de la hoja. */
@@ -508,8 +507,9 @@
         <tbody>${filas}</tbody></table></div></div>`;
   }
 
-  /* El conteo de CZ5, por empaque. Va en Inventario porque es el mismo conteo
-     de cierre y lo hace la misma persona en el mismo momento. */
+  /* El conteo de CZ5, por empaque. Va en Cálculos, no en Inventario: se
+     alimenta de corrido y tenerlo acá evita el ir y venir entre pestañas.
+     Igual se guarda en el día, no en la hoja suelta de los cálculos. */
   function pintarCz5() {
     const cont = $('#cz5Cont');
     if (!cont) return;
@@ -697,6 +697,8 @@
       <th>Unidades</th><th>Bolsas</th><th>QQ</th><th class="l">Suma</th>
       <th class="l">Producir antes de</th><th class="l">Estado</th><th class="l"></th></tr>`;
 
+    pintarResumenPed(visibles);
+
     if (!visibles.length) {
       $('#tbodyPed').innerHTML = `<tr><td colspan="10" class="l dim" style="padding:18px">`
         + (lista.length ? 'No hay pedidos con ese filtro.' : 'Todavía no hay pedidos. Agrega el primero arriba.')
@@ -738,6 +740,85 @@
           <button class="btn sec mini" type="button" data-pedborrar="${esc(p.id)}" aria-label="Borrar">×</button></td>
       </tr>`;
     }).join('');
+  }
+
+  /**
+   * El cruce de los mismos pedidos: una fila por clave, una columna por día
+   * de entrega. Es la vista que se mira para decidir —cuánto de cada cosa y
+   * para cuándo—, que en la lista fila por fila hay que ir sumando a ojo.
+   * Las claves van de mayor a menor, que es el orden en que se decide.
+   */
+  function pintarResumenPed(visibles) {
+    const cont = $('#pedResumen');
+    if (!cont) return;
+    const enUni = ui.pedResUnidad === 'unidades';
+    $('#pedResUnidad').innerHTML = [['bolsas', 'Bolsas'], ['unidades', 'Unidades']]
+      .map(([id, t]) => `<button class="btn ${ui.pedResUnidad === id ? '' : 'sec'} mini"
+        type="button" data-pedres="${id}">${t}</button>`).join('');
+
+    if (!visibles.length) {
+      cont.innerHTML = '<p class="dim" style="margin:12px 2px 0;font-size:.9rem">'
+        + 'Sin pedidos que resumir con este filtro.</p>';
+      return;
+    }
+
+    const dias = [...new Set(visibles.map((p) => p.fecha))].sort();
+    const filas = new Map();
+    const porDia = {}, sumaDia = {};
+    let faltanUni = 0;
+
+    visibles.forEach((p) => {
+      const ficha = D.fichaPorClave(p.clave) || {};
+      const sinCalc = !p.clave || !D.estado.params.prod[p.clave];
+      const llave = p.clave || p.codigo || '—';
+      if (!filas.has(llave)) {
+        const alias = ficha.alias && ficha.alias !== llave ? ficha.alias : '';
+        filas.set(llave, { llave, alias, sinCalc, por: {}, total: 0, suma: 0 });
+      }
+      const f = filas.get(llave);
+      const v = enUni ? (Number(p.unidades) || 0) : (Number(p.bolsas) || 0);
+      if (enUni && !p.unidades) faltanUni++;
+      f.por[p.fecha] = (f.por[p.fecha] || 0) + v;
+      f.total += v;
+      porDia[p.fecha] = (porDia[p.fecha] || 0) + v;
+      if (p.cuenta && !sinCalc) {
+        f.suma += v;
+        sumaDia[p.fecha] = (sumaDia[p.fecha] || 0) + v;
+      }
+    });
+
+    const orden = [...filas.values()].sort((a, b) => b.total - a.total || a.llave.localeCompare(b.llave));
+    const total = orden.reduce((a, f) => a + f.total, 0);
+    const haySuma = orden.some((f) => f.suma);
+
+    const cel = (v) => `<td class="num${v ? '' : ' dim'}">${v ? n0(v) : ''}</td>`;
+    const cuerpo = orden.map((f) => `<tr>
+      <td class="l clave">${esc(f.llave)}${f.alias || f.sinCalc
+        ? `<span class="mini">${esc(f.sinCalc ? 'no entra al cálculo' : f.alias)}</span>` : ''}</td>
+      ${dias.map((d) => cel(f.por[d])).join('')}
+      <td class="num"><b>${n0(f.total)}</b></td></tr>`).join('');
+
+    cont.innerHTML = `<div class="tablabox" style="margin-top:12px">
+      <table class="resped">
+        <thead><tr><th class="l">Clave</th>
+          ${dias.map((d) => `<th>${esc(D.fechaCorta(d))}</th>`).join('')}
+          <th>Total</th></tr></thead>
+        <tbody>${cuerpo}</tbody>
+        <tfoot>
+          <tr class="totales"><td class="l">TOTAL</td>
+            ${dias.map((d) => `<td class="num"><b>${n0(porDia[d] || 0)}</b></td>`).join('')}
+            <td class="num"><b>${n0(total)}</b></td></tr>
+          ${haySuma ? `<tr><td class="l dim">de esos, suman al sugerido</td>
+            ${dias.map((d) => `<td class="num dim">${sumaDia[d] ? n0(sumaDia[d]) : ''}</td>`).join('')}
+            <td class="num dim">${n0(orden.reduce((a, f) => a + f.suma, 0))}</td></tr>` : ''}
+        </tfoot>
+      </table></div>
+      <p class="dim" style="font-size:.85rem;margin:10px 2px 0">
+        ${visibles.length} pedido${visibles.length === 1 ? '' : 's'} ·
+        ${orden.length} clave${orden.length === 1 ? '' : 's'} ·
+        ${dias.length} día${dias.length === 1 ? '' : 's'} de entrega, en ${enUni ? 'unidades' : 'bolsas'}.
+        ${faltanUni ? `${faltanUni} de ellos se capturaron directo en bolsas y no tienen unidades que sumar.` : ''}
+      </p>`;
   }
 
   // ================= IMPRESIÓN BOLSA =================
@@ -939,6 +1020,7 @@
       </div>`));
 
     $('#secCont').innerHTML = partes.join('');
+    pintarCz5();
   }
 
   const tarjetaSec = (titulo, nota, tabla, extra) =>
@@ -2410,7 +2492,7 @@
         ui.ventaClave = e.target.value; pintarVenta();
       } else if (d.cz5) {
         window.Venta.escribirCz5(ui.fecha, d.cz5, e.target.value);
-        pintarCz5(); pintarInventario();
+        pintarCz5();
       } else if (d.pedcta) {
         const p = D.estado.pedidos[d.pedcta];
         if (p) p.cuenta = e.target.checked;
@@ -2451,6 +2533,8 @@
     document.addEventListener('click', (e) => {
       const fp = e.target.closest('[data-fped]');
       if (fp) { ui.filtroPed = fp.dataset.fped; pintarPedidos(); return; }
+      const ru = e.target.closest('[data-pedres]');
+      if (ru) { ui.pedResUnidad = ru.dataset.pedres; pintarPedidos(); return; }
       const pe = e.target.closest('[data-pedent]');
       if (pe) {
         D.estado.pedidos[pe.dataset.pedent].estado = 'entregado';

@@ -233,8 +233,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.39';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.39';`
+1. `js/ui.js` → `const VERSION = 'V.2026.40';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.40';`
 
 ## Plantas, claves y productos nuevos
 
@@ -451,6 +451,13 @@ Una presentación sin clave del catálogo —Encanelado, Mexicano, Espumilla, lo
 captura igual, porque sirve para decidir qué empacar, pero no toca el sugerido y su cheque sale
 deshabilitado.
 
+**El resumen por día y clave** cierra la pestaña: una fila por clave, una columna por día de
+entrega y, en el cruce, las bolsas. Es la vista con que se decide —cuánto de cada cosa y para
+cuándo—, que en la lista fila por fila hay que ir sumando a ojo. Las claves van de mayor a
+menor. Abajo, el total de cada día y, aparte, cuánto de ese total **suma al sugerido**, que no
+es lo mismo. Un botón cambia las bolsas por unidades. Sigue el filtro de la lista: lo que se ve
+en la tabla es lo que suma ahí.
+
 **Los entregados viejos se archivan solos.** Un pedido entregado o cancelado hace más de ocho
 días ya no sirve para decidir nada y la preventa son miles de líneas al año, así que sale del
 estado vivo al abrir el app y después de cada sincronización. No se tira: queda guardado aparte
@@ -460,7 +467,9 @@ en ese equipo, fuera de la sincronización.
 
 El CZ5 no es un producto del catálogo: en producción es CZ3, y lo que lo vuelve CZ5 es el
 empaque individual. Por eso no se cuenta por clave como todo lo demás, sino por empaque, y vive
-en su propia tarjeta al final de **Inventario**.
+en su propia tarjeta, arriba de todo en **Cálculos**. Está ahí y no en Inventario porque se
+alimenta de corrido, y el ir y venir entre pestañas costaba más que la cercanía al conteo. Va
+por el día a producir y sí se guarda en el día, al revés que las conversiones que tiene debajo.
 
 Se anotan dos cosas: **las parrillas que se empacaron hoy** y **el conteo de la tarde**, cada
 empaque por su lado. El app pasa todo a unidades con la tabla de siempre:

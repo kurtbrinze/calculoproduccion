@@ -112,16 +112,6 @@
     <p class="dim" style="font-size:.85rem;margin:10px 2px" id="pistaInv"></p>
     <div id="difCont"></div>
 
-    <div class="card" style="margin-top:14px">
-      <h3>Conteo de CZ5</h3>
-      <p class="sub">
-        El CZ5 no se cuenta por clave sino por empaque, y no es un producto del catálogo: en
-        producción es CZ3 con empaque individual. Se anota lo que se empacó hoy y lo que quedó en
-        el conteo de la tarde, cada cosa en su empaque; el app lo pasa a unidades y saca la venta
-        del día. Lo que quedó anoche es lo que hay esta mañana, así que esa casilla no se escribe.
-      </p>
-      <div id="cz5Cont"></div>
-    </div>
   </section>
 
   <!-- ============ PEDIDOS ESPECIALES ============ -->
@@ -159,6 +149,20 @@
     <div class="fila" style="margin-bottom:10px" id="pedFiltros"></div>
     <div class="tablabox">
       <table><thead id="theadPed"></thead><tbody id="tbodyPed"></tbody></table>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="fila" style="align-items:center">
+        <div>
+          <h3 style="margin:0 0 4px">Resumen por día y clave</h3>
+          <p class="sub" style="margin:0">
+            Lo mismo de arriba, juntado: una fila por clave y una columna por día de entrega.
+            Sigue el filtro de la lista, así que lo que se ve en la tabla es lo que suma acá.
+          </p>
+        </div>
+        <div class="fila" style="margin-left:auto;gap:6px" id="pedResUnidad"></div>
+      </div>
+      <div id="pedResumen"></div>
     </div>
   </section>
 
@@ -206,6 +210,18 @@
 
   <!-- ============ CALCULOS SECUNDARIOS ============ -->
   <section class="panel" id="pSec" role="tabpanel" aria-labelledby="tabSec" hidden>
+    <div class="card" style="margin-bottom:14px">
+      <h3>Conteo de CZ5</h3>
+      <p class="sub">
+        El CZ5 no se cuenta por clave sino por empaque, y no es un producto del catálogo: en
+        producción es CZ3 con empaque individual. Se anota lo que se empacó hoy y lo que quedó en
+        el conteo de la tarde, cada cosa en su empaque; el app lo pasa a unidades y saca la venta
+        del día. Lo que quedó anoche es lo que hay esta mañana, así que esa casilla no se escribe.
+        Va por el <b>día a producir</b> y sí se guarda en el día, al revés que las conversiones
+        de abajo.
+      </p>
+      <div id="cz5Cont"></div>
+    </div>
     <div class="card" style="margin-bottom:14px">
       <div class="fila">
         <div>
