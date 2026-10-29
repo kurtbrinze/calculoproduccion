@@ -89,7 +89,8 @@
         puede: Object.fromEntries(turnos.map((x) => [x.id, (D.fichaPorClave(f.clave) || {}).turnos.includes(x.id)])),
         porTurno,
         total: Math.round(total * 100) / 100,
-        stockAyer: f.stockAyer, prodAyerQQ: f.prodAyerQQ, ventaHoy: f.ventaHoy,
+        stockAyer: f.stockAyer, prodAyerQQ: f.prodAyerQQ, prodAyerB: f.prodAyerB,
+        prodAyerBruto: f.prodAyerBruto, yaContado: f.yaContado, ventaHoy: f.ventaHoy,
         teoricoHoy: f.teoricoHoy, invPM: f.invPM, ventaManana: f.ventaManana,
         ventaPasado: C.demandaDe(D.estado, D.estado.params, f.clave, D.sumarDias(fecha, 2)),
         todosTurnos: f.asign,
@@ -313,13 +314,14 @@
     const MX = 14, MY = 12;
     const h = hoja(ALTO);
 
-    /* Con tres plantas no caben todos los turnos en media carta, así que la
-       hoja lleva los de la planta que se eligió arriba. Con «todas» van todas
-       y la tabla se encoge sola. */
-    const grupos = (d.planta && d.planta !== 'TODAS'
-      ? D.PLANTAS.filter((p) => p.id === d.planta)
-      : D.PLANTAS)
-      .map((p) => ({ id: p.id, nombre: p.nombre, turnos: D.turnosDePlanta(p.id) }))
+    /* Los turnos de la hoja son los de lo que se eligió arriba, sea una planta
+       suelta o una combinación: salen de `d.turnos`, que ya viene filtrado, y
+       se agrupan por planta para la banda de encabezado. Recalcularlos acá
+       dejaba la combinación «Zona 18 + Zona 2 CZ» con los turnos de las tres
+       plantas, porque su id no es el de ninguna. */
+    const dePlanta = (x) => D.plantaDeTurno(x.id);
+    const grupos = D.PLANTAS
+      .map((p) => ({ id: p.id, nombre: p.nombre, turnos: d.turnos.filter((x) => dePlanta(x) === p.id) }))
       .filter((g) => g.turnos.length);
     const corto = (t) => (t.papel && t.papel.length > 2 ? t.papel : t.nombre).toUpperCase();
     const anchoTurno = grupos.reduce((a, g) => a + g.turnos.length, 0) > 8 ? 26 : 31;
@@ -327,7 +329,7 @@
       { k: 'rend', t: 'REND', w: 22 },
       { k: 'clave', t: 'HOY', w: 42, alinear: 'left' },
       { k: 'stock', t: 'STOCK AYER =', w: 36 },
-      { k: 'prod', t: 'PRODUC AYER +', w: 36 },
+      { k: 'prod', t: 'PRODUC AYER +', w: 40 },
       { k: 'cons', t: 'CONSUMO HOY -', w: 36 },
       { k: 'teo', t: 'TEORICO HOY PM', w: 36 },
       { k: 'real', t: 'REAL HOY PM', w: 36 },
@@ -407,7 +409,11 @@
       if (c.k === 'rend') return n0(f.rend);
       if (c.k === 'clave') return f.etiqueta;
       if (c.k === 'stock') return n0(f.stockAyer);
-      if (c.k === 'prod') return f.prodAyerQQ ? n2(f.prodAyerQQ) : '';
+      /* En bolsas, como las columnas de al lado: así la fila se lee de
+         corrido —stock + producción − consumo = teórico— sin tener que
+         multiplicar por el rendimiento de cabeza. Los quintales van abajo,
+         chiquitos, para no perder el dato de la producción. */
+      if (c.k === 'prod') return f.prodAyerB ? n0(f.prodAyerB) : '';
       if (c.k === 'cons') return n0(f.ventaHoy);
       if (c.k === 'teo') return n0(f.teoricoHoy);
       if (c.k === 'real') return f.invPM == null ? '' : n0(f.invPM);
@@ -431,9 +437,16 @@
         h.rect(xx, y, c.w, hFila);
         const neg = c.k === 'clave' || c.k === 'total' || !!c.turno;
         const tam = c.k === 'clave' ? 7 : 6.5;
-        h.texto(xx, y + (hFila - tam) / 2, valor(c, f), {
+        const qq = c.k === 'prod' && f.prodAyerQQ ? `(${n2(f.prodAyerQQ)})` : '';
+        /* Con los quintales abajo el número de arriba sube un poco para que
+           los dos queden centrados en la celda. */
+        h.texto(xx, y + (hFila - tam) / 2 - (qq ? 2.4 : 0), valor(c, f), {
           tam, negrita: neg, alinear: c.alinear || 'center', ancho: c.w,
         });
+        if (qq) {
+          h.texto(xx, y + (hFila - tam) / 2 + 3.4, qq,
+            { tam: 4.6, alinear: 'center', ancho: c.w });
+        }
         xx += c.w;
       });
     });

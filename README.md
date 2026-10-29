@@ -64,7 +64,10 @@ saliendo con el catálogo entero. Las combinaciones se agregan en `GRUPOS`, arri
   esa clave no se puede hacer en ese turno.
 - **Descargar PDF** / **Imprimir** — la hoja de trabajo de siempre, ya llena, en media carta
   horizontal: rendimiento, stock de ayer, producción de ayer, consumo de hoy, teórico PM,
-  INV PM, consumo de mañana y los quintales por turno de las dos plantas. El archivo sale como
+  INV PM, consumo de mañana y los quintales por turno. Lleva **los turnos de lo que se eligió
+  arriba**, sea una planta suelta o una combinación. La columna **PRODUC AYER** va en bolsas,
+  como las de al lado, para que la fila se lea de corrido —stock + producción − consumo =
+  teórico—, con los quintales abajo en letra chica. El archivo sale como
   `Produccion Z18 2026_10_17.pdf`.
 
 En celular y tablet las imágenes salen por el menú de compartir del sistema, así que van directo
@@ -233,8 +236,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.44';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.44';`
+1. `js/ui.js` → `const VERSION = 'V.2026.45';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.45';`
 
 ## Plantas, claves y productos nuevos
 
@@ -484,6 +487,9 @@ por parrilla y `20CZ5` a 6. El día se elige en esa misma tarjeta y **no depende
 producir**, que es el que manda en el resto del app; acá se mira un día a la vez, el de la
 entrega.
 
+**El listado de arriba también se puede filtrar por día**, con el selector a la derecha de
+*Pendientes · Todos · Cerrados*. Vacío, se ve el listado entero.
+
 **Los entregados viejos se archivan solos.** Un pedido entregado o cancelado hace más de ocho
 días ya no sirve para decidir nada y la preventa son miles de líneas al año, así que sale del
 estado vivo al abrir el app y después de cada sincronización. No se tira: queda guardado aparte
@@ -532,6 +538,10 @@ Esta vista es para ver si siguen valiendo.
 
 La pestaña **Cálculos** trae las tablas sueltas de la pestaña `INV_PM` del libro. Son
 conversiones que se hacen una vez, se apuntan a mano en otro reporte y no vuelven a usarse.
+
+En **BELCA**, después del pedido en bolsas va el mismo pedido en **parrillas + bolsas** del
+cliente, y al pie el total de parrillas que ocupa: las bolsas sueltas cuentan como una parrilla
+más, porque igual hay que bajarla.
 
 **No tocan nada**: ni el inventario, ni la producción, ni el historial, y **no se sincronizan**.
 Se guardan sólo en el equipo donde se escriben, para que una recarga a media captura no borre
@@ -669,6 +679,11 @@ el servidor queda como estaba, sin que el equipo apagado se lo pise al otro. Tam
 de comparación, así que al volver a encenderla la mezcla la trata como primer encuentro: si los
 dos lados dicen lo mismo no pregunta nada, si traen cosas distintas las junta, y sólo pregunta
 cuando el mismo dato cambió en los dos lados.
+
+**Las cabeceras no se van.** En cualquier tabla del app los títulos de columna se quedan
+pegados arriba al bajar por las filas, así que siempre se sabe qué número es cuál. La caja de
+la tabla se topa a lo que queda de pantalla y lo que corre es su contenido; las de dos pisos
+—la de impresión de bolsa, con las fechas arriba y los QQ abajo— se quedan enteras.
 
 **Enter y Tab se mueven por la cuadrícula.** En cualquier tabla del app, Enter y las flechas
 bajan y suben por la misma columna —al final de una columna siguen en la de al lado, como una

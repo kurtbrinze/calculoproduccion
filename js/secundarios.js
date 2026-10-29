@@ -133,6 +133,12 @@
         ...f,
         parr: num(d.parr), bolsas: num(d.bolsas), oc: pedido,
         listo, falta,
+        /* El pedido en parrillas del cliente, que son en las que se entrega:
+           las enteras, las bolsas que sobran, y cuántas parrillas ocupa en
+           total —las sueltas también van en una, aunque vaya a medias—. */
+        pedParr: Math.floor(pedido / f.cliente),
+        pedSueltas: r2(pedido - Math.floor(pedido / f.cliente) * f.cliente),
+        pedParrTot: Math.ceil(pedido / f.cliente),
         parrFalta, sueltasFalta: r2(falta - parrFalta * f.bodega),
         /* Parrillas enteras a bajar de bodega: media parrilla no se baja. */
         pedir: Math.ceil(falta / f.bodega),

@@ -155,7 +155,14 @@
 
     <div class="kpis" id="kpisPed"></div>
     <div id="avisosPed"></div>
-    <div class="fila" style="margin-bottom:10px" id="pedFiltros"></div>
+    <div class="fila" style="margin-bottom:10px;align-items:center">
+      <span id="pedFiltros" class="fila" style="margin:0"></span>
+      <div class="campo" style="margin-left:auto;align-items:flex-end">
+        <label for="pedFecha">Ver sólo un día</label>
+        <input type="date" id="pedFecha" style="min-width:160px">
+      </div>
+      <button class="btn sec mini" type="button" id="btnPedFechaNo" hidden>Ver todos</button>
+    </div>
     <div class="tablabox">
       <table><thead id="theadPed"></thead><tbody id="tbodyPed"></tbody></table>
     </div>

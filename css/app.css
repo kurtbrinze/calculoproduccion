@@ -138,10 +138,24 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
 .turno.apagado{opacity:.45}
 
 /* ---------- tablas ---------- */
-.tablabox{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);overflow:auto}
+/* La caja es la que hace de scroll, a lo ancho y a lo alto. Es lo que permite
+   que la cabecera quede pegada arriba al bajar por la tabla: un `thead` sólo
+   se queda quieto contra el marco que scrollea, y si el marco fuera la página
+   la tabla ancha ya no podría correrse de lado. El alto se topa a lo que queda
+   de pantalla entre las pestañas de arriba y la barra de abajo. */
+.tablabox{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  overflow:auto;max-height:calc(100vh - 190px)}
+@supports (height:100dvh){.tablabox{max-height:calc(100dvh - 190px)}}
 table{width:100%;border-collapse:collapse;font-size:.92rem}
+/* Se pega el `thead` entero, no cada `th`: las tablas de dos pisos —la de
+   impresión de bolsa lleva las fechas arriba y los QQ abajo— tenían las dos
+   filas pegadas al mismo cero y se tapaban entre ellas. */
+thead{position:sticky;top:0;z-index:3}
+/* Una sombrita bajo la cabecera: deja claro que lo de abajo sigue corriendo
+   por detrás, en vez de parecer que la fila quedó cortada a medias. */
+thead tr:last-child th{box-shadow:0 7px 9px -7px rgba(0,0,0,.6)}
 th{
-  position:sticky;top:0;z-index:2;background:var(--surface-2);text-align:right;
+  background:var(--surface-2);text-align:right;
   font-size:.72rem;font-weight:700;color:var(--muted);letter-spacing:.05em;
   padding:9px 10px;border-bottom:1px solid var(--line-2);white-space:nowrap;
 }
@@ -446,9 +460,14 @@ td.conped{color:var(--accent-2)}
 .calctec button.sec2{color:var(--muted)}
 
 table.resped td:first-child{position:sticky;left:0;background:var(--surface);z-index:1}
-table.resped th:first-child{left:0;z-index:3}
+table.resped th:first-child{position:sticky;left:0;z-index:4}
 table.resped tfoot td:first-child{background:var(--surface)}
 table.resped th:last-child,table.resped td:last-child{border-left:1px solid var(--line-2)}
+/* Columnas juntas: con la clave pegada a los números la fila se sigue de un
+   vistazo, sin recorrer media pantalla en blanco. */
+table.junta{width:auto;min-width:min(100%,540px)}
+table.junta th,table.junta td{padding-left:14px;padding-right:14px;white-space:nowrap}
+table.junta th:last-child,table.junta td:last-child{border-left:0}
 /* Los siete días como toques cortos, para marcar martes y jueves de un vistazo. */
 .diasf{gap:4px;margin:0;flex-wrap:nowrap}
 .diaf{min-height:32px;gap:4px;font-size:.8rem;color:var(--muted);

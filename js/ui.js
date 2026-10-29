@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.44';
+  const VERSION = 'V.2026.45';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -17,7 +17,7 @@
     try { const f = localStorage.getItem('panprod_fecha'); return /^\d{4}-\d{2}-\d{2}$/.test(f || '') ? f : null; }
     catch (_) { return null; }
   })();
-  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5', pedResFecha: '' };
+  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5', pedResFecha: '', pedFecha: '' };
   const recordarFecha = () => { try { localStorage.setItem('panprod_fecha', ui.fecha); } catch (_) {} };
 
   // ---------- avisos ----------
@@ -809,7 +809,11 @@
     $('#pedFiltros').innerHTML = [['vivos', 'Pendientes'], ['todos', 'Todos'], ['cerrados', 'Cerrados']]
       .map(([id, t]) => `<button class="btn ${ui.filtroPed === id ? '' : 'sec'} mini" type="button" data-fped="${id}">${t}</button>`).join('');
 
+    /* El filtro de fecha se suma al de estado: vacío, se ve todo el listado. */
+    $('#pedFecha').value = ui.pedFecha || '';
+    $('#btnPedFechaNo').hidden = !ui.pedFecha;
     const visibles = lista.filter((p) => {
+      if (ui.pedFecha && p.fecha !== ui.pedFecha) return false;
       const e = D.estadoPedido(p);
       if (ui.filtroPed === 'vivos') return e === 'pendiente' || e === 'vencido';
       if (ui.filtroPed === 'cerrados') return e === 'entregado' || e === 'cancelado';
@@ -925,33 +929,33 @@
     const totU = orden.reduce((a, f) => a + f.unidades, 0);
     const totP = orden.reduce((a, f) => a + f.parr, 0);
 
+    /* Sin los rótulos «parr» y «b»: con el título de la columna arriba
+       sobran, y el número queda más cerca del de al lado para seguir la fila. */
     const parrilla = (f) => {
-      if (!f.bxp) return '<span class="dim">sin parrilla</span>';
-      return `<b>${n0(f.parr)}</b> <span class="dim">parr</span>`
-        + (f.sueltas ? ` + <b>${n0(f.sueltas)}</b> <span class="dim">b</span>` : '');
+      if (!f.bxp) return '<span class="dim">—</span>';
+      return `<b>${n0(f.parr)}</b>${f.sueltas ? ` + <b>${n0(f.sueltas)}</b>` : ''}`;
     };
 
     cont.innerHTML = `<div class="tablabox" style="margin-top:12px">
-      <table class="resped">
+      <table class="resped junta">
         <thead><tr><th class="l">Clave</th><th>Unidades</th><th>Bolsas</th>
-          <th class="l">Parrillas + bolsa</th><th class="l">Bolsas por parrilla</th></tr></thead>
+          <th>Parrillas + bolsa</th><th class="l" style="width:100%"></th></tr></thead>
         <tbody>${orden.map((f) => `<tr>
-          <td class="l clave">${esc(f.cod)}${f.desc || f.sinPres
-            ? `<span class="mini">${esc(f.sinPres ? 'capturado en bolsas, sin presentación' : f.desc)}</span>` : ''}</td>
+          <td class="l clave">${esc(f.cod)}</td>
           <td class="num dim">${f.unidades ? n0(f.unidades) : ''}</td>
           <td class="num"><b>${n0(f.bolsas)}</b></td>
-          <td class="l">${parrilla(f)}</td>
-          <td class="l dim">${f.bxp ? n0(f.bxp) : ''}</td></tr>`).join('')}</tbody>
+          <td class="num">${parrilla(f)}</td>
+          <td class="l dim">${f.sinPres ? 'capturado en bolsas' : ''}</td></tr>`).join('')}</tbody>
         <tfoot><tr class="totales"><td class="l">TOTAL</td>
           <td class="num dim">${totU ? n0(totU) : ''}</td>
           <td class="num"><b>${n0(totB)}</b></td>
-          <td class="l"><b>${n0(totP)}</b> <span class="dim">parr</span></td>
+          <td class="num"><b>${n0(totP)}</b></td>
           <td></td></tr></tfoot>
       </table></div>
       <p class="dim" style="font-size:.85rem;margin:10px 2px 0">
         ${delDia.length} pedido${delDia.length === 1 ? '' : 's'} para el
-        ${esc(D.fechaCorta(fecha))} · ${orden.length} ${orden.length === 1 ? 'presentación' : 'presentaciones'}.
-        Las bolsas por parrilla salen del catálogo de presentaciones, en Parámetros.
+        ${esc(D.fechaCorta(fecha))} · ${orden.length} ${orden.length === 1 ? 'clave' : 'claves'}.
+        Las bolsas por parrilla de cada clave salen del catálogo de presentaciones, en Parámetros.
       </p>`;
   }
 
@@ -1306,6 +1310,8 @@
       <td class="num dim">${f.listo ? n2(f.listo) : ''}</td>
       <td><input class="inqq" inputmode="decimal" enterkeyhint="next" data-sb="${f.id}" data-sc="oc"
         value="${esc((datos.belca || {})[f.id] ? ((datos.belca[f.id] || {}).oc ?? '') : '')}" aria-label="Pedido ${esc(f.clave)}"></td>
+      <td class="num">${f.oc ? `<b>${n2(f.pedParr)}</b>${f.pedSueltas ? ` + <b>${n2(f.pedSueltas)}</b>` : ''}` : ''}
+        ${f.oc ? `<span class="mini">${n2(f.pedParrTot)} parrillas</span>` : ''}</td>
       <td class="num ${f.falta ? 'neg' : ''}"><b>${f.falta ? n2(f.falta) : '—'}</b></td>
       <td class="num dim">${f.falta ? `${n2(f.parrFalta)} + ${n2(f.sueltasFalta)}` : ''}</td>
       <td class="num"><b>${f.pedir ? n2(f.pedir) : '—'}</b></td></tr>`).join('');
@@ -1313,9 +1319,13 @@
       + ' convierte a parrillas de bodega, que son las que hay que bajar.',
       `<table><thead><tr>
         <th class="l">Clave</th>${th2('Parrillas', 'listas')}${th2('Bolsas', 'sueltas')}
-        ${th2('Preparado', 'bolsas')}${th2('Pedido', 'bolsas')}${th2('Falta', 'bolsas')}
-        ${th2('Falta', 'parr + sueltas')}${th2('Bajar', 'parrillas')}
-      </tr></thead><tbody>${filasB}</tbody></table>`);
+        ${th2('Preparado', 'bolsas')}${th2('Pedido', 'bolsas')}${th2('Pedido', 'parr + bolsas')}
+        ${th2('Falta', 'bolsas')}${th2('Falta', 'parr + sueltas')}${th2('Bajar', 'parrillas')}
+      </tr></thead><tbody>${filasB}</tbody>
+      <tfoot><tr class="totales"><td class="l">TOTAL PARRILLAS</td>
+        <td></td><td></td><td></td><td></td>
+        <td class="num"><b>${n2(belca.reduce((a, f) => a + (f.oc ? f.pedParrTot : 0), 0))}</b></td>
+        <td></td><td></td><td></td></tr></tfoot></table>`);
 
     /* El orden de las tarjetas es el de la jornada, no el del código: el CZ3 /
        CZ5 ya salió arriba pegado al conteo, y el PL1 cierra. */
@@ -2965,6 +2975,9 @@
         const p = D.estado.pedidos[d.pedb];
         if (p && v != null && !Number.isNaN(v) && v > 0) p.bolsas = Math.round(v);
         D.guardarPedidos(); pintarPedidos(); pintarProduccion();
+      } else if (e.target.id === 'pedFecha') {
+        ui.pedFecha = e.target.value || '';
+        pintarPedidos();
       } else if (e.target.id === 'pedResFecha') {
         ui.pedResFecha = e.target.value || '';
         pintarResumenPed();
@@ -3013,6 +3026,7 @@
     document.addEventListener('click', (e) => {
       const fp = e.target.closest('[data-fped]');
       if (fp) { ui.filtroPed = fp.dataset.fped; pintarPedidos(); return; }
+      if (e.target.closest('#btnPedFechaNo')) { ui.pedFecha = ''; pintarPedidos(); return; }
       const pe = e.target.closest('[data-pedent]');
       if (pe) {
         D.estado.pedidos[pe.dataset.pedent].estado = 'entregado';
