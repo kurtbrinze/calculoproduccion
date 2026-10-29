@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.45';
+  const VERSION = 'V.2026.46';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -17,7 +17,7 @@
     try { const f = localStorage.getItem('panprod_fecha'); return /^\d{4}-\d{2}-\d{2}$/.test(f || '') ? f : null; }
     catch (_) { return null; }
   })();
-  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5', pedResFecha: '', pedFecha: '' };
+  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5', pedResFecha: '', pedFecha: '', resAbierta: null };
   const recordarFecha = () => { try { localStorage.setItem('panprod_fecha', ui.fecha); } catch (_) {} };
 
   // ---------- avisos ----------
@@ -826,6 +826,8 @@
       <th class="l">Producir antes de</th><th class="l">Estado</th><th class="l"></th></tr>`;
 
     pintarResumenPed();
+    $('#btnPedExcel').onclick = () => exportarPedidos(visibles);
+    $('#btnPedExcel').disabled = !visibles.length;
 
     if (!visibles.length) {
       $('#tbodyPed').innerHTML = `<tr><td colspan="10" class="l dim" style="padding:18px">`
@@ -870,6 +872,35 @@
     }).join('');
   }
 
+  /**
+   * Quién pidió esa clave ese día y cuánto. Es lo que se pregunta en cuanto
+   * un número se ve raro: de dónde salieron esas bolsas. Va plegado, que la
+   * tabla se mira para decidir y el detalle sólo cuando hace falta.
+   */
+  function quienPidio(f) {
+    const por = f.de.slice().sort((a, b) => (Number(b.bolsas) || 0) - (Number(a.bolsas) || 0));
+    const cel = (p) => {
+      const e = D.estadoPedido(p);
+      const et = ETIQ_PED[e] || ETIQ_PED.pendiente;
+      return `<tr>
+        <td class="l">${esc(p.cliente || 'sin cliente')}</td>
+        <td class="num dim">${p.unidades ? n0(p.unidades) : ''}</td>
+        <td class="num"><b>${n0(Number(p.bolsas) || 0)}</b></td>
+        <td class="num dim">${f.bxp ? n2(C.redondea((Number(p.bolsas) || 0) / f.bxp, 2)) : ''}</td>
+        <td class="l">${p.cuenta ? '<span class="chip ped">SUMA</span>' : ''}</td>
+        <td class="l"><span class="chip ${et.chip}">${esc(et.txt)}</span></td></tr>`;
+    };
+    return `<div style="padding:10px 14px 12px">
+      <p class="dim" style="margin:0 0 8px;font-size:.84rem">
+        ${por.length} ${por.length === 1 ? 'pedido' : 'pedidos'} de ${esc(f.cod)}${f.desc ? ` · ${esc(f.desc)}` : ''}
+      </p>
+      <table class="junta" style="font-size:.88rem">
+        <thead><tr><th class="l">Cliente</th><th>Unidades</th><th>Bolsas</th>
+          <th>Parrillas</th><th class="l">Sugerido</th><th class="l">Estado</th></tr></thead>
+        <tbody>${por.map(cel).join('')}</tbody>
+      </table></div>`;
+  }
+
   /** El primer día de entrega que todavía tiene pedidos vivos, o mañana. */
   function diaResumenPed() {
     if (ui.pedResFecha) return ui.pedResFecha;
@@ -912,12 +943,13 @@
         const pres = p.codigo ? D.presentacionDe(p.codigo) : null;
         filas.set(cod, {
           cod, desc: pres ? pres.desc : '', bxp: pres ? Number(pres.bxp) || 0 : 0,
-          sinPres: !pres, bolsas: 0, unidades: 0,
+          sinPres: !pres, bolsas: 0, unidades: 0, de: [],
         });
       }
       const f = filas.get(cod);
       f.bolsas += Number(p.bolsas) || 0;
       f.unidades += Number(p.unidades) || 0;
+      f.de.push(p);
     });
 
     const orden = [...filas.values()].sort((a, b) => b.bolsas - a.bolsas || a.cod.localeCompare(b.cod));
@@ -940,12 +972,18 @@
       <table class="resped junta">
         <thead><tr><th class="l">Clave</th><th>Unidades</th><th>Bolsas</th>
           <th>Parrillas + bolsa</th><th class="l" style="width:100%"></th></tr></thead>
-        <tbody>${orden.map((f) => `<tr>
-          <td class="l clave">${esc(f.cod)}</td>
+        <tbody>${orden.map((f) => {
+          const ab = ui.resAbierta === f.cod;
+          return `<tr>
+          <td class="l clave"><button type="button" class="verPed" data-ped="${esc(f.cod)}"
+              style="background:none;border:0;color:inherit;font:inherit;cursor:pointer;padding:0;text-align:left">
+              ${esc(f.cod)} <span style="color:var(--muted);font-weight:400">${ab ? '▾' : '▸'}</span></button></td>
           <td class="num dim">${f.unidades ? n0(f.unidades) : ''}</td>
           <td class="num"><b>${n0(f.bolsas)}</b></td>
           <td class="num">${parrilla(f)}</td>
-          <td class="l dim">${f.sinPres ? 'capturado en bolsas' : ''}</td></tr>`).join('')}</tbody>
+          <td class="l dim">${f.sinPres ? 'capturado en bolsas' : ''}</td></tr>`
+          + (ab ? `<tr class="detalle"><td colspan="5">${quienPidio(f)}</td></tr>` : '');
+        }).join('')}</tbody>
         <tfoot><tr class="totales"><td class="l">TOTAL</td>
           <td class="num dim">${totU ? n0(totU) : ''}</td>
           <td class="num"><b>${n0(totB)}</b></td>
@@ -1565,6 +1603,31 @@
       const r = await descargar(blob, t ? `${t.nombre.replace(/[^\w]+/g, '_')}_${hoy}.xlsx` : `Historial_Produccion_${hoy}.xlsx`, TIPO_XLSX);
       if (r.modo === 'cancelado') return;
       aviso((t ? `Exportado ${t.titulo}` : `Exportados ${fechas.length} días en ${hojas.length} tablas`) + donde(r) + '.');
+    } catch (err) { aviso('No se pudo exportar: ' + err.message, 'err'); }
+    finally { espera(false); }
+  }
+
+  /**
+   * Los pedidos a Excel. Sale lo que la lista está mostrando, con los dos
+   * filtros puestos: así lo que se ve es lo que se exporta. Los archivados
+   * —entregados de hace más de ocho días— van en su propia hoja, porque de
+   * la pantalla ya no se alcanzan y en el archivo sí hacen falta.
+   */
+  async function exportarPedidos(visibles) {
+    const X = window.Excel;
+    espera(true, 'Armando el Excel…');
+    try {
+      const hojas = [X.tablaPedidos(visibles, 'Pedidos', 'Pedidos por día de entrega')];
+      const viejos = Object.values(D.pedidosViejos() || {});
+      if (viejos.length) {
+        hojas.push(X.tablaPedidos(viejos, 'Archivados', 'Pedidos cerrados y archivados'));
+      }
+      const { blob } = await X.escribirLibro(hojas, 'pedidos.xlsx');
+      const hoy = D.hoyISO().replace(/-/g, '_');
+      const r = await descargar(blob, `Pedidos_${hoy}.xlsx`, TIPO_XLSX);
+      if (r.modo === 'cancelado') return;
+      aviso(`Exportados ${n0(visibles.length)} pedidos`
+        + (viejos.length ? ` y ${n0(viejos.length)} archivados` : '') + donde(r) + '.');
     } catch (err) { aviso('No se pudo exportar: ' + err.message, 'err'); }
     finally { espera(false); }
   }
@@ -3070,6 +3133,11 @@
       }
       const b = e.target.closest('.verDet');
       if (b) { ui.abierta = ui.abierta === b.dataset.clave ? null : b.dataset.clave; pintarProduccion(); return; }
+      const vp = e.target.closest('.verPed');
+      if (vp) {
+        ui.resAbierta = ui.resAbierta === vp.dataset.ped ? null : vp.dataset.ped;
+        pintarResumenPed(); return;
+      }
       const ab = e.target.closest('[data-abrir]');
       if (ab) { ui.fecha = ab.dataset.abrir; recordarFecha(); window.irA('prod'); aviso('Abierto ' + D.fechaCorta(ui.fecha)); return; }
       const bo = e.target.closest('[data-borrar]');

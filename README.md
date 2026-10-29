@@ -236,8 +236,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.45';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.45';`
+1. `js/ui.js` → `const VERSION = 'V.2026.46';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.46';`
 
 ## Plantas, claves y productos nuevos
 
@@ -488,7 +488,15 @@ producir**, que es el que manda en el resto del app; acá se mira un día a la v
 entrega.
 
 **El listado de arriba también se puede filtrar por día**, con el selector a la derecha de
-*Pendientes · Todos · Cerrados*. Vacío, se ve el listado entero.
+*Pendientes · Todos · Cerrados*. Vacío, se ve el listado entero. **Exportar a Excel** baja lo
+que la lista está mostrando —con los dos filtros puestos— en una tabla ordenada por día de
+entrega, con cada pedido en las tres unidades, su QQ, si suma al sugerido y hasta cuándo hay
+para producirlo. Los archivados van en su propia hoja, porque de la pantalla ya no se alcanzan.
+
+**La flecha de cada clave** abre quién la pidió: el cliente, cuánto en unidades y bolsas, en
+cuántas parrillas cae y si ese pedido suma al sugerido. Es lo que se pregunta en cuanto un
+número se ve raro —de dónde salieron esas bolsas—, y va plegado porque la tabla se mira para
+decidir y el detalle sólo cuando hace falta.
 
 **Los entregados viejos se archivan solos.** Un pedido entregado o cancelado hace más de ocho
 días ya no sirve para decidir nada y la preventa son miles de líneas al año, así que sale del
