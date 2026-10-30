@@ -283,7 +283,7 @@
     const prod = {};
     PRODUCTOS.forEach((p) => { prod[p.clave] = fichaDe(p); });
     const turnos = {};
-    TURNOS.forEach((t) => { turnos[t.id] = { tope: t.tope, minimo: t.minimo || 0, planta: t.planta, activo: true }; });
+    TURNOS.forEach((t) => { turnos[t.id] = { tope: t.tope, minimo: t.minimo || 0, planta: t.planta, activo: true, reparte: true }; });
     const familias = {};
     FAMILIAS.forEach((f) => {
       familias[f.id] = { vidaUtil: f.vidaUtil, minDespacho: f.minDespacho, colchon: f.colchon, anticipacion: null };
@@ -436,6 +436,9 @@
     Object.keys(guardado.turnos || {}).forEach((k) => {
       if (base.turnos[k]) out.turnos[k] = { ...base.turnos[k], ...guardado.turnos[k] };
     });
+    /* Un turno guardado por una versión sin `reparte` entra repartiendo: es
+       como se comportaba antes y es lo que el usuario espera al actualizar. */
+    Object.keys(out.turnos).forEach((k) => { out.turnos[k].reparte = out.turnos[k].reparte !== false; });
     out.familias = { ...base.familias };
     Object.keys(guardado.familias || {}).forEach((k) => {
       if (base.familias[k]) out.familias[k] = { ...base.familias[k], ...guardado.familias[k] };

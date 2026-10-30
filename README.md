@@ -213,6 +213,23 @@ ninguna se quede en cero sólo porque otra llegó antes. Lo que no cabe se avisa
 Un turno con **mínimo** se completa aunque el sugerido sea cero: así Panaderos PM sigue
 corriendo con sus 12 qq de 10HD7, como en la operación real.
 
+### Activo y Reparte no son lo mismo
+
+En Parámetros cada turno lleva dos casillas:
+
+| Casilla | Qué hace |
+|---|---|
+| **Activo** | Si se apaga, el turno desaparece de Producción. No existe para la app |
+| **Reparte** | El turno se ve y se le puede escribir a mano, pero el reparto automático no le pone nada |
+
+**Reparte** sirve para el turno que sí va a trabajar pero cuya carga se decide en la planta, no
+acá. La diferencia importante: **el sugerido no cambia**. La capacidad de ese turno sigue
+contando para calcular cuánto hace falta producir; lo único que cambia es que la app no propone
+dónde ponerlo, y la clave aparece avisada como que no entró al reparto. Apagar **Activo** apaga
+también **Reparte**; volver a encenderlo los enciende los dos.
+
+Un turno guardado por una versión anterior entra repartiendo, que es como se comportaba antes.
+
 ## Calibrar el sugerido
 
 Los valores de fábrica salen del comportamiento observado, pero **el sugerido necesita
@@ -236,8 +253,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.46';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.46';`
+1. `js/ui.js` → `const VERSION = 'V.2026.47';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.47';`
 
 ## Plantas, claves y productos nuevos
 
@@ -557,7 +574,7 @@ el trabajo; **Limpiar todo** los deja en cero.
 
 | Tabla | Qué convierte |
 |---|---|
-| Especiales y dulces | S19M, S16, SR16, S25M, 5HD2 y 5HD2 Emp PM: parrillas × lo que lleva cada una, más sueltos. Suma aparte las dos presentaciones de 5HD2 |
+| Especiales y dulces | S11T, S16, SR16, S25M, 5HD2 y 5HD2 Emp PM: parrillas × lo que lleva cada una, más sueltos. Suma aparte las dos presentaciones de 5HD2 |
 | S16 total | S16 y SR16 sumados. Las dos marcas se escriben arriba y acá se ven y se suman, a 12 por parrilla |
 | PL1 (0034) | Las cinco presentaciones llevadas a equivalente de 15PL1 |
 | Magdalenas (0414) | MG4D a 5 por parrilla y MGND a 8 |
@@ -568,6 +585,22 @@ el trabajo; **Limpiar todo** los deja en cero.
 parrillas del cliente —el 10HM5 le lleva 9 bolsas—, y lo que falta se convierte a parrillas de
 bodega —8 bolsas—, que son las que hay que bajar al día siguiente para terminar el pedido. En
 el 10PM3 las dos coinciden en 6.
+
+### El S11T se llena solo, y avisa cuando queda poco
+
+La primera fila de **Especiales y dulces** es el **S11T**, el pan tostado. No es una clave del
+catálogo de producción: nadie la produce. Sale de tostar S11, y lo único que hay de ella es el
+número que aparece en la foto del **conteo PM**, que la app ya lee para calcular el inventario
+de S11 con `S11 + (S11T × 21)`.
+
+De ahí se trae. La fila toma las **parrillas que dejó el conteo de la tarde del día anterior** al
+día que está abierto en pantalla, y las convierte a bolsas **× 21**. El número llega como pista
+en gris: si se escribe encima, manda lo escrito. Debajo de la clave dice de qué conteo salió.
+
+Arriba de la pestaña, **cuando quedan 5 parrillas o menos**, sale una alerta que dice cuántas
+parrillas y bolsas quedaron, y **cuánto S11 se produjo ese mismo día**, en bolsas y en quintales
+—que es de donde va a salir el tostado de mañana—. Si ese día no se guardó conteo, lo dice en
+vez de inventar un número.
 
 **En CZ3 / CZ5**, las perchas de CZ3 y las de CZ5 se escriben en perchas y la parrilla sale
 de `perchas × 12`. La fila de **Producción PM** va en quintales y se llena sola con lo que ese día

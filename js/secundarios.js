@@ -17,6 +17,12 @@
   const D = window.Datos;
 
   const r2 = (n) => Math.round(n * 100) / 100;
+
+  /* El S11T va a 21 bolsas por parrilla, el mismo número con que el app ya lo
+     mete en el inventario de S11. El aviso salta a las cinco parrillas o menos,
+     que es cuando ya no alcanza para el día. */
+  const POR_PARRILLA_S11T = 21;
+  const TOPE_S11T = 5;
   const num = (v) => {
     const n = Number(String(v == null ? '' : v).replace(/[\s,]/g, ''));
     return Number.isFinite(n) ? n : 0;
@@ -36,6 +42,11 @@
         { k: 'total', t: 'Total unidades', fuerte: true },
       ],
       filas: [
+        /* El S11T no se escribe: viene del conteo de la tarde del día
+           anterior. No es una clave del catálogo —es una parte del cálculo de
+           S11, que es `S11 + S11T × 21`—, así que lo único que lo guarda es la
+           lectura cruda de la hoja. De ahí se trae. */
+        { id: 'S11T',  clave: 'S11T',        por: 21, auto: 'parr' },
         /* SR16 es la misma pieza que S16 con otra marca: va a 12 por parrilla
            igual, y se cuenta aparte porque de ahí sale cuánto empacar de esa
            marca. Se escribe acá y se ve también en la tarjeta de S16 total. */
@@ -226,11 +237,46 @@
   }
 
   /** Una tabla resuelta: cada fila con lo escrito y lo calculado. */
-  function resolver(tabla, datos) {
+  /**
+   * El S11T del conteo de la tarde del día anterior, en parrillas. Sale de la
+   * lectura cruda de la hoja, que es lo único que lo guarda: escrito a mano en
+   * Inventario no queda, porque no tiene casilla propia.
+   */
+  function lecturaS11T(fecha) {
+    const ayer = D.sumarDias(fecha, -1);
+    const reg = D.estado.dias[ayer];
+    const v = reg && reg.crudo ? num(reg.crudo.S11T) : null;
+    return { fecha: ayer, parrillas: v == null || Number.isNaN(v) ? null : v };
+  }
+
+  /** Lo que hace falta para el aviso de S11T: lo que quedó y lo que se hizo. */
+  function alertaS11T(fecha) {
+    const { fecha: ayer, parrillas } = lecturaS11T(fecha);
+    const reg = D.estado.dias[ayer];
+    const turnos = (reg && D.migrar(reg).turnos.S11) || {};
+    const qq = r2(Object.values(turnos).reduce((a, b) => a + (Number(b) || 0), 0));
+    const rend = Number((D.fichaPorClave('S11') || {}).rend) || 0;
+    return {
+      fecha: ayer, hay: parrillas != null, parrillas,
+      bolsas: parrillas == null ? null : r2(parrillas * POR_PARRILLA_S11T),
+      qq, prodBolsas: Math.round(qq * rend),
+      poco: parrillas != null && parrillas <= TOPE_S11T,
+      tope: TOPE_S11T,
+    };
+  }
+
+  function resolver(tabla, datos, fecha) {
     const filas = tabla.filas.map((f) => {
       const v = {};
       tabla.cols.forEach((c) => { if (c.k !== 'clave') v[c.k] = valor(datos, tabla.id, f.id, c.k); });
-      return { ...f, v, calc: tabla.calc(f, v) };
+      /* Una fila con `auto` trae su número de la lectura cuando no se escribió
+         nada encima; lo escrito a mano siempre manda. */
+      let autoVal = null;
+      if (f.auto && f.id === 'S11T' && fecha) {
+        autoVal = lecturaS11T(fecha).parrillas;
+        if (autoVal != null && String(v[f.auto] ?? '').trim() === '') v[f.auto] = String(autoVal);
+      }
+      return { ...f, v, autoVal, calc: tabla.calc(f, v) };
     });
     const pies = (tabla.pies || []).map((pie) => {
       const dentro = pie.de === '*' ? filas : filas.filter((f) => pie.de.includes(f.id));
@@ -241,6 +287,7 @@
 
   window.Secundarios = {
     TABLAS, BELCA, leer, grabar, limpiar, escribir, valor, resolver,
+    alertaS11T, lecturaS11T, POR_PARRILLA_S11T, TOPE_S11T,
     calcBelca, calcCz, num, r2, PERCHA, CZ3_POR_PERCHA,
   };
 })();

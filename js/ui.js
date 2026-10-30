@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.46';
+  const VERSION = 'V.2026.47';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -166,9 +166,10 @@
     const exc = Object.values(t.turnos).filter((x) => x.excedido);
     if (exc.length) av.push(['err', 'Hay turnos pasados de tope', exc.map((x) => `${x.nombre}: ${n2(x.usado)} de ${n2(x.tope)} QQ`).join(' · ')]);
     if (ui.sinTurnoHoy && ui.sinTurnoHoy.length) {
-      av.push(['', `${ui.sinTurnoHoy.length} claves no se pueden producir este día`,
+      av.push(['', `${ui.sinTurnoHoy.length} claves no entraron al reparto`,
         ui.sinTurnoHoy.map((x) => `${x.clave} ${n2(x.qq)} qq`).join(' · ')
-        + '. Sus turnos son de una planta que hoy descansa, así que el sugerido queda para la próxima corrida.']);
+        + '. Sus turnos son de una planta que hoy descansa, o están puestos para no repartir '
+        + 'en Parámetros; el sugerido se puede poner a mano o queda para la próxima corrida.']);
     }
     if (ui.sinCupo && ui.sinCupo.length) {
       av.push(['warn', `No cupo todo: faltan ${n2(ui.sinCupo.reduce((a, x) => a + x.qq, 0))} qq de turno`,
@@ -326,8 +327,11 @@
    */
   function topeDeClave(clave, turnos, cupos) {
     const cfg = D.estado.params.prod[clave] || {};
+    /* Sólo cuenta la capacidad de los turnos que de verdad van a recibir algo:
+       un turno fuera del reparto no es capacidad disponible. */
     const suyos = turnos.filter((x) => D.puedeEnTurno(clave, x.id)
-      && C.turnoTrabaja(D.estado.params, x.id, ui.fecha));
+      && C.turnoTrabaja(D.estado.params, x.id, ui.fecha)
+      && (D.estado.params.turnos[x.id] || {}).reparte !== false);
     let cap;
     if (!suyos.length) cap = 0;
     else if (suyos.some((x) => !(((cupos || {})[x.id] || {}).tope > 0))) cap = Infinity;
@@ -1313,18 +1317,49 @@
     const datos = S.leer();
     const partes = [];
 
+    /* El S11T es lo primero que se mira al abrir: si quedó poco, hay que
+       decidir ya si se tuesta más, y para eso hace falta saber cuánto S11 se
+       hizo anoche. */
+    const a11 = S.alertaS11T(ui.fecha);
+    const av = [];
+    if (a11.hay && a11.poco) {
+      av.push(['warn', `Queda poco S11T: ${n2(a11.parrillas)} ${a11.parrillas === 1 ? 'parrilla' : 'parrillas'}`,
+        `El conteo de la tarde del <b>${esc(D.fechaCorta(a11.fecha))}</b> dejó `
+        + `<b>${n2(a11.parrillas)} ${a11.parrillas === 1 ? 'parrilla' : 'parrillas'}</b> de S11T, que son `
+        + `<b>${n0(a11.bolsas)} bolsas</b>. `
+        + (a11.qq
+          ? `Ese día se produjeron <b>${n0(a11.prodBolsas)} bolsas de S11</b> (${n2(a11.qq)} QQ), `
+            + 'que es de donde sale el tostado.'
+          : 'Ese día no se produjo S11, así que no hay de dónde tostar más.')]);
+    } else if (!a11.hay) {
+      av.push(['', `No hay conteo de S11T del ${D.fechaCorta(a11.fecha)}`,
+        'El S11T sólo queda guardado cuando el INV PM se lee de la foto o se importa del Excel; '
+        + 'escrito a mano en Inventario no se conserva, porque no es una clave del catálogo sino '
+        + 'una parte del cálculo de S11. Se puede escribir a mano en la fila de Especiales y dulces.']);
+    }
+    $('#avisosSec').innerHTML = av.map(([c, h, t]) =>
+      `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${t}</p></div>`).join('');
+
     S.TABLAS.forEach((t0) => {
-      const t = S.resolver(t0, datos);
+      const t = S.resolver(t0, datos, ui.fecha);
       const th = t.cols.map((c) => `<th class="${c.ancho || ''}">${esc(c.t)}</th>`).join('');
       const tb = t.filas.map((f) => `<tr>${t.cols.map((c) => {
         if (c.k === 'clave') {
-          return `<td class="l clave">${esc(f.clave)}${f.espejo
-            ? '<span class="mini">viene de arriba</span>' : ''}</td>`;
+          const pie = f.espejo ? 'viene de arriba'
+            : (f.auto ? `del conteo del ${D.fechaCorta(S.lecturaS11T(ui.fecha).fecha)} · ${f.por} por parrilla` : '');
+          return `<td class="l clave">${esc(f.clave)}${pie ? `<span class="mini">${esc(pie)}</span>` : ''}</td>`;
         }
         if (c.entra) {
-          return `<td><input class="inqq${f.espejo ? ' espejo' : ''}" inputmode="decimal" enterkeyhint="next"
+          /* La casilla que viene de la lectura va en gris, como pista: se ve
+             de dónde salió y escribir encima la corrige. */
+          const auto = f.auto === c.k && f.autoVal != null;
+          const propio = String(S.valor(datos, t.id, f.id, c.k) ?? '').trim();
+          return `<td><input class="inqq${f.espejo ? ' espejo' : ''}${auto && !propio ? ' auto' : ''}"
+            inputmode="decimal" enterkeyhint="next"
             data-st="${t.id}" data-sf="${esc(f.id)}" data-sc="${c.k}"
-            value="${esc(f.v[c.k])}" aria-label="${esc(c.t)} de ${esc(f.clave)}"></td>`;
+            value="${esc(auto && !propio ? '' : f.v[c.k])}"
+            placeholder="${auto ? esc(f.autoVal) : ''}"
+            aria-label="${esc(c.t)} de ${esc(f.clave)}"></td>`;
         }
         const v = f.calc[c.k];
         return `<td class="num ${c.fuerte ? '' : 'dim'}">${v ? (c.fuerte ? `<b>${n2(v)}</b>` : n2(v)) : ''}</td>`;
@@ -1658,7 +1693,10 @@
         <td class="l">${mom}</td>
         <td><input class="inqq" inputmode="decimal" data-tope="${t.id}" value="${c.tope}" aria-label="Tope ${t.nombre}"></td>
         <td><input class="inqq" inputmode="decimal" data-min="${t.id}" value="${c.minimo}" aria-label="Mínimo ${t.nombre}"></td>
-        <td><label class="sw"><input type="checkbox" data-tact="${t.id}" ${c.activo !== false ? 'checked' : ''}> activo</label></td></tr>`;
+        <td><label class="sw"><input type="checkbox" data-tact="${t.id}" ${c.activo !== false ? 'checked' : ''}> activo</label></td>
+        <td><label class="sw" title="Sin esto el turno se sigue viendo y se le puede escribir a mano, pero «Calcular y repartir» no le pone nada">
+          <input type="checkbox" data-trep="${t.id}" ${c.activo === false ? 'disabled' : ''}
+            ${c.activo !== false && c.reparte !== false ? 'checked' : ''}> reparte</label></td></tr>`;
     }).join('');
 
     const topePlanta = {};
@@ -1768,8 +1806,11 @@
       <div class="card" style="margin-bottom:14px">
         <h3>Turnos y topes</h3>
         <p class="sub">El tope son los quintales que el turno alcanza a hacer. El mínimo obliga a dejarlo trabajando aunque el sugerido sea cero.
-          El momento dice si el turno es de mañana o de tarde: con eso se sabe a quién apaga un feriado de medio día y de quién sale la columna QQ PM Z2 de la hoja de bolsa.</p>
-        <div class="tablabox"><table><thead><tr><th class="l">Turno</th><th class="l">Planta</th><th class="l">Momento</th><th>Tope QQ</th><th>Mínimo QQ</th><th class="l">Estado</th></tr></thead><tbody>${turnos}</tbody></table></div>
+          El momento dice si el turno es de mañana o de tarde: con eso se sabe a quién apaga un feriado de medio día y de quién sale la columna QQ PM Z2 de la hoja de bolsa.
+          <br><b>Activo</b> decide si el turno existe: apagado desaparece de Producción. <b>Reparte</b> decide si
+          «Calcular y repartir» le pone quintales: apagado el turno se sigue viendo y se le puede escribir a mano,
+          pero el reparto lo salta y su tope deja de contar como capacidad. El sugerido de cada clave no cambia.</p>
+        <div class="tablabox"><table><thead><tr><th class="l">Turno</th><th class="l">Planta</th><th class="l">Momento</th><th>Tope QQ</th><th>Mínimo QQ</th><th class="l">Activo</th><th class="l">Reparte</th></tr></thead><tbody>${turnos}</tbody></table></div>
         <p class="dim" style="font-size:.84rem;margin:10px 2px">
           Capacidad por planta: ${D.PLANTAS.map((x) => `<b>${esc(x.nombre)}</b> ${n2(topePlanta[x.id])} QQ`).join(' · ')}.</p>
         <div class="fila" style="margin-top:12px;align-items:flex-end">
@@ -2752,7 +2793,17 @@
     else if (d.calf != null) P.calendario[+d.calf].factor = num(v, 1);
     else if (d.tope) P.turnos[d.tope].tope = Math.max(0, num(v, 0));
     else if (d.min) P.turnos[d.min].minimo = Math.max(0, num(v, 0));
-    else if (d.tact) P.turnos[d.tact].activo = v;
+    else if (d.tact) {
+      P.turnos[d.tact].activo = v;
+      /* Un turno que se apaga deja de repartir; al volver a encenderlo reparte
+         otra vez, que es lo que se espera al prenderlo. */
+      P.turnos[d.tact].reparte = v;
+      D.guardarParams(); pintarParametros(); pintarProduccion(); return true;
+    }
+    else if (d.trep) {
+      P.turnos[d.trep].reparte = v;
+      D.guardarParams(); pintarParametros(); pintarProduccion(); return true;
+    }
     else if (d.fvu) P.familias[d.fvu].vidaUtil = Math.max(1, num(v, 21));
     else if (d.fmd) P.familias[d.fmd].minDespacho = Math.max(0, num(v, 0));
     else if (d.fco) P.familias[d.fco].colchon = Math.max(0, num(v, 0));

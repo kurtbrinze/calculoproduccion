@@ -441,7 +441,11 @@
     base.filter((f) => objetivo.includes(f.clave)).forEach((f) => {
       const cfg = estado.params.prod[f.clave];
       const suyos = turnosUtiles(estado.params, f.clave).turnos;
-      const hoy = suyos.filter((t) => turnoTrabaja(estado.params, t, fecha));
+      /* Un turno puede estar activo —se ve en Producción y se le puede escribir
+         a mano— y aun así quedar fuera del reparto automático. El sugerido no
+         cambia por eso: lo que cambia es dónde la app propone ponerlo. */
+      const hoy = suyos.filter((t) => turnoTrabaja(estado.params, t, fecha)
+        && (estado.params.turnos[t] || {}).reparte !== false);
       if (!hoy.length) {
         dado[f.clave] = {};
         if (f.sugeridoQQ > 0) sinTurnoHoy.push({ clave: f.clave, qq: f.sugeridoQQ });
