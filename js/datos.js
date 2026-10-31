@@ -35,9 +35,12 @@
        entre 11 y 17 QQ por persona. Se ajustan en Parámetros. */
     { id: 'LUCAS',   nombre: 'Lucas',        papel: 'L',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
     { id: 'GILO',    nombre: 'Gilo',         papel: 'G',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
-    { id: 'ARMANDO', nombre: 'Armando',      papel: 'A',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
-    { id: 'RODRIGO', nombre: 'Rodrigo',      papel: 'R',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
-    { id: 'VICTOR',  nombre: 'Victor',       papel: 'V',          tope: 20, minimo: 0,  momento: 'AM', planta: 'Z2' },
+    /* Armando, Rodrigo y Victor son el turno de la tarde de Zona 2: lo que
+       hacen se empaca a la mañana siguiente. Venían puestos como de mañana y
+       eso partía mal la hoja de bolsa y los feriados de medio día. */
+    { id: 'ARMANDO', nombre: 'Armando',      papel: 'A',          tope: 20, minimo: 0,  momento: 'PM', planta: 'Z2' },
+    { id: 'RODRIGO', nombre: 'Rodrigo',      papel: 'R',          tope: 20, minimo: 0,  momento: 'PM', planta: 'Z2' },
+    { id: 'VICTOR',  nombre: 'Victor',       papel: 'V',          tope: 20, minimo: 0,  momento: 'PM', planta: 'Z2' },
     { id: 'MAQ_Z2',  nombre: 'Máquina',      papel: 'Máquina',    tope: 40, minimo: 0,  momento: 'AM', planta: 'Z2' },
   ];
 
@@ -228,8 +231,9 @@
        3 = el calendario de producción pasó a ser por planta.
        4 = el catálogo se ordenó como la hoja de papel.
        5 = se separó la planta Zona 2 de la de dulces (Zona 2 CZ).
-       6 = tope de quintales por producto y reparto por porcentaje. */
-  const ESQUEMA = 8;
+       6 = tope de quintales por producto y reparto por porcentaje.
+       9 = Zona 2 recupera su turno de tarde y se limpian las fuentes de bolsa. */
+  const ESQUEMA = 9;
 
   /**
    * Mapa de plantas de un producto. Acepta la forma nueva (`plantas` como
@@ -323,6 +327,11 @@
          esa planta, sacada del promedio de los últimos domingos capturados.
          Es la bolsa del domingo, que se manda a imprimir el sábado. */
       bolsaDomingo: { activo: true, planta: 'Z2', semanas: 4 },
+      /* El colchón sobre lo producido, en por ciento. `def` es el de todos los
+         días y `est` el del día que se imprime contra el domingo estimado, que
+         arriesga más porque esa producción todavía no existe. `por` lleva las
+         excepciones por clave, cada una con sus dos valores. */
+      bolsaMargen: { def: 10, est: 15, por: {} },
       /* Claves que llevan una cantidad fija en ciertos días de la semana:
          bolsa que se manda a imprimir sin esperar producción, porque el dato
          se sabe de antemano. `dias` va con lunes = 0. Lo que se escriba a
@@ -439,6 +448,13 @@
     /* Un turno guardado por una versión sin `reparte` entra repartiendo: es
        como se comportaba antes y es lo que el usuario espera al actualizar. */
     Object.keys(out.turnos).forEach((k) => { out.turnos[k].reparte = out.turnos[k].reparte !== false; });
+    /* El turno de tarde de Zona 2, que hasta el esquema 8 venía de fábrica
+       como de mañana. Se corrige una sola vez: después vale lo que se elija. */
+    if ((Number(guardado.esquema) || 0) < 9) {
+      ['ARMANDO', 'RODRIGO', 'VICTOR'].forEach((k) => {
+        if (out.turnos[k]) out.turnos[k].momento = 'PM';
+      });
+    }
     out.familias = { ...base.familias };
     Object.keys(guardado.familias || {}).forEach((k) => {
       if (base.familias[k]) out.familias[k] = { ...base.familias[k], ...guardado.familias[k] };
@@ -540,7 +556,12 @@
     });
 
     out.bolsaFuentes = {};
-    const gf = guardado.bolsaFuentes;
+    /* Hasta el esquema 8, los tres turnos de tarde de Zona 2 venían de fábrica
+       como de mañana. Lo que se haya configurado acá se armó para compensar
+       eso —turnos de tarde leyendo del día anterior— y con los momentos ya
+       buenos manda a imprimir un día tarde. Se limpia: el valor por omisión
+       —cada turno en su propio momento y en el día a producir— es el correcto. */
+    const gf = viejoEsquema < 9 ? null : guardado.bolsaFuentes;
     if (gf && typeof gf === 'object') {
       Object.keys(gf).forEach((c) => {
         const fila = gf[c];
@@ -554,6 +575,29 @@
         if (Object.keys(limpia).length) out.bolsaFuentes[c] = limpia;
       });
     }
+    /* El margen de seguridad de la hoja de bolsa. Los por clave se guardan
+       sólo si traen algo: una clave sin nada cae al general. */
+    const gm = guardado.bolsaMargen || {};
+    const pct = (v, alt) => {
+      const n = Number(v);
+      return Number.isFinite(n) && n >= 0 ? n : alt;
+    };
+    out.bolsaMargen = {
+      def: pct(gm.def, base.bolsaMargen.def),
+      est: pct(gm.est, base.bolsaMargen.est),
+      por: {},
+    };
+    Object.keys(gm.por || {}).forEach((k) => {
+      const v = gm.por[k];
+      if (!v || typeof v !== 'object') return;
+      const fila = {};
+      ['dia', 'est'].forEach((x) => {
+        const n = Number(v[x]);
+        if (v[x] !== '' && v[x] !== null && v[x] !== undefined && Number.isFinite(n) && n >= 0) fila[x] = n;
+      });
+      if (Object.keys(fila).length) out.bolsaMargen.por[k] = fila;
+    });
+
     out.empaque = (Array.isArray(guardado.empaque) && guardado.empaque.length
       ? guardado.empaque : EMPAQUE)
       .filter((e) => e && e.id)

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.47';
+  const VERSION = 'V.2026.48';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1208,19 +1208,35 @@
 
     const fs = B.enTotal(B.calcular(fecha));
     const t = B.totales(fs);
-    const d0 = D.fechaCorta(fecha);
+    /* El día cuya producción lleva la hoja. El sábado es el domingo estimado,
+       y las columnas tienen que decir domingo, no sábado. */
+    const fProd = B.fechaProd(fecha);
+    const d0 = D.fechaCorta(fProd);
     const d1 = D.fechaCorta(B.fechaPrevia(fecha));
+    const dSig = D.fechaCorta(D.sumarDias(fProd, 1));
+
+    const mDia = B.margenDelDia(fecha);
+    const M = D.estado.params.bolsaMargen || {};
+    const estimado = fProd !== fecha;
+    $('#inMargenDia').value = mDia === null ? '' : mDia;
+    $('#margenPista').textContent = mDia === null
+      ? `vacío = lo parametrizado (${n2(Number(estimado ? M.est : M.def) || 0)}% general)`
+      : 'pisa el de todas las claves';
 
     /* Dos pisos de encabezado: arriba el día y abajo su mañana y su tarde,
-       como en la hoja de papel. */
+       como en la hoja de papel. Las columnas de empaque llevan la fecha de la
+       tanda que esa bolsa va a empacar, que no es la de la producción: lo de
+       la mañana se empaca esa tarde y lo de la tarde, a la mañana siguiente. */
     $('#theadBolsa').innerHTML = `<tr class="grupo">
         <th rowspan="2" class="l">P PROD</th><th rowspan="2" class="l">CLAVE</th>
         <th rowspan="2">RENDIM<br><span class="mini2">bolsas/QQ</span></th>
         <th colspan="2" class="bloque">${esc(d1.toUpperCase())}</th>
-        <th colspan="2" class="bloque">${esc(d0.toUpperCase())}</th>
+        <th colspan="2" class="bloque">${esc(d0.toUpperCase())}${estimado ? '<br><span class="mini2">estimado</span>' : ''}</th>
         <th rowspan="2">PROD<br>AM</th><th rowspan="2">PROD<br>PM</th>
         <th rowspan="2">OH<br><span class="mini2">ya impreso</span></th>
-        <th rowspan="2">EMPAQUE<br>AM</th><th rowspan="2">EMPAQUE<br>PM</th>
+        <th rowspan="2">EMPAQUE<br>${esc(d0.toUpperCase())} PM</th>
+        <th rowspan="2">EMPAQUE<br>${esc(dSig.toUpperCase())} AM</th>
+        <th rowspan="2">MARGEN<br><span class="mini2">%</span></th>
         <th rowspan="2">A<br>IMPRIMIR</th></tr>
       <tr><th>QQ AM</th><th>QQ PM</th><th>QQ AM</th><th>QQ PM</th></tr>`;
 
@@ -1246,6 +1262,8 @@
           : ''}</td>
         <td class="num bolsas">${f.empAM ? n0(f.empAM) : ''}</td>
         <td class="num bolsas">${f.empPM ? n0(f.empPM) : ''}</td>
+        <td class="num dim">${f.final && B.llevaMargen(f) && f.margen && (f.prodAM || f.prodPM)
+          ? `${n2(f.margen)}%` : ''}</td>
         <td>${f.manual
           ? `<input class="inqq${f.auto ? ' auto' : ''}" inputmode="decimal" enterkeyhint="next"
               data-bcampo="manual" data-bid="${esc(f.id)}"
@@ -1262,8 +1280,8 @@
 
     $('#kpisBolsa').innerHTML =
       kpi('Bolsas a imprimir', n0(t.total)) +
-      kpi('Empaque AM', n0(t.empAM)) +
-      kpi('Empaque PM', n0(t.empPM)) +
+      kpi(`Empaque ${d0} PM`, n0(t.empAM)) +
+      kpi(`Empaque ${dSig} AM`, n0(t.empPM)) +
       kpi('Claves con bolsa', fs.filter((f) => f.cuenta && f.total > 0).length);
 
     const av = [];
@@ -1303,10 +1321,12 @@
         + '. Ese turno está en «—». Se prende en Parámetros → Impresión de bolsa, '
         + 'en «De dónde salen los quintales».']);
     }
-    av.push(['', `Los quintales salen del ${d0} y del ${d1}`,
-      'Cada clave dice, turno por turno, si sus quintales cuentan para PROD AM o para PROD PM y '
-      + 'de cuál de los dos días se leen. Eso se cambia en Parámetros → Impresión de bolsa. '
-      + 'EMPAQUE AM = PROD AM − OH, EMPAQUE PM = PROD PM, y A IMPRIMIR los suma.']);
+    av.push(['', `Lo de la mañana se empaca el ${d0} por la tarde; lo de la tarde, el ${dSig} por la mañana`,
+      'Por eso las dos columnas de empaque llevan fecha: son dos tandas distintas y las dos se '
+      + `imprimen hoy. A IMPRIMIR = producción × (1 + margen) − OH, redondeado a la decena de `
+      + 'arriba, y el OH sale primero contra la tanda de la tarde. Cada clave dice, turno por '
+      + 'turno, si sus quintales cuentan para PROD AM o para PROD PM, en Parámetros → '
+      + 'Impresión de bolsa.']);
     $('#avisosBolsa').innerHTML = av.map(([c, h, p]) =>
       `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p)}</p></div>`).join('');
   }
@@ -1932,6 +1952,21 @@
             style="margin-left:6px">Volver a lo de siempre</button>
         </p>
         <div id="bolsaFuentes"></div>
+        <h4 class="subrot" style="margin-top:18px">Margen de seguridad</h4>
+        <p class="dim" style="font-size:.84rem;margin:0 2px 10px">
+          El colchón sobre lo producido: <b>A IMPRIMIR = producción × (1 + margen) − OH</b>,
+          redondeado a la decena de arriba. El <b>día de estimado</b> es aquel en que la hoja se
+          arma contra el promedio de domingos, que arriesga más porque esa producción todavía no
+          existe. Una clave en blanco usa el general. <b>MU1 y las filas de ingreso manual no
+          llevan margen</b>: esas cantidades se escriben a mano.
+        </p>
+        <div class="fila" style="align-items:flex-end;margin:0 2px 10px">
+          <div class="campo"><label for="inMargenDef">General (%)</label>
+            <input class="inqq" inputmode="decimal" id="inMargenDef" style="width:110px"></div>
+          <div class="campo"><label for="inMargenEst">Día de estimado (%)</label>
+            <input class="inqq" inputmode="decimal" id="inMargenEst" style="width:130px"></div>
+        </div>
+        <div id="bolsaMargen"></div>
         <h4 class="subrot" style="margin-top:18px">El domingo que se imprime el sábado</h4>
         <p class="dim" style="font-size:.84rem;margin:0 2px 10px">
           La bolsa del domingo se manda a imprimir el sábado, cuando esa producción todavía no
@@ -2086,6 +2121,7 @@
     pintarFeriados();
     pintarBolsaClaves();
     pintarBolsaFuentes();
+    pintarBolsaMargen();
     pintarBolsaFijos();
     pintarTraslado();
     const bd = D.estado.params.bolsaDomingo;
@@ -2235,6 +2271,46 @@
   /* Las claves de Impresión de bolsa, en el mismo orden de la hoja. Las filas
      de más —las sumas, MU1 y las que se cuentan a mano— también se pueden
      quitar: también estorban. */
+  /**
+   * El margen por clave. Una fila por clave que lleva margen —las de MU1 y las
+   * manuales quedan fuera— con sus dos valores. En blanco cae al general, y la
+   * pista del campo lo dice para que se vea qué va a usar sin tener que
+   * acordarse de lo que hay arriba.
+   */
+  function pintarBolsaMargen() {
+    const cont = $('#bolsaMargen');
+    if (!cont) return;
+    const P = D.estado.params;
+    const B = window.Bolsa;
+    const M = P.bolsaMargen || {};
+    $('#inMargenDef').value = Number(M.def) || 0;
+    $('#inMargenEst').value = Number(M.est) || 0;
+
+    /* Una fila por clave, no por fila de la hoja: una clave que se hace en dos
+       plantas comparte bolsa y comparte margen. */
+    const vistas = new Set();
+    const filas = B.filas(P, true).filter((f) => {
+      if (!B.llevaMargen(f)) return false;
+      const k = f.clave || f.id;
+      if (vistas.has(k)) return false;
+      vistas.add(k);
+      return true;
+    });
+    const celda = (k, campo, v, def) => `<td><input class="inqq" inputmode="decimal"
+      data-margen="${esc(k)}" data-mcampo="${campo}" value="${v === undefined ? '' : v}"
+      placeholder="${n2(def)}" aria-label="Margen ${campo === 'est' ? 'de estimado' : 'normal'} de ${esc(k)}"></td>`;
+    cont.innerHTML = `<div class="tablabox"><table style="max-width:560px"><thead><tr>
+        <th class="l">Clave</th><th style="width:130px">Normal %</th>
+        <th style="width:160px">Día de estimado %</th></tr></thead><tbody>${
+      filas.map((f) => {
+        const k = f.clave || f.id;
+        const p = (M.por || {})[k] || {};
+        return `<tr><td class="l clave">${esc(f.nombre)}</td>${
+          celda(k, 'dia', p.dia, Number(M.def) || 0)}${
+          celda(k, 'est', p.est, Number(M.est) || 0)}</tr>`;
+      }).join('')}</tbody></table></div>`;
+  }
+
   function pintarBolsaClaves() {
     const cont = $('#bolsaClaves');
     if (!cont) return;
@@ -3100,6 +3176,18 @@
       } else if (d.cz5) {
         window.Venta.escribirCz5(ui.fecha, d.cz5, e.target.value);
         pintarCz5();
+      } else if (d.margen) {
+        /* Vacío devuelve esa clave al general; un cero escrito es un cero
+           a propósito, que es imprimir clavado contra lo producido. */
+        const P = D.estado.params;
+        const t = String(e.target.value).trim();
+        const n = Number(t);
+        const fila = P.bolsaMargen.por[d.margen] || {};
+        if (t === '' || !Number.isFinite(n) || n < 0) delete fila[d.mcampo];
+        else fila[d.mcampo] = n;
+        if (Object.keys(fila).length) P.bolsaMargen.por[d.margen] = fila;
+        else delete P.bolsaMargen.por[d.margen];
+        D.guardarParams(); pintarBolsaMargen(); pintarBolsa();
       } else if (d.pedcta) {
         const p = D.estado.pedidos[d.pedcta];
         if (p) p.cuenta = e.target.checked;
@@ -3131,6 +3219,11 @@
           else if (id === 'inBolsaDomPlanta') P.bolsaDomingo.planta = e.target.value;
           else P.bolsaDomingo.semanas = Math.max(1, Math.round(Number(e.target.value) || 4));
           D.guardarParams(); pintarParametros(); pintarBolsa(); return;
+        } else if (id === 'inMargenDef' || id === 'inMargenEst') {
+          const n = Number(e.target.value);
+          const v = Number.isFinite(n) && n >= 0 ? n : 0;
+          P.bolsaMargen[id === 'inMargenDef' ? 'def' : 'est'] = v;
+          D.guardarParams(); pintarBolsaMargen(); pintarBolsa(); return;
         }
         else return;
         D.guardarParams();
@@ -3316,6 +3409,10 @@
     };
     $('#inMu1').onchange = (e) => {
       window.Bolsa.escribir(ui.fechaBolsa, 'mu1', null, e.target.value);
+      pintarBolsa();
+    };
+    $('#inMargenDia').onchange = (e) => {
+      window.Bolsa.escribir(ui.fechaBolsa, 'margen', null, e.target.value);
       pintarBolsa();
     };
     $('#tbodyBolsa').addEventListener('change', (e) => {

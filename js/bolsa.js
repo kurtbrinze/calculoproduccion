@@ -31,9 +31,11 @@
   'use strict';
   const D = window.Datos;
 
-  /* El empaque se pide en bolsas de diez en diez. */
+  /* El empaque se pide en bolsas de diez en diez, y siempre hacia arriba: es
+     una cantidad en la que quedarse corto cuesta, y sobrarle no. Redondear al
+     más cercano mandaba a imprimir 180 cuando se habían producido 182. */
   const MULT_EMPAQUE = 10;
-  const alDiez = (n) => (n > 0 ? Math.round(n / MULT_EMPAQUE) * MULT_EMPAQUE : 0);
+  const alDiez = (n) => (n > 0 ? Math.ceil(n / MULT_EMPAQUE) * MULT_EMPAQUE : 0);
   const r2 = (n) => Math.round(n * 100) / 100;
 
   /* Las filas que no salen del catálogo: la unión de dos claves distintas que
@@ -190,6 +192,48 @@
   /** El día del que salen las fuentes marcadas «día anterior». */
   const fechaPrevia = (fecha) => D.sumarDias(fecha, -1);
 
+  // ---------- el margen de seguridad ----------
+  /* La hoja mandaba a imprimir el 100% exacto de lo producido menos el OH.
+     Cualquier bolsa rota, mal impresa o producción por encima de lo decidido
+     dejaba corto el empaque. El margen es ese colchón:
+
+       A IMPRIMIR = techo_a_diez( producción × (1 + margen) − OH )
+
+     El margen se aplica a la producción y no al neto, porque hay que cubrir
+     la tanda entera con su colchón y de eso ya está impreso el OH.
+
+     Tres niveles, de menos a más mandón: el general, el de la clave, y el que
+     se escriba en el módulo ese día, que pisa todo. Y dos valores en los dos
+     primeros, porque el día que se imprime contra el domingo estimado se
+     arriesga más que un día contra producción ya decidida.
+
+     MU1 y las filas de ingreso manual no llevan margen: esas cantidades se
+     escriben a mano, ya con el criterio de quien las escribe. */
+  const MARGEN_SIN = ['mu1', 'manual'];
+  const llevaMargen = (f) => !MARGEN_SIN.includes(f.tipo);
+
+  /** El % escrito en el módulo para ese día, o null si no escribieron nada. */
+  function margenDelDia(fecha) {
+    const v = ((D.estado.bolsa || {})[fecha] || {}).margen;
+    if (v === '' || v === null || v === undefined) return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  /**
+   * El % que le toca a esa fila. `estimado` es verdadero el día que la hoja se
+   * arma contra el promedio de domingos. `delDia` es lo escrito en el módulo.
+   */
+  function margenDe(P, f, estimado, delDia) {
+    if (!llevaMargen(f)) return 0;
+    if (delDia !== null && delDia !== undefined) return delDia;
+    const M = P.bolsaMargen || {};
+    const propio = (M.por || {})[f.clave || f.id] || {};
+    const v = estimado ? propio.est : propio.dia;
+    if (v !== '' && v !== null && v !== undefined && Number.isFinite(Number(v))) return Number(v);
+    return Number(estimado ? M.est : M.def) || 0;
+  }
+
   // ---------- el domingo que todavía no pasó ----------
   /* La bolsa del domingo de Zona 2 se manda a imprimir el sábado, cuando esa
      producción todavía no existe en ningún lado. Lo único con qué estimarla
@@ -233,7 +277,10 @@
       const hay = Object.values(r.turnos || {}).some((t) => ids.some((id) => Number((t || {})[id]) > 0));
       if (hay) dias.push(f);
     }
-    if (!dias.length) return { dias: [], qq: {}, planta, cuantos };
+    /* El domingo que esta hoja estima: el de mañana. Sirve para rotular las
+       columnas con el día cuya producción llevan, y no con el de la hoja. */
+    const domingo = D.sumarDias(fecha, 1);
+    if (!dias.length) return { dias: [], qq: {}, planta, cuantos, fecha: domingo };
     const suma = {};
     dias.forEach((d) => {
       const r = D.migrar(D.estado.dias[d]);
@@ -250,7 +297,7 @@
       qq[c] = {};
       Object.keys(suma[c]).forEach((id) => { qq[c][id] = r2(suma[c][id] / dias.length); });
     });
-    return { dias, qq, planta, cuantos };
+    return { dias, qq, planta, cuantos, fecha: domingo };
   }
 
   /**
@@ -268,6 +315,10 @@
     const mu1 = Number(b.mu1) || 0;
     const mu112 = Number(((b.manual || {})['mu1:12'])) || 0;
     const dom = promDomingos(P, fecha);
+    /* El día que la hoja se arma contra el domingo estimado corre más riesgo
+       que uno contra producción ya decidida, así que lleva su propio margen. */
+    const estimado = !!dom;
+    const mDia = margenDelDia(fecha);
 
     return filas(P).map((f) => {
       const oh = f.final ? (Number(puesto(b, 'oh', f.id)) || 0) : 0;
@@ -278,7 +329,7 @@
         const aMano = puesto(b, 'manual', f.id);
         const fijo = fijoDe(P, f.id, fecha);
         const tot = aMano !== null ? aMano : fijo;
-        return { ...f, oh: 0, qq: celdas(), qqAM: 0, qqPM: 0,
+        return { ...f, oh: 0, qq: celdas(), qqAM: 0, qqPM: 0, margen: 0,
           prodAM: 0, prodPM: 0, empAM: 0, empPM: 0, total: tot, manual: true,
           fijo, auto: aMano === null && !!fijo };
       }
@@ -289,7 +340,7 @@
         const uni = Number(f.unidades) || 6;
         const bolsas6 = Math.ceil(Math.round(1.01 * Math.floor(mu1 / uni)) / MULT_EMPAQUE) * MULT_EMPAQUE;
         const total = Math.max(0, bolsas6 - oh - mu112 * 2);
-        return { ...f, oh, qq: celdas(), qqAM: 0, qqPM: 0,
+        return { ...f, oh, qq: celdas(), qqAM: 0, qqPM: 0, margen: 0,
           prodAM: 0, prodPM: 0, empAM: 0, empPM: 0, total,
           nota: `${mu1 ? mu1.toLocaleString('es-GT') : 0} unidades ÷ ${uni}` };
       }
@@ -310,27 +361,43 @@
           if (v) sumar(s.atras, s.turno, s.cubeta, v);
         });
         /* El sábado se le suma encima el domingo estimado, que va en la
-           columna del día a producir porque es bolsa de esta misma tanda. */
+           columna del día a producir porque es bolsa de esta misma tanda.
+
+           Entra por el momento propio del turno salvo que esa clave diga otra
+           cosa para su producción del mismo día. Antes salía sólo de lo que
+           dijera «hoy», y un turno puesto en «—» tiraba su parte del estimado
+           sin avisar: con los turnos de tarde en «—» se perdía el domingo PM
+           entero, que es la bolsa que se empaca el lunes por la mañana. */
         if (!dom) return;
         const fila = dom.qq[c] || {};
         Object.keys(fila).forEach((id) => {
           if (!f.plantas.includes(D.plantaDeTurno(id))) return;
-          const cub = fuenteDe(P, c, id).hoy;
+          const cub = fuenteDe(P, c, id).hoy || D.momentoDeTurno(id, dom.fecha);
           if (cub && fila[id]) sumar(0, id, cub, fila[id]);
         });
       });
       const rend = Number(f.rend) || 0;
       const prodAM = Math.round(rend * qqAM);
       const prodPM = Math.round(rend * qqPM);
+      const margen = margenDe(P, f, estimado, mDia);
       if (!f.final) {
-        return { ...f, oh: 0, qq, qqAM, qqPM, prodAM, prodPM, empAM: 0, empPM: 0, total: 0 };
+        return { ...f, oh: 0, qq, qqAM, qqPM, prodAM, prodPM, margen,
+          empAM: 0, empPM: 0, total: 0 };
       }
-      /* El OH ya está impreso: sale del día completo. Primero contra la
-         mañana y, si no cabe entero ahí, el resto contra la tarde. */
-      const sobra = Math.max(0, oh - prodAM);
-      const empAM = alDiez(prodAM - oh);
-      const empPM = alDiez(prodPM - sobra);
-      return { ...f, oh, qq, qqAM, qqPM, prodAM, prodPM, empAM, empPM, total: empAM + empPM };
+      /* Primero el colchón sobre lo producido, y de ahí sale el OH, que ya
+         está impreso: del día completo, primero contra la mañana y, si no cabe
+         entero ahí, el resto contra la tarde. */
+      /* A bolsas enteras antes de redondear a la decena: 5.100 × 1,1 da
+         5.610,000000000001 en coma flotante, y con el techo esa basura se
+         convertía en una decena entera de más. */
+      const conMargen = (n) => Math.round(n * (1 + margen / 100));
+      const necAM = conMargen(prodAM);
+      const necPM = conMargen(prodPM);
+      const sobra = Math.max(0, oh - necAM);
+      const empAM = alDiez(necAM - oh);
+      const empPM = alDiez(necPM - sobra);
+      return { ...f, oh, qq, qqAM, qqPM, prodAM, prodPM, margen,
+        empAM, empPM, total: empAM + empPM };
     });
   }
 
@@ -349,6 +416,13 @@
       const n = Number(valor);
       b.mu1 = String(valor).trim() === '' || Number.isNaN(n) ? 0 : n;
       if (!b.mu1) delete b.mu1;
+    } else if (campo === 'margen') {
+      /* El margen de hoy sí puede ser cero a propósito —imprimir clavado—, así
+         que sólo el campo vacío lo devuelve a lo parametrizado. */
+      const t = String(valor).trim();
+      const n = Number(t);
+      if (t === '' || Number.isNaN(n)) delete b.margen;
+      else b.margen = Math.max(0, n);
     } else {
       if (!b[campo]) b[campo] = {};
       const t = String(valor).trim();
@@ -387,8 +461,10 @@
   /* Las trece columnas de la hoja de trabajo, con su ancho relativo. Las
      comparten el PDF y la imagen para que los dos digan lo mismo. */
   function colsHoja(fecha) {
-    const d0 = D.fechaCorta(fecha).toUpperCase();
+    const p = fechaProd(fecha);
+    const d0 = D.fechaCorta(p).toUpperCase();
     const d1 = D.fechaCorta(fechaPrevia(fecha)).toUpperCase();
+    const e1 = D.fechaCorta(D.sumarDias(p, 1)).toUpperCase();
     return [
       { k: 'pprod', t: 'P PROD', w: 36 },
       { k: 'nombre', t: 'CLAVE', w: 58, alinear: 'left' },
@@ -400,10 +476,25 @@
       { k: 'prodAM', lineas: ['PROD', 'AM'], w: 44 },
       { k: 'prodPM', lineas: ['PROD', 'PM'], w: 44 },
       { k: 'oh', t: 'OH', w: 36 },
-      { k: 'empAM', lineas: ['EMPAQUE', 'AM'], w: 52 },
-      { k: 'empPM', lineas: ['EMPAQUE', 'PM'], w: 52 },
+      /* El rótulo dice la tanda que esa bolsa va a empacar, no la hora de la
+         producción: lo de la mañana se empaca esa tarde y lo de la tarde, a la
+         mañana siguiente. Decía «EMPAQUE AM / PM» a secas y nadie podía saber
+         a cuál de las dos tandas correspondía cada número. */
+      { k: 'empAM', lineas: ['EMPAQUE', `${d0} PM`], w: 56 },
+      { k: 'empPM', lineas: ['EMPAQUE', `${e1} AM`], w: 56 },
+      { k: 'margen', lineas: ['MARGEN', '%'], w: 34 },
       { k: 'total', lineas: ['A', 'IMPRIMIR'], w: 52 },
     ];
+  }
+
+  /**
+   * El día cuya producción lleva la hoja. Es el de la hoja, salvo el día que
+   * se imprime contra el domingo estimado: ahí los quintales son del domingo
+   * y las columnas tienen que decirlo.
+   */
+  function fechaProd(fecha) {
+    const dom = promDomingos(D.estado.params, fecha);
+    return dom ? dom.fecha : fecha;
   }
 
   const nHoja = (v) => (!v ? '' : Math.round(v).toLocaleString('es-GT'));
@@ -419,7 +510,12 @@
     if (c.k === 'q0AM') return n2Hoja(f.qq[0].AM);
     if (c.k === 'q0PM') return n2Hoja(f.qq[0].PM);
     /* En las filas de detalle el cálculo lo lleva la de abajo. */
-    if (!f.final && ['oh', 'empAM', 'empPM', 'total'].includes(c.k)) return '';
+    if (!f.final && ['oh', 'empAM', 'empPM', 'margen', 'total'].includes(c.k)) return '';
+    /* El margen sólo en las filas que van a imprimir algo: puesto en todas,
+       repite el mismo número cincuenta veces y tapa las que sí importan. */
+    if (c.k === 'margen') {
+      return llevaMargen(f) && f.margen && (f.prodAM || f.prodPM) ? `${n2Hoja(f.margen)}%` : '';
+    }
     return nHoja(f[c.k]);
   }
 
@@ -718,7 +814,11 @@
       turnosDeClave(c).forEach((t) => {
         const v = Number((reg.turnos[c] || {})[t.id]) || 0;
         if (!v) return;
-        if (fuenteDe(P, c, t.id).hoy) return;
+        /* Lo puesto en «día anterior» sí entra: en la hoja del día siguiente.
+           Sólo se avisa de los turnos que están en «—» por los dos lados, que
+           son los que no entran en ninguna hoja nunca. */
+        const fu = fuenteDe(P, c, t.id);
+        if (fu.hoy || fu.ayer) return;
         out.push({ clave: c, nombre: (P.prod[c] || {}).alias || c, turno: t.nombre, qq: r2(v) });
       });
     });
@@ -727,6 +827,7 @@
 
   window.Bolsa = { filas, calcular, escribir, totales, enTotal, pdf, ignorados,
     ordenLineas, ordenPdf, ordenImagen, hojaImagen, COLS_ORDEN,
-    dentro, filaDentro, fechaPrevia, fuenteDe, fuentesDe, turnosDeClave, promDomingos, fijoDe,
+    dentro, filaDentro, fechaPrevia, fechaProd, fuenteDe, fuentesDe, turnosDeClave,
+    promDomingos, fijoDe, margenDe, margenDelDia, llevaMargen,
     DESTINOS, DIAS, EXTRAS, alDiez };
 })();

@@ -197,6 +197,9 @@
           <input type="date" id="inFechaBolsa" style="min-width:160px"></div>
         <div class="campo"><label for="inMu1">MU1 producido (unidades)</label>
           <input class="inqq" inputmode="decimal" id="inMu1" style="width:140px"></div>
+        <div class="campo"><label for="inMargenDia">Margen de hoy (%)</label>
+          <input class="inqq" inputmode="decimal" id="inMargenDia" style="width:120px">
+          <span class="mini" id="margenPista"></span></div>
         <div class="campo" style="margin-left:auto;align-items:flex-end">
           <label>&nbsp;</label>
           <div class="fila" style="gap:8px;margin:0">
@@ -209,9 +212,12 @@
       <p class="sub" style="margin-bottom:0">
         Los quintales salen solos del reparto. Cada clave dice, turno por turno, si cuentan para
         <b>PROD AM</b> o para <b>PROD PM</b> y si se leen del día a producir o del anterior; eso
-        se cambia en Parámetros. El <b>OH</b> se descuenta del día completo: primero del
-        <b>EMPAQUE AM</b> y lo que no quepa ahí, del <b>EMPAQUE PM</b>.
-        <b>A IMPRIMIR</b> los suma. Lo único que se escribe acá es el OH, las claves que se
+        se cambia en Parámetros. Lo de la mañana se empaca esa misma tarde y lo de la tarde, a la
+        mañana siguiente: por eso las dos columnas de empaque llevan fecha.
+        <b>A IMPRIMIR = producción × (1 + margen) − OH</b>, redondeado a la decena de arriba, y el
+        <b>OH</b> sale del día completo: primero contra la tanda de la tarde y lo que no quepa ahí,
+        contra la de la mañana siguiente. El <b>margen de hoy</b> pisa el que esté parametrizado
+        por clave. Lo único que se escribe acá es el OH, el margen, las claves que se
         cuentan a mano y las unidades de MU1. Enter y Tab bajan por la misma columna. Esta hoja
         se sincroniza como una parte aparte: se enciende o se apaga por equipo en
         Parámetros → Sincronizar.

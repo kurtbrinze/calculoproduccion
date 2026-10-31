@@ -253,8 +253,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.47';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.47';`
+1. `js/ui.js` → `const VERSION = 'V.2026.48';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.48';`
 
 ## Plantas, claves y productos nuevos
 
@@ -264,7 +264,7 @@ Hay **tres plantas**:
 |---|---|
 | Zona 18 | Magdalenas, Redondo AM, Sándwich AM, Panaderos PM, Redondo PM |
 | Zona 2 CZ | Byron, Julio (se turnan la mañana y la tarde cada semana) |
-| Zona 2 | Lucas, Gilo, Armando, Rodrigo, Victor, Máquina |
+| Zona 2 | Lucas, Gilo, Máquina (mañana) · Armando, Rodrigo, Victor (tarde) |
 
 En Parámetros cada producto dice en qué plantas se puede hacer, y el reparto sólo usa turnos de
 esas plantas.
@@ -273,6 +273,12 @@ La lista de turnos de un producto es el **orden que sigue el reparto automático
 mano —o para que entre lo que viene de la foto— basta con que el producto se haga en la planta
 de ese turno. Por eso 10HR3 se anota en Zona 2 sin que el reparto automático se le vaya para
 allá al llenarse Redondo.
+
+**Zona 2 tiene turno de tarde.** Armando, Rodrigo y Victor trabajan por la tarde y lo que hacen
+se empaca a la mañana siguiente. Hasta la V.2026.48 venían de fábrica como turnos de mañana, y
+eso partía mal la hoja de bolsa y los feriados de medio día. La V.2026.48 los corrige y, de
+paso, limpia lo que hubiera en «De dónde salen los quintales», porque lo que había ahí estaba
+armado para compensar el error.
 
 Los topes de los seis turnos de Zona 2 vienen en 20 qq y el de la Máquina en 40: son un punto de
 partida tomado de la hoja, conviene ajustarlos. Las claves nuevas de Zona 2 entran sin promedios
@@ -350,15 +356,63 @@ sale de ella.
 | PROD AM | Quintales de la cubeta **AM** × rendimiento |
 | PROD PM | Quintales de la cubeta **PM** × rendimiento |
 | OH | Lo que ya hay impreso |
-| EMPAQUE AM | `PROD AM − OH`, redondeado a diez |
-| EMPAQUE PM | `PROD PM −` lo que del OH no cupo en la mañana, redondeado a diez |
-| A IMPRIMIR | `EMPAQUE AM + EMPAQUE PM` |
+| EMPAQUE *fecha* PM | Para la tanda de esa tarde: sale de **PROD AM** |
+| EMPAQUE *fecha* AM | Para la tanda de la mañana siguiente: sale de **PROD PM** |
+| MARGEN % | El colchón que se le aplicó a esa clave |
+| A IMPRIMIR | La suma de las dos columnas de empaque |
 
-**El OH se descuenta del día completo**, no de una sola cubeta: primero contra la mañana y lo
-que sobre contra la tarde. Saliendo sólo de la mañana, un día en que la producción grande cae
-en la tarde —lo normal en Zona 2, que toma el PM del día anterior— el OH se perdía y la hoja
-mandaba a imprimir bolsa que ya estaba impresa. Si el OH es mayor que todo el día, A IMPRIMIR
-queda en cero y la clave igual sale en la orden, con el cero a la vista.
+### El día de la bolsa no es el día del empaque
+
+Lo que se produce por la mañana se empaca **esa misma tarde**. Lo que se produce por la tarde se
+empaca **a la mañana siguiente**. Las dos bolsas se imprimen el mismo día, por la mañana, antes
+de que empiece la producción.
+
+Por eso las dos columnas de empaque llevan **fecha**: son dos tandas distintas y hasta la
+V.2026.48 decían «EMPAQUE AM» y «EMPAQUE PM» a secas, de modo que nadie podía saber a cuál
+correspondía cada número.
+
+### El cálculo
+
+```
+A IMPRIMIR = techo_a_diez( producción × (1 + margen) − OH )
+```
+
+**El margen va sobre la producción y no sobre el neto**, porque hay que cubrir la tanda entera
+con su colchón y de eso ya está impreso el OH.
+
+**El redondeo a decenas va hacia arriba.** Antes iba al múltiplo más cercano y 182 bolsas
+producidas se mandaban a imprimir como 180: es una cantidad en la que quedarse corto cuesta y
+sobrarle no.
+
+**El OH se descuenta del día completo**, no de una sola cubeta: primero contra la tanda de la
+tarde y lo que sobre contra la de la mañana siguiente. Saliendo sólo de la primera, un día en
+que la producción grande cae en la tarde el OH se perdía y la hoja mandaba a imprimir bolsa que
+ya estaba impresa. Si el OH es mayor que todo el día, A IMPRIMIR queda en cero y la clave igual
+sale en la orden, con el cero a la vista.
+
+### El margen de seguridad
+
+La hoja mandaba a imprimir el 100 % exacto de lo producido menos el OH. Cualquier bolsa rota,
+mal impresa o producción por encima de lo decidido dejaba corto el empaque, y había que empacar
+sin fecha.
+
+El margen son tres niveles, de menos a más mandón:
+
+| Nivel | Dónde | Para qué |
+|---|---|---|
+| General | Parámetros → Impresión de bolsa | Lo que usa toda clave que no diga otra cosa |
+| Por clave | La misma sección, una fila por clave | La excepción; en blanco cae al general |
+| **Margen de hoy** | Arriba de la hoja, en el módulo | Pisa todo para esa impresión; vacío vuelve a lo parametrizado |
+
+Los dos primeros llevan **dos valores**: el normal y el del **día de estimado**, que es aquel en
+que la hoja se arma contra el promedio de domingos. Ese día arriesga más, porque esa producción
+todavía no existe, así que lleva su propio colchón. De fábrica, 10 % normal y 15 % de estimado.
+
+Un cero escrito a mano es un cero a propósito —imprimir clavado contra lo producido—; sólo el
+campo vacío devuelve la clave a lo parametrizado.
+
+**MU1 y las filas de ingreso manual no llevan margen**: esas cantidades se escriben a mano, ya
+con el criterio de quien las escribe.
 
 **De dónde salen los quintales se parametriza.** En Parámetros → Impresión de bolsa, cada clave
 lista sus turnos y cada turno lleva **dos** ajustes: qué hace lo que produjo el **día a
@@ -397,10 +451,21 @@ perderse. «Orden de siempre» devuelve el de las áreas de producción.
 imprimir el sábado, cuando esa producción todavía no existe en ningún lado. Lo único con qué
 estimarla son los domingos anteriores, que el app sí guarda porque la foto de Zona 2 entra a
 diario. Así que cuando el día a producir cae en sábado se le **suma** a lo que ya trae la hoja el
-promedio de los últimos domingos capturados, turno por turno, y cada turno entra por la cubeta
-que tenga puesta. Un domingo sin nada capturado no cuenta como cero: se salta y se busca el
-anterior. La pestaña dice cuántos quintales sumó y de qué domingos salieron. Se apaga, se cambia
-la planta o el número de domingos en Parámetros → Impresión de bolsa.
+promedio de los últimos domingos capturados, turno por turno. Un domingo sin nada capturado no
+cuenta como cero: se salta y se busca el anterior. La pestaña dice cuántos quintales sumó y de
+qué domingos salieron. Se apaga, se cambia la planta o el número de domingos en Parámetros →
+Impresión de bolsa.
+
+Ese día las columnas llevan la fecha del **domingo**, no la del sábado, porque los quintales son
+del domingo. Y el empaque sale rotulado como lo que es: la tarde del domingo y la mañana del
+lunes.
+
+**Cada turno entra por su propio momento**, salvo que esa clave diga otra cosa para su
+producción del mismo día. Hasta la V.2026.48 el estimado salía sólo de lo que dijera «hoy», y un
+turno puesto en «—» tiraba su parte sin avisar: con los tres turnos de tarde de Zona 2 en «—»
+—que es como quedaban al venir de fábrica como turnos de mañana— se perdía el **domingo PM
+entero**, que es la bolsa que se empaca el lunes por la mañana. De ahí salía el producto que se
+empacaba sin fecha.
 
 **Cantidades fijas por día de la semana.** Una clave de cálculo manual puede llevar una
 cantidad fija en ciertos días: bolsa que se manda a imprimir sin esperar producción, porque el
