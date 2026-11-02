@@ -46,7 +46,7 @@ dice lo que de verdad se produjo.
 
 **Esa hoja llega al día siguiente**, así que trae la producción de ayer. Lo leído se guarda en
 el día que dice la hoja, sin preguntar, y el día de trabajo no se mueve. De ahí sale el
-`PROD AYER` de hoy: lo que Zona 2 hizo desde el último conteo se suma a ese conteo para saber
+`PROD AYER` de hoy: lo que Zona 2 hizo ayer se suma al último conteo para saber
 con qué se amanece. Si la foto no deja leer la fecha, queda en ayer y se puede cambiar arriba.
 
 ### Resumen del día
@@ -87,7 +87,7 @@ momento con el día que está en pantalla.
 | Columna | Qué es |
 |---|---|
 | STOCK AYER | El INV PM del día anterior. Trae la fecha en el encabezado |
-| PROD AYER (qq) | Los quintales producidos desde ese conteo, con todos sus turnos. Trae el tramo en el encabezado |
+| PROD AYER (qq) | Los quintales del día anterior, con todos sus turnos. Trae la fecha en el encabezado |
 | BOLSAS | PROD AYER × rendimiento |
 | CONSUMO HOY | La venta promedio del día que se está calculando |
 | TEÓRICO PM | (STOCK AYER + BOLSAS) − CONSUMO HOY |
@@ -96,29 +96,29 @@ momento con el día que está en pantalla.
 
 STOCK AYER y PROD AYER se llenan solos y salen en gris; al escribir encima, ese valor manda.
 
-### PROD AYER va del conteo para acá
+### PROD AYER es siempre el día anterior
 
-El conteo de cierre se hace en la tarde y la producción de ese día entra después, así que
-**STOCK AYER y PROD AYER del mismo día son las dos mitades** de lo que hay a la mañana
-siguiente. Por eso PROD AYER arranca en el día del conteo y no se busca por su cuenta: si lo
-hiciera, un día sin reparto guardado mandaría la producción a buscarse más atrás y se sumaría
-contra un conteo que no le toca.
+Un corrimiento de un día, el mismo los siete días de la semana:
 
-Pero el conteo y la producción no siempre caen el mismo día. **El conteo del domingo se captura
-el lunes por la mañana**, así que al calcular el lunes el último conteo guardado suele ser el
-del sábado —donde no produce nadie— y la producción del domingo quedaba fuera entera: hasta la
-V.2026.50 la columna salía en cero y el teórico PM del lunes arrancaba sólo con el conteo del
-sábado.
+| Día de cálculo | Toma la producción del |
+|---|---|
+| Lunes | Domingo |
+| Martes | Lunes |
+| Miércoles | Martes |
+| Jueves | Miércoles |
+| Viernes | Jueves |
+| Sábado | Viernes |
+| Domingo | Sábado |
 
-Ahora PROD AYER **suma todo lo producido desde el conteo** hasta el día anterior al que se
-produce, con todos los turnos de cada día. Casi siempre es un solo día y se lee igual que antes.
-Cuando son varios, el encabezado muestra el tramo —`SAB 31/10 a DOM 1/11`— y sale un aviso con
-los días y los quintales. **En cuanto se captura el conteo que falta, el tramo se encoge solo** a
-ese día, sin contar nada dos veces.
+**No se busca y no se acumula.** Si el día anterior no tiene producción guardada, la columna va
+en cero y se escribe a mano; no se va a buscar más atrás ni suma varios días. Las dos cosas
+meten producción de días que ya estaban contados y distorsionan el teórico de toda la semana.
 
-Un límite que conviene tener presente: **la venta de los días del tramo no se descuenta**. Para
-el domingo da igual, porque lo que se produce ese día no sale de bodega hasta el lunes. Si
-alguna vez el tramo abarca un día entre semana, el teórico va a quedar alto y el aviso lo dice.
+**El stock sí se busca**: es el último conteo de cierre guardado. Las dos fechas pueden no
+coincidir y está bien. El caso normal es el lunes: **el conteo del domingo se captura el lunes
+por la mañana**, así que al calcular el lunes el stock sale del conteo del sábado y la
+producción del domingo. Cada columna dice en su encabezado de qué día sale, y cuando las dos
+fechas difieren sale un aviso diciéndolo, para que no parezca un error.
 
 Los tres botones:
 
@@ -277,8 +277,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.50';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.50';`
+1. `js/ui.js` → `const VERSION = 'V.2026.51';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.51';`
 
 ## Plantas, claves y productos nuevos
 

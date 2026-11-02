@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.50';
+  const VERSION = 'V.2026.51';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -449,14 +449,7 @@
     const r = reg(), t = calc(), P = D.estado.params;
     const ctx = t.ctx;
     const dStock = ctx.fStock ? D.fechaCorta(ctx.fStock) : 'sin día previo';
-    /* El tramo que suma la columna: del conteo para acá. Casi siempre es un
-       solo día y se lee igual que antes; cuando son varios hay que decirlo,
-       porque es la diferencia entre ver el domingo y no verlo. */
-    const fp = ctx.fProds || [];
-    const dProd = !fp.length
-      ? (ctx.fProd ? D.fechaCorta(ctx.fProd) : 'sin día previo')
-      : (fp.length === 1 ? D.fechaCorta(fp[0])
-        : `${D.fechaCorta(fp[0])} a ${D.fechaCorta(fp[fp.length - 1])}`);
+    const dProd = D.fechaCorta(ctx.fProd);
     const dHoy = D.fechaCorta(ui.fecha);
 
     $('#invTit').innerHTML = `Inventario para producir el <b>${esc(dHoy)}</b>`;
@@ -501,16 +494,14 @@
       'El STOCK AYER sale en blanco. Escríbelo a mano o guarda primero el día anterior.']);
     else if (sinStock) av.push(['warn', `${sinStock} claves sin stock de ayer`,
       `Se toman como cero. El dato viene del INV PM del ${dStock}.`]);
-    /* Cuando el tramo es de más de un día hay que decirlo: la columna está
-       sumando producción de días que no son el del conteo, y la venta de esos
-       días no se descuenta en ningún lado. */
-    if (fp.length > 1) {
-      const qq = t.filas.reduce((a, f) => a + (f.prodEsAuto ? f.prodAyerQQ : 0), 0);
-      av.push(['', `PROD AYER suma ${fp.length} días: ${fp.map((f) => D.fechaCorta(f)).join(' · ')}`,
-        `Son ${n2(C.redondea(qq, 2))} QQ en total. El último conteo guardado es el del ${dStock}, `
-        + 'así que la columna trae todo lo producido desde entonces, con todos sus turnos. '
-        + 'La venta de esos días no se descuenta. En cuanto se capture el conteo del día que '
-        + 'falta, el tramo se encoge solo.']);
+    /* Las dos columnas pueden venir de días distintos: el conteo del domingo se
+       captura el lunes, así que el lunes el stock sale del sábado y la
+       producción del domingo. Se dice, para que no parezca un error. */
+    if (ctx.fStock && ctx.fStock !== ctx.fProd) {
+      av.push(['', `El STOCK AYER es del ${dStock} y la PROD AYER del ${dProd}`,
+        `No hay conteo guardado del ${dProd}. La producción siempre sale del día anterior, `
+        + 'así que la columna está bien; el stock se queda en el último conteo que haya. '
+        + `En cuanto se capture el conteo del ${dProd}, las dos columnas van a decir lo mismo.`]);
     }
     const pedHoy = t.filas.filter((f) => f.pedidoHoy > 0);
     if (pedHoy.length) {

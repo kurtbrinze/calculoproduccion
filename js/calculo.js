@@ -118,49 +118,28 @@
   }
 
   /**
-   * De dónde salen el stock y la producción de ayer para una fecha:
-   * lo escrito a mano manda, y si está vacío se toma del día anterior guardado.
+   * De dónde salen el stock y la producción de ayer para una fecha.
    *
-   * Los dos salen del MISMO día, y eso es a propósito. El conteo de cierre se
-   * hace en la tarde y la producción de ese día entra después, así que
-   * «STOCK AYER del sábado» y «PROD AYER del sábado» son las dos mitades de lo
-   * que hay el domingo en la mañana. Buscarlos por separado los desalineaba:
-   * si el sábado quedaba sin reparto guardado, la producción se iba a buscar
-   * al viernes y se la sumaba al conteo del sábado, inflando el teórico.
+   * La producción es SIEMPRE la del día anterior del calendario, sin buscar y
+   * sin sumar tramos: el lunes toma el domingo, el martes el lunes, y así hasta
+   * el domingo, que toma el sábado. Es un corrimiento de un día, siempre el
+   * mismo. Buscar el último día con producción guardada, o acumular desde el
+   * último conteo, mete producción de días que ya estaban contados y distorsiona
+   * el teórico de toda la semana.
+   *
+   * El stock sí se busca: es el último conteo de cierre guardado. Las dos fechas
+   * pueden no coincidir y está bien —el conteo del domingo se captura el lunes
+   * por la mañana, así que el lunes el stock sale del sábado y la producción del
+   * domingo—. Cada columna dice en el encabezado de qué día sale su dato.
    */
   function contexto(estado, fecha) {
     const fStock = D.diaPrevio(fecha, 'inv');
-    /* Sin ningún conteo anterior —los primeros días de uso— todavía sirve lo
-       último que se haya producido; con conteo, manda la fecha del conteo. */
-    const base = fStock || D.diaPrevio(fecha, 'prod');
-    /* Del conteo para acá, todo lo que se haya producido.
-       Normalmente es un solo día y no cambia nada. Pero el conteo del domingo
-       se captura el lunes por la mañana, así que al calcular el lunes el
-       último conteo guardado suele ser el del sábado —donde no produce
-       nadie— y la producción del domingo entera se perdía: quedaba atada al
-       día del conteo. Sumando el tramo, el domingo entra con todos sus
-       turnos, y en cuanto el conteo del domingo se captura el tramo se
-       encoge solo a ese día. */
-    const fProds = base ? diasEntre(estado, base, fecha) : [];
-    const fProd = fProds.length ? fProds[fProds.length - 1] : base;
-    const prevProd = {};
-    fProds.forEach((f) => {
-      const p = D.produccionDe(f);
-      Object.keys(p).forEach((c) => { prevProd[c] = redondea((prevProd[c] || 0) + p[c], 2); });
-    });
+    const fProd = D.sumarDias(fecha, -1);
     return {
-      fStock, fProd, fProds,
+      fStock, fProd,
       prevInv: fStock ? (D.migrar(estado.dias[fStock]).invPM || {}) : {},
-      prevProd,
+      prevProd: D.produccionDe(fProd),
     };
-  }
-
-  /** Los días guardados con producción desde `desde` (incluido) hasta antes de `hasta`. */
-  function diasEntre(estado, desde, hasta) {
-    return Object.keys(estado.dias || {})
-      .filter((f) => f >= desde && f < hasta)
-      .sort()
-      .filter((f) => Object.keys(D.produccionDe(f)).length);
   }
 
   const ventaDe = (estado, params, clave, iso) => {
