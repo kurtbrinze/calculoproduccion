@@ -683,6 +683,11 @@
        sincroniza con la tablet. Guardarla fuera del día es lo que la deja
        fuera del envío, sin tener que acordarse de filtrarla. */
     bolsa: leer('bolsa', {}),    // { 'AAAA-MM-DD': { qqAmZ2, oh, manual, hd7z2, mu1 } }
+    /* La hoja de Cálculos secundarios: conversiones de parrillas y perchas que
+       se apuntan una vez. No tiene fecha —es una sola hoja de trabajo— y vive
+       fuera de los días como la de bolsa, pero sí viaja: se sincroniza como su
+       propia parte, para capturar en la tablet y leer en la laptop. */
+    sec: leer('secundarios', {}),  // { tabla: { fila: { campo: 'valor' } } }
   };
   /* Versión vieja de los promedios: S13 pasó a S11. */
   if (estado.prom.S13 && !estado.prom.S11) { estado.prom.S11 = estado.prom.S13; delete estado.prom.S13; }
@@ -891,6 +896,8 @@
   const hayDefecto = () => !!misDefecto();
   const guardarProm = () => grabar('prom', estado.prom);
   const guardarBolsa = () => grabar('bolsa', estado.bolsa);
+  /* La clave vieja se conserva: es la hoja que ya tiene escrita la gente. */
+  const guardarSec = () => grabar('secundarios', estado.sec);
 
   /** Un día sin nada capturado no merece guardarse: ensucia el historial. */
   function vacio(r) {
@@ -1315,7 +1322,8 @@
     momentoDeTurno, rotacionDe, turnoRotandoEn, domingoDe,
     diasFeriado, feriadoNuevo, feriadoDe, plantaTrabaja, normalDe,
     paramsPorDefecto, fusionarParams,
-    estado, guardarParams, guardarProm, guardarDias, guardarPedidos, guardarBolsa, leer, grabar,
+    estado, guardarParams, guardarProm, guardarDias, guardarPedidos, guardarBolsa, guardarSec,
+    leer, grabar,
     nuevoPedido, pedidosLista, pedidosVivos, pedidosQueCuentan, estadoPedido,
     clientes, ANTICIPACION, migrarPedidos, archivarPedidos, pedidosViejos,
     PRESENTACIONES, presentaciones, presentacionDe, presentacionesPorUso, ORDEN_PREVENTA, DIAS_ARCHIVO,

@@ -253,8 +253,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.48';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.48';`
+1. `js/ui.js` → `const VERSION = 'V.2026.49';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.49';`
 
 ## Plantas, claves y productos nuevos
 
@@ -633,9 +633,14 @@ En **BELCA**, después del pedido en bolsas va el mismo pedido en **parrillas + 
 cliente, y al pie el total de parrillas que ocupa: las bolsas sueltas cuentan como una parrilla
 más, porque igual hay que bajarla.
 
-**No tocan nada**: ni el inventario, ni la producción, ni el historial, y **no se sincronizan**.
-Se guardan sólo en el equipo donde se escriben, para que una recarga a media captura no borre
-el trabajo; **Limpiar todo** los deja en cero.
+**No tocan nada**: ni el inventario, ni la producción, ni el historial. Es **una sola hoja, sin
+fecha** —no hay una por día, porque son conversiones del momento—, y vive fuera de los días.
+
+**Se sincroniza como su propia parte**, que se enciende o se apaga por equipo en Parámetros →
+Sincronizar. Se compara hasta la casilla —tabla, fila y campo—, así que la laptop puede llenar
+unas filas y la tablet otras, de la misma tabla y al mismo tiempo, y quedan las dos. **Limpiar
+todo** la deja en cero en los dos equipos: el vacío viaja como borrado, no como «este equipo no
+mandó nada».
 
 | Tabla | Qué convierte |
 |---|---|
@@ -773,9 +778,10 @@ tocaste Sincronizar y la app lo avisa.
 Sincroniza al abrir, al guardar el día y con el botón. No más seguido: el plan gratis de Vercel
 da 2,000 guardados al mes y la tarjeta lleva la cuenta.
 
-**Qué se sincroniza se elige por equipo.** En la misma tarjeta hay cinco casillas: *El día*
+**Qué se sincroniza se elige por equipo.** En la misma tarjeta hay seis casillas: *El día*
 (Producción, Inventario y el historial), *Pedidos*, *Impresión de bolsa* (el OH, las claves de
-cálculo manual y las unidades de MU1), *Promedios* y *Parámetros*. La elección vive
+cálculo manual y las unidades de MU1), *Cálculos* (la hoja de conversiones de parrillas y
+perchas), *Promedios* y *Parámetros*. La elección vive
 en el navegador de cada equipo y **no viaja con la sincronización** —si viajara, los dos equipos
 acabarían con la misma configuración y no habría nada que controlar—, así que la tablet puede
 quedarse sin los pedidos mientras la laptop los lleva.

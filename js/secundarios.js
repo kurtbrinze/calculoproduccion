@@ -201,16 +201,19 @@
   }
 
   // ---------- guardado ----------
-  /* Una sola hoja de trabajo, local, fuera de los días y fuera del envío. */
-  const K = 'panprod_secundarios';
-  function leer() {
-    try { return JSON.parse(localStorage.getItem(K) || '{}') || {}; }
-    catch (_) { return {}; }
-  }
+  /* Una sola hoja de trabajo, sin fecha, que vive fuera de los días. Antes era
+     puramente local; ahora el dato vive en el estado de la app y viaja como su
+     propia parte, así que se captura en un equipo y se lee en el otro. Se sigue
+     guardando bajo la misma clave para no perder lo ya escrito. */
+  const leer = () => D.estado.sec;
   function grabar(v) {
-    try { localStorage.setItem(K, JSON.stringify(v)); return true; } catch (_) { return false; }
+    if (v && v !== D.estado.sec) D.estado.sec = v;
+    return D.guardarSec();
   }
-  const limpiar = () => { try { localStorage.removeItem(K); } catch (_) {} };
+  /* Vaciar, no borrar la clave: el vacío es lo que el otro equipo tiene que ver
+     para que la mezcla lo lea como borrado y no como «este equipo no mandó
+     nada», que dejaría revivir lo limpiado en la próxima sincronización. */
+  const limpiar = () => { D.estado.sec = {}; D.guardarSec(); };
 
   /** Lee una casilla, siguiendo el espejo si la fila lo tiene. */
   function valor(datos, tablaId, filaId, campo) {

@@ -41,6 +41,7 @@
     { id: 'dias', nombre: 'El día', detalle: 'Producción, Inventario y el historial de días.' },
     { id: 'pedidos', nombre: 'Pedidos', detalle: 'Los pedidos y preventas.' },
     { id: 'bolsa', nombre: 'Impresión de bolsa', detalle: 'El OH, las claves que se cuentan a mano y las unidades de MU1 de cada día.' },
+    { id: 'sec', nombre: 'Cálculos', detalle: 'La hoja de conversiones de parrillas y perchas: especiales y dulces, S16, PL1, magdalenas, BELCA y CZ3 / CZ5.' },
     { id: 'prom', nombre: 'Promedios', detalle: 'La venta promedio por día de la semana.' },
     { id: 'params', nombre: 'Parámetros', detalle: 'Turnos, topes, productos, calendario y feriados.' },
   ];
@@ -108,6 +109,7 @@
     v: 1, params: D.estado.params, prom: D.estado.prom,
     dias: diasReales(), pedidos: D.estado.pedidos || {},
     bolsa: D.estado.bolsa || {},
+    sec: D.estado.sec || {},
   });
 
   /* Hasta dónde se baja a comparar en cada rama. Los parámetros se tratan
@@ -117,7 +119,9 @@
   /* La hoja de bolsa baja hasta la casilla —día, campo y clave—: la laptop
      escribe el OH de unas claves y la tablet el de otras el mismo día, y las
      dos tienen que quedar. */
-  const PROF = { params: 0, prom: 1, pedidos: 1, bolsa: 3 };
+  /* La hoja de Cálculos baja hasta la casilla —tabla, fila y campo—: es una
+     sola hoja sin fecha y los dos equipos escriben filas distintas de ella. */
+  const PROF = { params: 0, prom: 1, pedidos: 1, bolsa: 3, sec: 3 };
 
   /* Los días recientes se comparan hasta la última casilla: la clave dentro de
      la sección y, donde hay otro nivel, el turno o la celda de impresión de
@@ -179,6 +183,7 @@
     if (P.dias) out.dias = arbolDias(est.dias);
     if (P.pedidos) out.pedidos = arbol(est.pedidos || {}, PROF.pedidos);
     if (P.bolsa) out.bolsa = arbol(est.bolsa || {}, PROF.bolsa);
+    if (P.sec) out.sec = arbol(est.sec || {}, PROF.sec);
     return out;
   }
 
@@ -304,7 +309,8 @@
         prom: P.prom ? local.prom : undefined,
         dias: P.dias ? { ...local.dias } : undefined,
         pedidos: P.pedidos ? { ...local.pedidos } : undefined,
-        bolsa: P.bolsa ? { ...local.bolsa } : undefined });
+        bolsa: P.bolsa ? { ...local.bolsa } : undefined,
+        sec: P.sec ? { ...local.sec } : undefined });
     }
     const bb = b || {};
     remoto = completar(local, remoto);
@@ -333,6 +339,25 @@
       });
     }
 
+    /* La hoja de Cálculos se recorre por tabla, para que el aviso diga
+       «Especiales y dulces de los cálculos» y no el id crudo de la tabla. */
+    let sec = null;
+    if (P.sec) {
+      sec = {};
+      const nombreTabla = (id) => {
+        const T = (window.Secundarios || {}).TABLAS || [];
+        return (T.find((x) => x.id === id) || {}).nombre || id;
+      };
+      const bs = esObjeto(bb.sec) ? bb.sec : {};
+      const ls = local.sec || {}, rs = remoto.sec || {};
+      const tablas = new Set([...Object.keys(ls), ...Object.keys(rs), ...Object.keys(bs)]);
+      [...tablas].sort().forEach((t) => {
+        const v = mezclarNodo(ls[t], rs[t], bs[t], PROF.sec - 1,
+          `${nombreTabla(t)} de los cálculos`, reg, eleccion, []);
+        if (v !== AUSENTE) sec[t] = v;
+      });
+    }
+
     /* Los días se recorren uno por uno para poder nombrarlos en los avisos. */
     let dias = null;
     if (P.dias) {
@@ -357,6 +382,7 @@
       prom: P.prom ? (prom === AUSENTE ? local.prom : prom) : comoEsta('prom'),
       pedidos: P.pedidos ? (pedidos === AUSENTE ? (local.pedidos || {}) : pedidos) : comoEsta('pedidos'),
       bolsa: P.bolsa ? bolsa : comoEsta('bolsa'),
+      sec: P.sec ? sec : comoEsta('sec'),
       dias: P.dias ? dias : comoEsta('dias'),
     });
   }
@@ -494,6 +520,7 @@
     if (P.prom && est.prom) { D.estado.prom = est.prom; D.guardarProm(); }
     if (P.pedidos) { D.estado.pedidos = est.pedidos || {}; D.guardarPedidos(); }
     if (P.bolsa) { D.estado.bolsa = est.bolsa || {}; D.guardarBolsa(); }
+    if (P.sec) { D.estado.sec = est.sec || {}; D.guardarSec(); }
     if (P.dias) {
       D.estado.dias = est.dias || {};
       /* Se graba directo: guardarDias() limpia los días vacíos y eso borraría

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.48';
+  const VERSION = 'V.2026.49';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2763,6 +2763,9 @@
   /** Vuelve a pintar todo lo que pudo cambiar al traer datos de la otra. */
   function refrescarTodo() {
     pintarProduccion(); pintarInventario(); pintarPedidos(); pintarHistorial(); pintarPromedios();
+    /* La hoja de Cálculos también viaja: hay que volver a pintarla para no
+       dejar en pantalla lo que la mezcla acaba de cambiar. */
+    pintarSecundarios(); pintarBolsa();
     if (ui.tab === 'param') pintarParametros(); else pintarSync();
   }
 
