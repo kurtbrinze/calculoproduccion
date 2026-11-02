@@ -277,8 +277,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.51';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.51';`
+1. `js/ui.js` → `const VERSION = 'V.2026.52';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.52';`
 
 ## Plantas, claves y productos nuevos
 
@@ -363,6 +363,11 @@ En la tabla de productos, **Editar** cambia la clave y arrastra promedios e hist
 que hace falta cuando IN16 pase a ser LS19B — y **Agregar producto** da de alta uno nuevo con
 su rendimiento, unidad, múltiplo y plantas. Los topes de producción salen de los turnos que se
 le marquen.
+
+**Unidades por bolsa** le da escala a la bolsa de la clave. No se usa en el cálculo de
+producción —ése va en quintales y bolsas de la clave— sino para convertir contra ella la bolsa
+de cada presentación de pedido: ver [la equivalencia](#el-producto-madre-y-la-equivalencia).
+En blanco, cada presentación vale una bolsa.
 
 ## Impresión bolsa
 
@@ -549,7 +554,7 @@ Sólo se ofrecen las que esa presentación puede convertir: las unidades si la b
 una, y las parrillas si el catálogo dice cuántas bolsas caben. Debajo del formulario se ve la
 cuenta hecha antes de agregar.
 
-**La clave se teclea o se despliega.** El campo lleva las 75 presentaciones de preventa más
+**La clave se teclea o se despliega.** El campo lleva las presentaciones de preventa activas más
 las claves del catálogo que no tienen ninguna, y nada más que eso: la clave pelada, sin
 descripción y sin la clave madre. Con tres letras el listado ya se redujo a lo que se busca, y
 no distingue mayúsculas —`cz5gr` encuentra `CZ5Gr` y el campo se endereza solo—. Enter pasa a
@@ -557,7 +562,58 @@ la cantidad.
 
 **El orden es el de uso**, contado sobre las 17,274 líneas de preventa del libro: `15PL1U`,
 `20CZ5`, `20CZ3`, `CZ5Gr`, `10PM3`… Las dos primeras son más de la mitad de los pedidos, así
-que abrir el listado casi siempre deja lo que se busca a la vista.
+que abrir el listado casi siempre deja lo que se busca a la vista. Las presentaciones dadas de
+alta a mano van **arriba del todo** mientras no entren a ese conteo: recién creadas son las que
+más se van a usar, y al fondo de setenta y cinco no las encontraría nadie.
+
+### Presentaciones nuevas
+
+Se dan de alta de dos maneras:
+
+- **Mientras se captura.** Al teclear un código que no está, el formulario lo dice y ofrece
+  **Crear esta presentación**. Se llena el alta, se vuelve al pedido con el código ya puesto y
+  no se pierde lo que ya estaba escrito.
+- **En frío**, en Parámetros → Presentaciones de pedido, que es también donde se corrigen.
+
+Una presentación lleva el **código** con que pide el cliente, su descripción, las **unidades por
+bolsa**, las **bolsas por parrilla** y el **producto madre**.
+
+Las de fábrica y las propias conviven: **sólo se guardan los agregados y las correcciones**, no
+la lista entera. Así una presentación nueva que traiga una versión futura sigue llegando en vez
+de quedar tapada por la copia guardada. Viajan con *Parámetros* en la sincronización.
+
+**No se borran, se apagan.** Los pedidos viejos guardan el código, y borrarlo dejaría el
+historial ilegible. Una presentación apagada deja de ofrecerse al capturar pero se sigue
+reconociendo si se teclea.
+
+### El producto madre y la equivalencia
+
+El **producto madre** es a qué clave del catálogo le pega el pedido para el cálculo. La
+presentación **no tiene sugerido propio**: lo que se pida mueve el sugerido de esa clave. Si
+`12DCN` es una presentación de `6CG2N`, el pedido aparece en Producción bajo `6CG2N` y en el
+resumen de pedidos bajo `12DCN`, que es donde interesa saber qué empacar.
+
+Con **Ninguno** el pedido se captura igual, sale en el resumen y se empaca, pero no mueve el
+sugerido: son las que calcula otra persona o no se producen acá.
+
+La **equivalencia** es cuántas bolsas de la madre vale una bolsa de esa presentación:
+
+```
+bolsas que suma a la madre = bolsas pedidas × equivalencia
+```
+
+Sale de dividir las unidades por bolsa de la presentación entre las **unidades por bolsa de la
+clave madre**, que se pone en la tabla de productos. Si `6CG2N` se produce en bolsas de 6 y
+`12DCN` viene en bolsas de 12, cada bolsa pedida vale **2**. El granel de una unidad vale **⅙**.
+Se puede escribir a mano cuando esa división no dice la verdad.
+
+**Mientras la clave madre no diga cuántas unidades lleva su bolsa, la equivalencia vale 1**, que
+es como se contaba antes de la V.2026.52: cien bolsas de granel pesaban lo mismo que cien bolsas
+de veinticuatro, y entre ellas hay veinticuatro veces. No se cambió de golpe para no mover el
+sugerido de un día para otro; en cambio, la pestaña **avisa qué claves están en ese caso** —las
+que tienen más de una presentación viva y con empaques distintos— para irlas arreglando con la
+lista a la vista. De fábrica son tres: `15PL1`, `6CG2N` y `CZ3`, y la grande es `CZ3`, con diez
+presentaciones de 1, 15, 16, 20 y 24 unidades.
 
 Lo que la lista ya no dice sale debajo del formulario una vez elegida la clave, que es cuando
 sirve: *Pirujo de Leche Empacado 15 uni · 2.5 parrillas = 10 bolsas · 150 unidades · va a

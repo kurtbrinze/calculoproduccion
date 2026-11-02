@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.51';
+  const VERSION = 'V.2026.52';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -17,7 +17,7 @@
     try { const f = localStorage.getItem('panprod_fecha'); return /^\d{4}-\d{2}-\d{2}$/.test(f || '') ? f : null; }
     catch (_) { return null; }
   })();
-  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5', pedResFecha: '', pedFecha: '', resAbierta: null };
+  const ui = { fecha: ultimaFecha || D.hoyISO(), abierta: null, tab: 'prod', sinCupo: null, sinTurnoHoy: null, famMatriz: '', vistaHist: 'turno', filtroPed: 'vivos', ventaClave: 'CZ5', pedResFecha: '', pedFecha: '', resAbierta: null, buscaPres: '' };
   const recordarFecha = () => { try { localStorage.setItem('panprod_fecha', ui.fecha); } catch (_) {} };
 
   // ---------- avisos ----------
@@ -698,7 +698,9 @@
    */
   function opcionesPedido() {
     const conPres = new Set();
-    const pres = D.presentacionesPorUso().map((p) => {
+    /* Las apagadas no se ofrecen, pero se siguen reconociendo al teclearlas:
+       los pedidos viejos guardan su código. */
+    const pres = D.presentacionesPorUso().filter((p) => p.activa !== false).map((p) => {
       if (p.clave) conPres.add(p.clave);
       return `<option value="${esc(p.cod)}"></option>`;
     }).join('');
@@ -760,8 +762,12 @@
 
     if (!el) {
       const esc0 = String($('#pdClave').value || '').trim();
-      $('#pdPista').textContent = esc0
-        ? `No encuentro la clave «${esc0}». Desplegá el listado para verlas.`
+      /* Un código que no está no es un callejón: casi siempre es una
+         presentación nueva que todavía nadie dio de alta. */
+      $('#pdPista').innerHTML = esc0
+        ? `No encuentro <b>${esc(esc0)}</b> en el catálogo.
+           <button class="btn ghost mini" type="button" id="btnPresNueva"
+             data-cod="${esc(esc0)}" style="margin-left:6px">Crear esta presentación</button>`
         : 'Tecleá la clave o desplegá el listado.';
       return;
     }
@@ -785,8 +791,13 @@
       if (unidad !== 'parr' && c.bxp > 0) resto.push(`${n2(C.redondea(c.bolsas / c.bxp, 2))} parrillas`);
       partes.push(resto.length ? `${dicho} = ${resto.join(' · ')}` : `<b>${dicho}</b>`);
     }
+    /* Cuánto de eso le llega de verdad a la clave madre: la bolsa del cliente
+       y la de producción casi nunca son del mismo tamaño. */
+    const eq = el.pres ? D.equivalenciaDe(el.pres.cod) : 1;
     partes.push(el.clave
-      ? `va a <b>${esc(el.clave)}</b>`
+      ? (eq !== 1 && cant
+        ? `va a <b>${esc(el.clave)}</b> como <b>${n2(C.redondea(c.bolsas * eq, 2))} bolsas</b> (× ${n2(eq)})`
+        : `va a <b>${esc(el.clave)}</b>`)
       : '<b>no entra al cálculo de producción</b>');
     $('#pdPista').innerHTML = partes.join(' · ')
       + '. La fecha y el cliente se quedan puestos para seguir agregando.';
@@ -1936,6 +1947,25 @@
       </div>
 
       <div class="card" style="margin-bottom:14px">
+        <h3>Presentaciones de pedido</h3>
+        <p class="sub">
+          El empaque con que el cliente pide. Cada una dice a qué <b>producto madre</b> del
+          catálogo le pega: la presentación no tiene sugerido propio, lo que se pida mueve el
+          sugerido de esa clave. La <b>equivalencia</b> es cuántas bolsas de la madre vale una
+          bolsa de ésta; en blanco se calcula dividiendo las unidades por bolsa de acá entre las
+          de la madre, y si la madre no las tiene puestas vale 1.
+        </p>
+        <div class="fila" style="margin-bottom:10px">
+          <button class="btn ghost mini" type="button" id="btnPresNuevaParam">Agregar presentación</button>
+          <input type="search" id="buscaPres" placeholder="Buscar código o descripción"
+            style="min-width:240px" value="${esc(ui.buscaPres || '')}">
+          <span class="dim" style="font-size:.84rem" id="presCuenta"></span>
+        </div>
+        <div id="avisosPres"></div>
+        <div id="tablaPres"></div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
         <h3>Impresión de bolsa</h3>
         <p class="sub">
           Qué filas salen en esa hoja y en qué orden. Cada ficha es una fila de la hoja: una clave
@@ -2131,6 +2161,7 @@
     pintarBolsaClaves();
     pintarBolsaFuentes();
     pintarBolsaMargen();
+    pintarPresentaciones();
     pintarBolsaFijos();
     pintarTraslado();
     const bd = D.estado.params.bolsaDomingo;
@@ -2286,6 +2317,64 @@
    * pista del campo lo dice para que se vea qué va a usar sin tener que
    * acordarse de lo que hay arriba.
    */
+  /**
+   * Las presentaciones, con su equivalencia contra la bolsa de la madre.
+   * Son 75 de fábrica, así que lleva buscador: sin él nadie encuentra nada.
+   */
+  function pintarPresentaciones() {
+    const cont = $('#tablaPres');
+    if (!cont) return;
+    const P = D.estado.params;
+    const q = String(ui.buscaPres || '').trim().toLowerCase();
+    const todas = D.presentacionesPorUso();
+    const lista = q
+      ? todas.filter((p) => `${p.cod} ${p.desc || ''} ${p.clave || ''}`.toLowerCase().includes(q))
+      : todas;
+
+    /* Las claves donde todavía se están sumando bolsas de distinto tamaño como
+       si fueran iguales. Es el agujero que había, y conviene verlo arriba. */
+    const flojas = D.clavesSinEquivalencia();
+    $('#avisosPres').innerHTML = flojas.length
+      ? `<div class="aviso warn"><h4>${flojas.length} ${flojas.length === 1
+        ? 'clave suma bolsas de distinto tamaño' : 'claves suman bolsas de distinto tamaño'}</h4>
+        <p>${esc(flojas.map((f) => `${f.clave} (${f.presentaciones.length} presentaciones de `
+          + `${[...new Set(f.presentaciones.map((p) => p.uxb || 0))].sort((a, b) => a - b).join(', ')} unidades)`)
+          .join(' · '))}.
+        Mientras la clave no diga cuántas unidades lleva su bolsa, cada pedido suma bolsa por
+        bolsa sin importar el empaque, que es como se contaba antes. Se arregla poniéndole
+        <b>Unidades por bolsa</b> a la clave, en la tabla de productos.</p></div>`
+      : '';
+
+    $('#presCuenta').textContent = q
+      ? `${lista.length} de ${todas.length}`
+      : `${todas.length} presentaciones · ${todas.filter((p) => p.activa === false).length} apagadas`;
+
+    const fila = (p) => {
+      const eq = D.equivalenciaDe(p.cod);
+      const madre = Number((P.prod[p.clave] || {}).uxb) || 0;
+      const propia = p.eq !== '' && p.eq != null && Number(p.eq) > 0;
+      return `<tr${p.activa === false ? ' class="nocuenta"' : ''}>
+        <td class="l clave">${esc(p.cod)}</td>
+        <td class="l">${esc(p.desc || '')}</td>
+        <td class="num dim">${p.uxb ? n0(p.uxb) : ''}</td>
+        <td class="num dim">${p.bxp ? n0(p.bxp) : ''}</td>
+        <td class="l clave">${p.clave
+          ? `${esc(p.clave)}${madre ? `<span class="mini">bolsa de ${n0(madre)}</span>` : ''}`
+          : '<span class="mini">sólo se captura</span>'}</td>
+        <td class="num${eq === 1 ? ' dim' : ''}">${p.clave ? n2(eq) : ''}${
+          propia ? '<span class="mini">a mano</span>' : ''}</td>
+        <td><label class="sw"><input type="checkbox" data-presact="${esc(p.cod)}"
+          ${p.activa === false ? '' : 'checked'} aria-label="${esc(p.cod)} activa"></label></td>
+        <td><button class="btn ghost mini" type="button" data-presed="${esc(p.cod)}">Editar</button></td></tr>`;
+    };
+    cont.innerHTML = `<div class="tablabox"><table><thead><tr>
+        <th class="l">Código</th><th class="l">Descripción</th>
+        <th>Uni/bolsa</th><th>Bolsas/parr</th>
+        <th class="l">Producto madre</th><th>Equivale a</th>
+        <th>Activa</th><th class="l"></th></tr></thead>
+      <tbody>${lista.map(fila).join('')}</tbody></table></div>`;
+  }
+
   function pintarBolsaMargen() {
     const cont = $('#bolsaMargen');
     if (!cont) return;
@@ -3188,6 +3277,14 @@
       } else if (d.cz5) {
         window.Venta.escribirCz5(ui.fecha, d.cz5, e.target.value);
         pintarCz5();
+      } else if (d.presact) {
+        /* Apagar no borra: los pedidos viejos guardan el código y hay que
+           poder seguir leyéndolos. Sólo deja de ofrecerse al capturar. */
+        D.guardarPresentacion(d.presact, { activa: e.target.checked ? undefined : false });
+        pintarPresentaciones(); pintarPedidos();
+      } else if (e.target.id === 'buscaPres') {
+        ui.buscaPres = e.target.value;
+        pintarPresentaciones();
       } else if (d.margen) {
         /* Vacío devuelve esa clave al general; un cero escrito es un cero
            a propósito, que es imprimir clavado contra lo producido. */
@@ -3591,6 +3688,19 @@
       const ed = e.target.closest('[data-editar]');
       if (ed) { fichaProducto(ed.dataset.editar); return; }
       if (e.target.closest('#btnNuevoProd')) { fichaProducto(null); return; }
+      if (e.target.closest('#btnPresNuevaParam')) { fichaPresentacion('', null); return; }
+      const pe = e.target.closest('[data-presed]');
+      if (pe) { fichaPresentacion(pe.dataset.presed, null); return; }
+      /* Desde la captura: se crea y se vuelve al formulario con el código ya
+         puesto, para seguir con el pedido sin perder lo escrito. */
+      const pn = e.target.closest('#btnPresNueva');
+      if (pn) {
+        fichaPresentacion(pn.dataset.cod, (cod) => {
+          $('#pdClave').value = cod;
+          pistaPedido();
+        });
+        return;
+      }
 
       if (e.target.closest('#btnBolsaTodas')) {
         P.bolsaFuera = []; D.guardarParams(); pintarBolsaClaves(); pintarBolsa();
@@ -3778,6 +3888,70 @@
    * Alta y cambio de clave. Renombrar arrastra la ficha, los promedios y todo
    * el historial, que es lo que hace falta cuando IN16 pasa a ser LS19B.
    */
+  /**
+   * El alta o la corrección de una presentación: el empaque con que el cliente
+   * pide, y a qué clave del catálogo le pega para el cálculo de producción.
+   *
+   * `tras` se llama con el código guardado, para que quien la abrió desde la
+   * captura pueda seguir con el pedido sin perder lo que ya tenía escrito.
+   */
+  function fichaPresentacion(cod, tras) {
+    const P = D.estado.params;
+    const p = cod ? (D.presentacionDe(cod) || { cod }) : { cod: '' };
+    const nuevo = !D.presentacionDe(cod);
+    const campo = (id, et, val, tipo = 'text', extra = '') =>
+      `<div class="campo"><label for="${id}">${esc(et)}</label>
+       <input type="${tipo}" id="${id}" value="${esc(val ?? '')}" ${extra} style="min-width:140px"></div>`;
+    const claves = D.activos().map((x) => x.clave);
+    preguntar(nuevo ? `Nueva presentación ${cod || ''}`.trim() : `Editar ${p.cod}`, `
+      <div class="fila">
+        ${campo('fsCod', 'Código', p.cod, 'text', nuevo ? '' : 'readonly')}
+        ${campo('fsDesc', 'Descripción', p.desc || '')}
+      </div>
+      <div class="fila" style="margin-top:10px">
+        ${campo('fsUxb', 'Unidades por bolsa', p.uxb ?? 1, 'number', 'min="1" step="1"')}
+        ${campo('fsBxp', 'Bolsas por parrilla', p.bxp ?? '', 'number', 'min="0" step="1"')}
+        <div class="campo"><label for="fsClave">Producto madre</label>
+          <select id="fsClave" style="min-width:200px">
+            <option value="">Ninguno — sólo se captura</option>
+            ${claves.map((k) => `<option value="${esc(k)}" ${p.clave === k ? 'selected' : ''}>${esc(k)}${
+              Number((P.prod[k] || {}).uxb) > 0 ? ` · bolsa de ${n0(P.prod[k].uxb)}` : ''}</option>`).join('')}
+          </select></div>
+        ${campo('fsEq', 'Equivalencia (opcional)', p.eq ?? '', 'number', 'min="0" step="0.0001"')}
+      </div>
+      <p class="dim" style="font-size:.84rem;margin:10px 2px 0">
+        El <b>producto madre</b> es a qué clave del catálogo le pega el pedido para el cálculo de
+        producción. La presentación no tiene sugerido propio: lo que se pida acá mueve el
+        sugerido de esa clave. Con <b>Ninguno</b> el pedido se captura igual, sale en el resumen
+        y se empaca, pero <b>no mueve el sugerido</b>.</p>
+      <p class="dim" style="font-size:.84rem;margin:8px 2px 0">
+        La <b>equivalencia</b> es cuántas bolsas de la madre vale una bolsa de ésta. En blanco se
+        calcula sola, dividiendo las unidades por bolsa de acá entre las de la madre —si la madre
+        las tiene puestas—; se escribe a mano sólo cuando esa división no dice la verdad.</p>`,
+      nuevo ? 'Crear' : 'Guardar')
+      .then((si) => {
+        if (!si) return;
+        const nueva = ($('#fsCod').value || '').trim();
+        if (!nueva) { aviso('El código no puede quedar vacío.', 'err'); return; }
+        if (nuevo && D.presentacionDe(nueva)) { aviso(`Ya existe la presentación ${nueva}.`, 'err'); return; }
+        const num = (id) => {
+          const v = String($(id).value).trim();
+          const n = Number(v);
+          return v === '' || !Number.isFinite(n) || n < 0 ? '' : n;
+        };
+        D.guardarPresentacion(nueva, {
+          desc: ($('#fsDesc').value || '').trim(),
+          uxb: Math.max(1, Number($('#fsUxb').value) || 1),
+          bxp: num('#fsBxp') === '' ? 0 : num('#fsBxp'),
+          clave: $('#fsClave').value || '',
+          eq: num('#fsEq'),
+        });
+        pintarParametros(); pintarPedidos(); pintarProduccion();
+        aviso(nuevo ? `${nueva} agregada.` : `${nueva} actualizada.`);
+        if (typeof tras === 'function') tras(nueva);
+      });
+  }
+
   function fichaProducto(clave) {
     const P = D.estado.params;
     const c = clave ? P.prod[clave] : D.fichaDe({ clave: '', familia: 'SANDWICH', rend: 100, mult: 1, turnos: [] });
@@ -3797,7 +3971,13 @@
         ${campo('fpRend', 'Rendimiento (por QQ)', c.rend, 'number', 'min="1" step="1"')}
         ${campo('fpMult', 'Múltiplo de producción (QQ)', c.mult, 'number', 'min="0" step="0.01"')}
         ${campo('fpCod', 'Código', c.codigo ?? '')}
+        ${campo('fpUxb', 'Unidades por bolsa', c.uxb ?? '', 'number', 'min="0" step="1"')}
       </div>
+      <p class="dim" style="font-size:.84rem;margin:8px 2px 0">
+        <b>Unidades por bolsa</b> le da escala a la bolsa de esta clave, para poder convertir
+        contra ella la de cada presentación: si el cliente pide en bolsas de doce y la clave se
+        produce en bolsas de seis, cada bolsa pedida vale dos. En blanco, cada presentación vale
+        una bolsa, que es como se contaba antes.</p>
       <div class="fila" style="margin-top:10px">
         ${D.PLANTAS.map((x) => `<label class="sw"><input type="checkbox" data-fppl="${x.id}"
           ${(c.plantas || {})[x.id] ? 'checked' : ''}> Se produce en ${esc(x.nombre)}</label>`).join('')}
@@ -3839,6 +4019,7 @@
           plantas: Object.fromEntries(D.PLANTAS.map((x) =>
             [x.id, $(`[data-fppl="${x.id}"]`).checked])),
           maxDia: Number($('#fpMax').value) > 0 ? Number($('#fpMax').value) : null,
+          uxb: Number($('#fpUxb').value) > 0 ? Math.round(Number($('#fpUxb').value)) : null,
           reparto: $('#fpRep').value === 'porcentaje' ? 'porcentaje' : 'cascada',
           pesos: Object.fromEntries([...document.querySelectorAll('[data-fppeso]')]
             .map((i) => [i.dataset.fppeso, Number(i.value) || 0])

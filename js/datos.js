@@ -439,6 +439,12 @@
       out.prod[c].maxDia = md === '' || md == null || !(Number(md) > 0) ? null : Number(md);
       out.prod[c].reparto = out.prod[c].reparto === 'porcentaje' ? 'porcentaje' : 'cascada';
       out.prod[c].pesos = { ...(out.prod[c].pesos || {}) };
+      /* Unidades por bolsa de la clave. Es lo que le da escala a la bolsa del
+         producto, para poder convertir la de cada presentación contra ella.
+         Vacío quiere decir «todavía no se dijo», y entonces las equivalencias
+         valen 1, que es como se contaba antes. */
+      const ux = out.prod[c].uxb;
+      out.prod[c].uxb = ux === '' || ux == null || !(Number(ux) > 0) ? null : Number(ux);
     });
 
     out.turnos = { ...base.turnos };
@@ -575,6 +581,29 @@
         if (Object.keys(limpia).length) out.bolsaFuentes[c] = limpia;
       });
     }
+    /* Las presentaciones. Se guardan los agregados y las correcciones ENCIMA
+       de las de fábrica, no la lista entera: si se guardara entera, una
+       presentación nueva que traiga una versión futura nunca llegaría al
+       equipo, porque la copia guardada la taparía. */
+    out.presentacionesPropias = (Array.isArray(guardado.presentacionesPropias)
+      ? guardado.presentacionesPropias : [])
+      .filter((v) => v && typeof v === 'object' && String(v.cod || '').trim())
+      .map((v) => {
+        const o = { cod: String(v.cod).trim() };
+        ['desc', 'clave'].forEach((k) => { if (typeof v[k] === 'string') o[k] = v[k]; });
+        ['uxb', 'bxp', 'eq'].forEach((k) => {
+          if (v[k] === '' || v[k] == null) return;
+          const n = Number(v[k]);
+          if (Number.isFinite(n) && n >= 0) o[k] = n;
+        });
+        if (v.activa === false) o.activa = false;
+        return o;
+      });
+    /* La lista viva NO se arma acá: esto corre al cargar el módulo, antes de
+       que la tabla de fábrica esté inicializada. Se arma la primera vez que
+       alguien la pide. */
+    delete out.presentaciones;
+
     /* El margen de seguridad de la hoja de bolsa. Los por clave se guardan
        sólo si traen algo: una clave sin nada cae al general. */
     const gm = guardado.bolsaMargen || {};
@@ -1130,8 +1159,105 @@
     { cod: 'PS1_Mi', desc: 'Milhoja PS1', uxb: 1, bxp: 120, clave: '' },
     { cod: 'PS1_Mil', desc: 'PS1 Milhoja', uxb: 120, bxp: 1, clave: '' },
   ];
-  const presentaciones = () => (estado.params.presentaciones || PRESENTACIONES);
+  /**
+   * La lista viva: las de fábrica con los agregados y las correcciones encima.
+   * Sólo se guardan las diferencias, en `presentacionesPropias`; así una
+   * presentación nueva que traiga una versión futura sigue llegando en vez de
+   * quedar tapada por la copia guardada.
+   */
+  function armarPresentaciones(propias) {
+    const out = PRESENTACIONES.map((p) => ({ ...p }));
+    const porCod = new Map(out.map((p) => [p.cod, p]));
+    (propias || []).forEach((v) => {
+      const vieja = porCod.get(v.cod);
+      if (vieja) Object.assign(vieja, v);
+      else {
+        const nueva = { cod: v.cod, desc: '', uxb: 1, bxp: 0, clave: '', ...v };
+        out.push(nueva);
+        porCod.set(v.cod, nueva);
+      }
+    });
+    return out;
+  }
+
+  /**
+   * Guarda el alta o la corrección de una presentación. Un campo en blanco o
+   * `undefined` se quita de lo propio, y entonces esa presentación vuelve a lo
+   * que diga la de fábrica.
+   */
+  function guardarPresentacion(cod, campos) {
+    const P = estado.params;
+    const propias = Array.isArray(P.presentacionesPropias) ? P.presentacionesPropias : [];
+    const vieja = propias.find((x) => x.cod === cod) || {};
+    const fila = { ...vieja, ...campos, cod };
+    Object.keys(fila).forEach((k) => {
+      if (k !== 'cod' && (fila[k] === undefined || fila[k] === '')) delete fila[k];
+    });
+    /* Un arreglo nuevo, no el mismo mutado: así el memo de abajo se entera. */
+    P.presentacionesPropias = [...propias.filter((x) => x.cod !== cod), fila];
+    return guardarParams();
+  }
+
+  /* La lista viva se arma a pedido y se recuerda mientras lo propio no cambie:
+     se pide muchas veces por pintada y son setenta y cinco filas. */
+  let presMemo = null, presMemoDe = null;
+  function presentaciones() {
+    const propias = estado.params.presentacionesPropias || [];
+    if (presMemo && presMemoDe === propias) return presMemo;
+    presMemoDe = propias;
+    presMemo = armarPresentaciones(propias);
+    return presMemo;
+  }
   const presentacionDe = (cod) => presentaciones().find((p) => p.cod === cod) || null;
+
+  /* Una presentación apagada se sigue leyendo —los pedidos viejos guardan su
+     código y hay que poder leerlos— pero no sale a la hora de capturar. */
+  const presentacionesActivas = () => presentaciones().filter((p) => p.activa !== false);
+
+  /**
+   * Cuántas bolsas de la clave madre vale una bolsa de esa presentación.
+   *
+   * Un pedido se captura en el empaque del cliente y la producción se calcula
+   * en el de la clave. Sin convertir, cien bolsas de granel de un pan pesan lo
+   * mismo que cien bolsas de doce, y entre las dos hay doce veces.
+   *
+   * Sale de dividir las unidades por bolsa de la presentación entre las de la
+   * clave madre. Mientras la clave no diga cuántas unidades lleva su bolsa,
+   * vale 1 —que es como se comportaba antes— y la pestaña lo avisa. Lo escrito
+   * a mano en la presentación manda sobre la división.
+   */
+  function equivalenciaDe(cod) {
+    const p = typeof cod === 'string' ? presentacionDe(cod) : cod;
+    if (!p) return 1;
+    const propia = Number(p.eq);
+    if (p.eq !== '' && p.eq != null && Number.isFinite(propia) && propia > 0) return propia;
+    const madre = Number(((estado.params.prod || {})[p.clave] || {}).uxb) || 0;
+    const suya = Number(p.uxb) || 0;
+    if (!madre || !suya) return 1;
+    return Math.round((suya / madre) * 10000) / 10000;
+  }
+
+  /**
+   * Las claves donde la equivalencia todavía no está puesta y hace falta: más
+   * de una presentación viva y con empaques distintos entre sí. Son las que
+   * están sumando bolsas de distinto tamaño como si fueran iguales.
+   */
+  function clavesSinEquivalencia() {
+    const porClave = {};
+    presentacionesActivas().forEach((p) => {
+      if (!p.clave || !(p.clave in (estado.params.prod || {}))) return;
+      (porClave[p.clave] = porClave[p.clave] || []).push(p);
+    });
+    return Object.keys(porClave).sort().filter((c) => {
+      if (Number((estado.params.prod[c] || {}).uxb) > 0) return false;
+      const lista = porClave[c];
+      if (lista.length < 2) return false;
+      /* Con `eq` escrito a mano en todas, ya está resuelto a mano. */
+      if (lista.every((p) => Number(p.eq) > 0)) return false;
+      const tam = new Set(lista.map((p) => Number(p.uxb) || 0));
+      return tam.size > 1;
+    }).map((c) => ({ clave: c, presentaciones: porClave[c] }));
+  }
 
   // ---------- pedidos ----------
   /* Un pedido es producto comprometido para una fecha, un cliente y una
@@ -1243,7 +1369,15 @@
   /** Las presentaciones en el orden en que se piden. */
   function presentacionesPorUso() {
     const puesto = new Map(ORDEN_PREVENTA.map((c, i) => [c, i]));
+    /* El orden sale de 17,274 líneas de preventa, así que una presentación
+       recién dada de alta no está en ese conteo y caería al fondo de setenta y
+       cinco, justo el día que más se va a usar. Las propias van arriba hasta
+       que entren al conteo. */
+    const deFabrica = new Set(PRESENTACIONES.map((p) => p.cod));
     return presentaciones().slice().sort((a, b) => {
+      const na = deFabrica.has(a.cod) ? 0 : -1;
+      const nb = deFabrica.has(b.cod) ? 0 : -1;
+      if (na !== nb) return na - nb;
       const pa = puesto.has(a.cod) ? puesto.get(a.cod) : 9999;
       const pb = puesto.has(b.cod) ? puesto.get(b.cod) : 9999;
       return pa - pb;
@@ -1327,6 +1461,7 @@
     nuevoPedido, pedidosLista, pedidosVivos, pedidosQueCuentan, estadoPedido,
     clientes, ANTICIPACION, migrarPedidos, archivarPedidos, pedidosViejos,
     PRESENTACIONES, presentaciones, presentacionDe, presentacionesPorUso, ORDEN_PREVENTA, DIAS_ARCHIVO,
+    presentacionesActivas, equivalenciaDe, clavesSinEquivalencia, guardarPresentacion,
     misDefecto, fijarDefecto, borrarDefecto, hayDefecto, ESQUEMA,
     hoyISO, desdeISO, aISO, sumarDias, indiceDia, nombreDia, fechaCorta,
     registro, registroVacio, migrar, diaPrevio, produccionDe, turnosDe, porTurnoDe, porPlantaDe,

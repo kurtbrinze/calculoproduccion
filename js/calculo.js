@@ -163,7 +163,16 @@
   function pedidosDe(estado, clave, iso, hoy) {
     return D.pedidosQueCuentan(hoy).filter((p) => p.clave === clave && p.fecha === iso);
   }
-  const bolsasDe = (lista) => lista.reduce((a, p) => a + (Number(p.bolsas) || 0), 0);
+  /**
+   * Lo pedido, en bolsas de la CLAVE, que es como se calcula la producción.
+   *
+   * El pedido se guarda en el empaque del cliente: cien bolsas de granel y cien
+   * de doce unidades son el mismo número y pesan doce veces distinto. Cada
+   * presentación trae su equivalencia contra la bolsa de la clave madre; las
+   * que todavía no la tienen puesta valen 1, que es como se contaban antes.
+   */
+  const bolsasDe = (lista) => lista.reduce(
+    (a, p) => a + (Number(p.bolsas) || 0) * (p.codigo ? D.equivalenciaDe(p.codigo) : 1), 0);
 
   /**
    * Lo que de verdad sale de bodega ese día: la venta promedio más lo que haya
