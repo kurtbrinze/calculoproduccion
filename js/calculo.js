@@ -132,12 +132,35 @@
     const fStock = D.diaPrevio(fecha, 'inv');
     /* Sin ningún conteo anterior —los primeros días de uso— todavía sirve lo
        último que se haya producido; con conteo, manda la fecha del conteo. */
-    const fProd = fStock || D.diaPrevio(fecha, 'prod');
+    const base = fStock || D.diaPrevio(fecha, 'prod');
+    /* Del conteo para acá, todo lo que se haya producido.
+       Normalmente es un solo día y no cambia nada. Pero el conteo del domingo
+       se captura el lunes por la mañana, así que al calcular el lunes el
+       último conteo guardado suele ser el del sábado —donde no produce
+       nadie— y la producción del domingo entera se perdía: quedaba atada al
+       día del conteo. Sumando el tramo, el domingo entra con todos sus
+       turnos, y en cuanto el conteo del domingo se captura el tramo se
+       encoge solo a ese día. */
+    const fProds = base ? diasEntre(estado, base, fecha) : [];
+    const fProd = fProds.length ? fProds[fProds.length - 1] : base;
+    const prevProd = {};
+    fProds.forEach((f) => {
+      const p = D.produccionDe(f);
+      Object.keys(p).forEach((c) => { prevProd[c] = redondea((prevProd[c] || 0) + p[c], 2); });
+    });
     return {
-      fStock, fProd,
+      fStock, fProd, fProds,
       prevInv: fStock ? (D.migrar(estado.dias[fStock]).invPM || {}) : {},
-      prevProd: fProd ? D.produccionDe(fProd) : {},
+      prevProd,
     };
+  }
+
+  /** Los días guardados con producción desde `desde` (incluido) hasta antes de `hasta`. */
+  function diasEntre(estado, desde, hasta) {
+    return Object.keys(estado.dias || {})
+      .filter((f) => f >= desde && f < hasta)
+      .sort()
+      .filter((f) => Object.keys(D.produccionDe(f)).length);
   }
 
   const ventaDe = (estado, params, clave, iso) => {
