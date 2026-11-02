@@ -277,8 +277,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.52';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.52';`
+1. `js/ui.js` → `const VERSION = 'V.2026.53';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.53';`
 
 ## Plantas, claves y productos nuevos
 
@@ -876,6 +876,13 @@ cuando el mismo dato cambió en los dos lados.
 pegados arriba al bajar por las filas, así que siempre se sabe qué número es cuál. La caja de
 la tabla se topa a lo que queda de pantalla y lo que corre es su contenido; las de dos pisos
 —la de impresión de bolsa, con las fechas arriba y los QQ abajo— se quedan enteras.
+
+**La vista no se mueve bajo los dedos.** Escribir en una casilla o elegir en un desplegable
+rehace el HTML de la tabla, y con eso se iba el scroll de la caja y el foco: tocar un
+desplegable a media tabla devolvía la vista al principio y había que volver a bajar para el
+siguiente. Ahora se anota dónde estaba todo antes de repintar y se vuelve a poner después —el
+scroll de cada caja, el de la página, el campo enfocado y hasta la posición del cursor dentro
+del texto—. Vale para todas las tablas, no sólo para la que dio el problema.
 
 **Enter y Tab se mueven por la cuadrícula.** En cualquier tabla del app, Enter y las flechas
 bajan y suben por la misma columna —al final de una columna siguen en la de al lado, como una

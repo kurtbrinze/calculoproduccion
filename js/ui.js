@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.52';
+  const VERSION = 'V.2026.53';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2938,6 +2938,62 @@
     return P.cobertura.general;
   }
 
+  /**
+   * Un selector estable para volver a encontrar un campo después de repintar.
+   * Las tablas del app se arman con `data-…`, así que el id y los datos juntos
+   * identifican la casilla aunque el nodo sea otro.
+   */
+  function selectorDe(el) {
+    if (!el || el === document.body || !el.tagName) return '';
+    const val = (s) => String(s).replace(/(["\\])/g, '\\$1');
+    if (el.id) return `#${el.id.replace(/([^\w-])/g, '\\$1')}`;
+    const datos = Object.keys(el.dataset || {});
+    if (!datos.length) return '';
+    return el.tagName.toLowerCase() + datos.map((k) => {
+      const attr = k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+      return `[data-${attr}="${val(el.dataset[k])}"]`;
+    }).join('');
+  }
+
+  /**
+   * Repinta sin que la pantalla se mueva bajo los dedos.
+   *
+   * Repintar cambia el HTML entero de la tabla, y con eso se iba el scroll de
+   * la caja y el foco: tocar un desplegable a media tabla de «de dónde salen
+   * los quintales» devolvía la vista al principio y había que volver a bajar
+   * para el siguiente. Se anota dónde estaba todo antes, se repinta, y se
+   * vuelve a poner. Se guardan todas las cajas de tabla, no sólo la de quien
+   * disparó, porque un repintado puede tocar varias.
+   */
+  function sinMoverse(fn) {
+    const act = document.activeElement;
+    const sel = selectorDe(act);
+    let desde = null, hasta = null;
+    try { desde = act.selectionStart; hasta = act.selectionEnd; } catch (_) { desde = null; }
+    const y = window.scrollY, x = window.scrollX;
+    const cajas = [...document.querySelectorAll('.tablabox')]
+      .map((c) => [c.scrollTop, c.scrollLeft]);
+    /* Soltar el foco antes de repintar: si el nodo enfocado desaparece a media
+       escritura del HTML, el navegador aborta el repintado entero. */
+    if (sel && act && act.blur) act.blur();
+    try { fn(); } finally {
+      if (sel) {
+        const el = document.querySelector(sel);
+        if (el) {
+          el.focus({ preventScroll: true });
+          if (desde != null) { try { el.setSelectionRange(desde, hasta); } catch (_) { /* no es de texto */ } }
+        }
+      }
+      /* Los scrolls al final y no antes: enfocar y poner el cursor arrastran
+         la vista para dejar el campo a la vista, y deshacen lo recién puesto. */
+      const nuevas = [...document.querySelectorAll('.tablabox')];
+      if (nuevas.length === cajas.length) {
+        nuevas.forEach((c, i) => { c.scrollTop = cajas[i][0]; c.scrollLeft = cajas[i][1]; });
+      }
+      window.scrollTo(x, y);
+    }
+  }
+
   function cambiosParametros(e) {
     const t = e.target, P = D.estado.params;
     const v = t.type === 'checkbox' ? t.checked : t.value.trim();
@@ -3247,7 +3303,11 @@
       C.limpiarReparto(reg()); ui.sinCupo = null; ui.sinTurnoHoy = null; D.guardarDias(); pintarProduccion(); aviso('Reparto borrado.');
     };
 
-    document.addEventListener('change', (e) => {
+    /* Todo lo que se escribe o se elige en una tabla pasa por acá y casi todo
+       termina repintando. Envuelto, la vista se queda donde estaba. */
+    document.addEventListener('change', (e) => sinMoverse(() => cambioEnTabla(e)));
+
+    function cambioEnTabla(e) {
       const d = e.target.dataset || {};
       if (d.clave && d.turno) {
         const v = D.num(e.target.value);
@@ -3337,7 +3397,7 @@
         else return;
         D.guardarParams();
       }
-    });
+    }
 
     document.addEventListener('click', (e) => {
       const fp = e.target.closest('[data-fped]');
@@ -3527,8 +3587,10 @@
     $('#tbodyBolsa').addEventListener('change', (e) => {
       const t = e.target;
       if (!t.matches('input.inqq')) return;
-      window.Bolsa.escribir(ui.fechaBolsa, t.dataset.bcampo, t.dataset.bid, t.value);
-      pintarBolsa();
+      sinMoverse(() => {
+        window.Bolsa.escribir(ui.fechaBolsa, t.dataset.bcampo, t.dataset.bid, t.value);
+        pintarBolsa();
+      });
     });
     /* Enter baja por la misma columna, que es como se llena una hoja así: una
        columna entera de arriba abajo, no una fila a la vez. */
@@ -3574,7 +3636,9 @@
     // cálculos secundarios
     /* Escucha toda la pestaña, no sólo la lista de tarjetas: el CZ3 / CZ5 vive
        dentro de la tarjeta del conteo, que está fuera de `#secCont`. */
-    $('#pSec').addEventListener('change', (e) => {
+    $('#pSec').addEventListener('change', (e) => sinMoverse(() => cambioEnSec(e)));
+
+    function cambioEnSec(e) {
       const t = e.target;
       if (!t.matches('input.inqq')) return;
       const S = window.Secundarios, d = t.dataset;
@@ -3596,7 +3660,7 @@
         S.grabar(datos);
       }
       pintarSecundarios();
-    });
+    }
     $('#btnSecLimpiar').onclick = async () => {
       if (!await preguntar('Limpiar los cálculos',
         '<p>Se borra todo lo escrito en esta pestaña. No afecta inventario, producción ni historial.</p>',
@@ -3847,7 +3911,9 @@
         return;
       }
     });
-    document.addEventListener('change', (e) => {
+    document.addEventListener('change', (e) => sinMoverse(() => cambioEnSync(e)));
+
+    function cambioEnSync(e) {
       const S = window.Sync, id0 = e.target.id;
       if (id0 === 'chkSync') {
         S.setCfg('syncOn', e.target.checked ? '1' : '0');
@@ -3873,7 +3939,7 @@
         D.guardarParams(); pintarParametros();
         return `Rendimientos actualizados en ${n} claves.`;
       });
-    });
+    }
   }
 
   /** Pide un texto en el mismo cuadro de diálogo de siempre. */
