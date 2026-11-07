@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.53';
+  const VERSION = 'V.2026.55';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -3273,6 +3273,47 @@
 
     $('#btnResumen').onclick = () => window.Resumen.abrir(ui.fecha, aviso);
     $('#btnTraslado').onclick = () => abrirTraslado(ui.fecha);
+    /**
+     * La producción del día como código QR, para consultarla en el teléfono.
+     *
+     * Va la cadena ya resuelta de cada clave —stock, producción de ayer, venta
+     * promedio de hoy y de mañana, sugerido— con los turnos y sus topes. Allá
+     * se puede mover la producción para ver qué pasaría; es una simulación y
+     * no vuelve acá. Lo que se decida se escribe en esta pantalla.
+     */
+    $('#btnProdQr').onclick = async () => {
+      try {
+        const RP = window.RetratoProd;
+        const texto = RP.armar(ui.fecha, VERSION);
+        const b64 = await window.Retrato.empacar(texto);
+        const qr = window.qrcode(0, 'M');
+        qr.addData(b64, 'Byte');
+        qr.make();
+        const lado = qr.getModuleCount();
+        const px = Math.max(3, Math.floor(380 / lado));
+        const r = RP.leer(texto);
+        const conPedido = r.claves.filter((c) => c.pedHoy > 0 || c.pedMan > 0).length;
+        await preguntar(`Producción del ${D.fechaCorta(ui.fecha)} para el teléfono`, `
+          <div style="text-align:center">
+            ${qr.createImgTag(px, px * 2)}
+            <p class="dim" style="font-size:.85rem;margin:10px auto 0;max-width:48ch">
+              Abrí <b>Producción</b> en el teléfono y escaneá esto. Van
+              <b>${r.claves.length} claves</b> en el orden del catálogo y
+              <b>${r.turnos.length} turnos</b> con sus topes.
+            </p>
+            <p class="dim" style="font-size:.78rem;margin:8px auto 0;max-width:48ch">
+              La venta que viaja es la <b>venta promedio sola</b>, sin los pedidos en
+              firme${conPedido ? `; los pedidos de ${conPedido} clave${conPedido === 1 ? '' : 's'} van aparte, en su propia línea` : ''}.
+              Por eso el teórico de allá puede no ser el de acá, y se ve por qué.
+            </p>
+            <p class="dim" style="font-size:.78rem;margin:8px auto 0;max-width:48ch">
+              ${b64.length.toLocaleString('es-GT')} caracteres · versión ${
+            Math.round((lado - 17) / 4)} del QR · ${VERSION}.
+              El teléfono no escribe nada acá.
+            </p>
+          </div>`, 'Listo');
+      } catch (err) { aviso('No se pudo armar el código: ' + err.message, 'err'); }
+    };
 
     $('#btnCalc').onclick = calcAbrir;
     $('#calcCerrar').onclick = calcCerrar;
@@ -3603,6 +3644,45 @@
         if (r.modo === 'cancelado') return;
         aviso(`Hoja completa guardada${donde(r)}: carta acostada, en una hoja.`);
       } catch (err) { aviso('No se pudo armar el PDF: ' + err.message, 'err'); }
+    };
+    /**
+     * El retrato del día como código QR, para la app del teléfono.
+     *
+     * Va la hoja ya resuelta —fuentes, promedio de domingos, márgenes por
+     * clave— y queda para el teléfono lo que se escribe a mano: el OH, los
+     * quintales de la mañana de Zona 2, las manuales y el MU1. El teléfono
+     * lee y calcula; nunca escribe de vuelta.
+     */
+    $('#btnBolsaQr').onclick = async () => {
+      try {
+        const texto = window.Retrato.armar(ui.fechaBolsa, VERSION);
+        const b64 = await window.Retrato.empacar(texto);
+        /* Corrección de errores media: la pantalla de una laptop es un
+           soporte limpio, y bajar de alta a media deja más sitio para el
+           dato, que es lo que vuelve el código fácil de leer de lejos. */
+        const qr = window.qrcode(0, 'M');
+        qr.addData(b64, 'Byte');
+        qr.make();
+        const lado = qr.getModuleCount();
+        const px = Math.max(3, Math.floor(360 / lado));
+        const filas = window.Bolsa.enTotal(window.Bolsa.calcular(ui.fechaBolsa));
+        const aMano = filas.filter((f) => f.final && f.plantas
+          && f.plantas.includes('Z2')).length;
+        await preguntar(`Hoja del ${D.fechaCorta(ui.fechaBolsa)} para el teléfono`, `
+          <div style="text-align:center">
+            ${qr.createImgTag(px, px * 2)}
+            <p class="dim" style="font-size:.85rem;margin:10px auto 0;max-width:46ch">
+              Abrí <b>Hoja de bolsa</b> en el teléfono y escaneá esto. Van
+              <b>${filas.length} filas</b> con sus quintales, sus márgenes y el OH que
+              ya esté puesto${aMano ? `, y quedan <b>${aMano}</b> de Zona 2 para escribir allá` : ''}.
+            </p>
+            <p class="dim" style="font-size:.78rem;margin:8px auto 0;max-width:46ch">
+              ${b64.length.toLocaleString('es-GT')} caracteres · versión ${
+            Math.round((lado - 17) / 4)} del QR · ${VERSION}.
+              El teléfono no escribe nada acá.
+            </p>
+          </div>`, 'Listo');
+      } catch (err) { aviso('No se pudo armar el código: ' + err.message, 'err'); }
     };
     $('#btnOrdenPdf').onclick = async () => {
       try {

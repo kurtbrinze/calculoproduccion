@@ -277,8 +277,8 @@ y funciona sin señal, salvo la lectura de fotos.
 
 Al publicar un cambio hay que subirla en dos lugares que deben coincidir:
 
-1. `js/ui.js` → `const VERSION = 'V.2026.53';`
-2. `sw.js` → `const CACHE = 'panprod-V.2026.53';`
+1. `js/ui.js` → `const VERSION = 'V.2026.55';`
+2. `sw.js` → `const CACHE = 'panprod-V.2026.55';`
 
 ## Plantas, claves y productos nuevos
 
@@ -418,6 +418,65 @@ tarde y lo que sobre contra la de la mañana siguiente. Saliendo sólo de la pri
 que la producción grande cae en la tarde el OH se perdía y la hoja mandaba a imprimir bolsa que
 ya estaba impresa. Si el OH es mayor que todo el día, A IMPRIMIR queda en cero y la clave igual
 sale en la orden, con el cero a la vista.
+
+### Pasar la hoja al teléfono
+
+El botón **Código QR** muestra el **retrato del día**: la hoja ya resuelta
+—fuentes, promedio de domingos, equivalencias, margen de cada clave— para que la
+app **Hoja de bolsa** del teléfono la arme parada frente a la producción.
+
+Son unos 2.300 caracteres que, comprimidos y en base64, quedan en unos 800: un
+QR de versión veintipico que la cámara lee de la pantalla sin acercarse. Viajan
+todas las filas con sus quintales, su margen y el OH que ya esté escrito.
+
+Queda para el teléfono lo que todavía no existe cuando el retrato sale: los
+quintales de la mañana de Zona 2, el OH, las claves de ingreso manual y las
+unidades de MU1.
+
+**Va en un solo sentido.** El teléfono lee y calcula; nunca escribe de vuelta,
+no entra a la sincronización y no toca el historial. Lo único que sale de allá
+es el PDF.
+
+La hoja del teléfono sale **idéntica** a la de acá porque es el mismo código:
+`js/hojacalc.js` (la cuenta), `js/hojadib.js` (el dibujo), `js/resumen.js` (el
+motor de PDF) y `js/retrato.js` (el formato del QR) son byte por byte los
+mismos archivos en las dos apps. `pruebas/telefono.py` lo comprueba comparando
+los dos PDF byte por byte.
+
+El retrato lleva la **versión de la cuenta** (`HojaCalc.VERSION`, hoy `C1`) y el
+teléfono avisa si no coincide con la suya. **Al cambiar una fórmula de
+`hojacalc.js` hay que subir ese número y copiar los cuatro archivos al app del
+teléfono.**
+
+### Pasar la producción al teléfono
+
+El botón **Código QR** de la pestaña Producción manda el **retrato de la
+producción**: la cadena ya resuelta de cada clave —stock, lo que produjo ayer,
+venta promedio de hoy y de mañana, sugerido y lo repartido— con los turnos y
+sus topes. En el teléfono se abre como una **consulta con simulación**: se mira
+qué alcanza y qué no, y se mueven los quintales con − y + para decidir.
+
+Son unos 3.200 caracteres que quedan en unos 1.200 comprimidos: un QR de
+versión treinta. Con todas las claves repartidas en todos sus turnos —el peor
+caso— sube a 1.364 y versión 30, bien lejos del límite.
+
+Cuatro cosas que conviene tener claras:
+
+- **El turno lo elige quien mira.** El teléfono no reparte solo: muestra los
+  turnos que pueden hacer la clave y lo que se sube cae en el que esté elegido.
+- **El tope del turno frena**, y el del día del producto también. En el
+  teléfono se pueden pisar para simular, y queda avisado.
+- **La lista va en el orden del catálogo**, igual que acá.
+- **La venta que viaja es la venta promedio sola, sin los pedidos en firme.**
+  Los pedidos van aparte, en su propia línea. Por eso una clave con pedido
+  **cierra distinto allá que acá**, y la diferencia es exactamente el pedido.
+  Es a propósito y los dos lados lo dicen en pantalla; `pruebas/telprod.py`
+  comprueba que la diferencia sea el pedido y nada más.
+
+**Va en un solo sentido**, igual que la hoja: lo que se decida en el teléfono
+hay que escribirlo acá. La cadena sale idéntica porque `js/retratoprod.js` —el
+formato y la función `cadena`— es byte por byte el mismo archivo en las dos
+apps, y lleva su propia versión de cuenta (`RetratoProd.VERSION`, hoy `P1`).
 
 ### El margen de seguridad
 
