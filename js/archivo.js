@@ -89,6 +89,30 @@
     return { modo: 'descarga', donde: 'Descargas' };
   }
 
+  /* Cada tipo de reporte cae en su propia subcarpeta dentro de la carpeta
+     elegida, para que no quede todo en un solo listado. El orden importa: los
+     nombres más largos van antes que los cortos que los contienen
+     (Hx_Prod_x_Planta antes que Hx_Prod, Orden Impresion Bolsa antes que
+     Impresion Bolsa). Lo que no calce con nada queda en la carpeta elegida. */
+  const SUBCARPETAS = [
+    [/^Hx_Prod_Clave_Planta_/i, 'Hx Prod Clave Planta'],
+    [/^Hx_Prod_x_Planta_/i,     'Hx Prod x Planta'],
+    [/^Hx_Prod_x_Turno_/i,      'Hx Prod x Turno'],
+    [/^Hx_Prod_/i,              'Hx Prod'],
+    [/^Hx_Inv_/i,               'Hx Inv'],
+    [/^Detalle_/i,              'Detalle'],
+    [/^Historial_Produccion_/i, 'Historial Produccion'],
+    [/^Pedidos_/i,              'Pedidos'],
+    [/^Orden Impresion Bolsa /i, 'Orden Impresion Bolsa'],
+    [/^Impresion Bolsa /i,      'Impresion Bolsa'],
+    [/^Produccion /i,           'Produccion PDF'],
+    [/^Respaldo_Produccion_/i,  'Respaldos'],
+  ];
+  const subcarpetaDe = (nombre) => {
+    const r = SUBCARPETAS.find(([re]) => re.test(nombre));
+    return r ? r[1] : null;
+  };
+
   /**
    * Guarda el archivo donde corresponda.
    * `comoGuardarComo` fuerza el diálogo aunque haya carpeta elegida.
@@ -100,10 +124,13 @@
       const h = c && c.handle;
       if (h && await permiso(h, true)) {
         try {
-          const f = await h.getFileHandle(nombre, { create: true });
+          const sub = subcarpetaDe(nombre);
+          /* La subcarpeta se crea sola la primera vez. */
+          const dir = sub ? await h.getDirectoryHandle(sub, { create: true }) : h;
+          const f = await dir.getFileHandle(nombre, { create: true });
           const w = await f.createWritable();
           await w.write(blob); await w.close();
-          return { modo: 'carpeta', donde: h.name };
+          return { modo: 'carpeta', donde: sub ? `${h.name}\\${sub}` : h.name };
         } catch (err) {
           /* La carpeta pudo haberse movido o borrado: se sigue de largo. */
           if (err && err.name === 'AbortError') return { modo: 'cancelado' };
@@ -133,6 +160,6 @@
 
   window.Archivo = {
     guardar, carpeta, elegirCarpeta, olvidarCarpeta, descargaNormal,
-    haySoporte, hayDialogo, TIPO_PDF, TIPO_PNG,
+    haySoporte, hayDialogo, subcarpetaDe, TIPO_PDF, TIPO_PNG,
   };
 })();
