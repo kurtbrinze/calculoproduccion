@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.57';
+  const VERSION = 'V.2026.58';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2874,8 +2874,18 @@
   async function pintarCarpeta() {
     if (!$('#carpFila')) return;
     const A = window.Archivo;
-    const c = await A.carpeta();
-    $('#carpFila').innerHTML = c
+    /* Primero lo que no depende de leer nada, para que la tarjeta nunca quede
+       en blanco; después se corrige con lo que de verdad hay guardado. */
+    $('#carpFila').innerHTML = '<span class="dim">Revisando la carpeta…</span>';
+    $('#carpNota').innerHTML = '';
+    let c = null;
+    try { c = await A.carpeta(); } catch (_) { c = { trabada: true }; }
+    if (c && c.trabada) {
+      $('#carpFila').innerHTML = '<span class="dim" style="color:var(--rojo,#e5484d)">No pude leer la '
+        + 'carpeta guardada. Los PDF van a Descargas hasta que la quites y la vuelvas a elegir.</span>'
+        + '<button class="btn sec mini" type="button" id="btnCarpQuitar">Quitar</button>'
+        + '<button class="btn ghost mini" type="button" id="btnCarpCambiar">Elegir de nuevo</button>';
+    } else $('#carpFila').innerHTML = c
       ? `<span class="dim">Carpeta elegida: <b>${esc(c.nombre)}</b></span>
          <button class="btn sec mini" type="button" id="btnCarpCambiar">Cambiar</button>
          <button class="btn sec mini" type="button" id="btnCarpQuitar">Quitar</button>`

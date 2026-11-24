@@ -19,17 +19,26 @@
 
   /* El permiso de una carpeta es un objeto vivo, no un texto: no cabe en
      localStorage, así que va a IndexedDB. */
+  /* Nada de lo que toca la carpeta puede quedarse esperando para siempre: si
+     la base o el permiso no contestan, la tarjeta de Parámetros quedaba en
+     blanco y los botones de PDF no hacían nada, sin aviso. */
+  const TRABADO = Symbol('trabado');
+  const conTiempo = (p, ms = 3000) => Promise.race([
+    p, new Promise((res) => setTimeout(() => res(TRABADO), ms))]);
+
   function abrirBD() {
     return new Promise((res, rej) => {
       const r = indexedDB.open(BD, 1);
       r.onupgradeneeded = () => r.result.createObjectStore(ALMACEN);
       r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
+      r.onblocked = () => rej(new Error('base bloqueada'));
     });
   }
   async function enBD(modo, fn) {
+    let db;
     try {
-      const db = await abrirBD();
+      db = await abrirBD();
       return await new Promise((res, rej) => {
         const t = db.transaction(ALMACEN, modo);
         const pedido = fn(t.objectStore(ALMACEN));
@@ -39,9 +48,15 @@
         t.onerror = () => rej(t.error);
         t.onabort = () => rej(t.error);
       });
-    } catch (_) { return undefined; }
+    } catch (err) {
+      console.warn('Archivo: no se pudo usar la base de la carpeta', err);
+      return undefined;
+    } finally {
+      /* Cada llamada abre su conexión; dejarlas abiertas bloquea el borrado. */
+      try { if (db) db.close(); } catch (_) { /* nada */ }
+    }
   }
-  const leerCarpeta = () => enBD('readonly', (o) => o.get(LLAVE));
+  const leerCarpeta = () => conTiempo(enBD('readonly', (o) => o.get(LLAVE)));
   const grabarCarpeta = (h) => enBD('readwrite', (o) => o.put(h, LLAVE));
   const borrarCarpeta = () => enBD('readwrite', (o) => o.delete(LLAVE));
 
@@ -52,7 +67,9 @@
     if (typeof h.queryPermission !== 'function') return true;
     const op = { mode: 'readwrite' };
     try {
-      if ((await h.queryPermission(op)) === 'granted') return true;
+      const q = await conTiempo(h.queryPermission(op));
+      if (q === TRABADO) { console.warn('Archivo: el permiso de la carpeta no contestó'); return false; }
+      if (q === 'granted') return true;
       if (!pedir) return false;
       return (await h.requestPermission(op)) === 'granted';
     } catch (_) { return false; }
@@ -61,6 +78,7 @@
   /** La carpeta elegida, si todavía sirve. */
   async function carpeta() {
     const h = await leerCarpeta();
+    if (h === TRABADO) return { trabada: true, nombre: '', listo: false };
     if (!h || typeof h.getFileHandle !== 'function') return null;
     return { handle: h, nombre: h.name, listo: await permiso(h, false) };
   }
@@ -71,7 +89,13 @@
     try {
       const h = await window.showDirectoryPicker({ mode: 'readwrite', id: 'panprod' });
       if (!(await permiso(h, true))) return null;
-      await grabarCarpeta(h);
+      if ((await conTiempo(grabarCarpeta(h))) === TRABADO) {
+        /* La base no contesta: se tira y se vuelve a grabar en limpio. */
+        await olvidarCarpeta();
+        if ((await conTiempo(grabarCarpeta(h))) === TRABADO) {
+          throw new Error('el navegador no deja guardar la carpeta; cerrá Chrome por completo y volvé a abrir el app');
+        }
+      }
       return h.name;
     } catch (err) {
       if (err && err.name === 'AbortError') return null;
@@ -79,7 +103,15 @@
     }
   }
 
-  const olvidarCarpeta = () => borrarCarpeta();
+  /* Si la base no contesta ni para borrar, se tira entera: sólo guarda esto. */
+  async function olvidarCarpeta() {
+    const r = await conTiempo(borrarCarpeta());
+    if (r !== TRABADO) return;
+    await conTiempo(new Promise((res) => {
+      const d = indexedDB.deleteDatabase(BD);
+      d.onsuccess = d.onerror = d.onblocked = () => res();
+    }));
+  }
 
   function descargaNormal(blob, nombre) {
     const u = URL.createObjectURL(blob);
@@ -126,7 +158,9 @@
     if (!guardarComo) {
       const c = await carpeta();
       const h = c && c.handle;
-      if (h && !(await permiso(h, true))) {
+      if (c && c.trabada) {
+        fallo = 'no pude leer la carpeta elegida; en Parámetros → Dónde se guardan, quitala y elegila de nuevo';
+      } else if (h && !(await permiso(h, true))) {
         fallo = `Chrome no dio permiso para escribir en ${h.name}`;
       } else if (h) {
         try {
