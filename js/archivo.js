@@ -119,10 +119,16 @@
    * Debe llamarse desde un clic: Chrome no da permisos fuera de un gesto.
    */
   async function guardar(blob, nombre, { guardarComo = false, tipo } = {}) {
+    /* Si la carpeta elegida no se deja escribir, el archivo igual sale por
+       Descargas, pero hay que decir por qué: antes caía ahí callado y
+       parecía que el botón no había hecho nada. */
+    let fallo = null;
     if (!guardarComo) {
       const c = await carpeta();
       const h = c && c.handle;
-      if (h && await permiso(h, true)) {
+      if (h && !(await permiso(h, true))) {
+        fallo = `Chrome no dio permiso para escribir en ${h.name}`;
+      } else if (h) {
         try {
           const sub = subcarpetaDe(nombre);
           /* La subcarpeta se crea sola la primera vez. */
@@ -132,8 +138,16 @@
           await w.write(blob); await w.close();
           return { modo: 'carpeta', donde: sub ? `${h.name}\\${sub}` : h.name };
         } catch (err) {
-          /* La carpeta pudo haberse movido o borrado: se sigue de largo. */
           if (err && err.name === 'AbortError') return { modo: 'cancelado' };
+          /* Windows no deja reemplazar un archivo abierto en otro programa
+             (el visor de PDF, Excel) ni uno que OneDrive esté subiendo; la
+             carpeta también pudo haberse movido o borrado. */
+          fallo = (err && (err.name === 'NoModificationAllowedError'
+            || err.name === 'InvalidStateError' || err.name === 'NotReadableError'))
+            ? `${nombre} está abierto en otro programa o OneDrive lo está usando; cerralo y volvé a intentar`
+            : (err && err.name === 'NotFoundError'
+              ? `ya no encontré la carpeta ${h.name}; elegila de nuevo en Parámetros`
+              : `no se pudo escribir en ${h.name} (${(err && err.message) || err})`);
         }
       }
     }
@@ -152,7 +166,9 @@
         if (err && err.name === 'AbortError') return { modo: 'cancelado' };
       }
     }
-    return descargaNormal(blob, nombre);
+    const r = descargaNormal(blob, nombre);
+    if (fallo) r.fallo = fallo;
+    return r;
   }
 
   const TIPO_PDF = { description: 'PDF', accept: { 'application/pdf': ['.pdf'] } };

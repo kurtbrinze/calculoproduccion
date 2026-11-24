@@ -487,7 +487,8 @@
     return A().guardar(blob, nombre, { tipo, ...(opciones || {}) });
   }
   const dondeDice = (r) => (r.modo === 'carpeta' ? ` en ${r.donde}`
-    : (r.modo === 'elegido' ? ' donde lo pediste' : ''));
+    : (r.modo === 'elegido' ? ' donde lo pediste'
+      : (r.fallo ? ` en Descargas, NO en la carpeta: ${r.fallo}` : '')));
 
   /** Comparte el archivo si el equipo sabe; si no, lo descarga. */
   async function compartir(blob, nombre, titulo2) {
