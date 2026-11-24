@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.56';
+  const VERSION = 'V.2026.57';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -23,6 +23,8 @@
   // ---------- avisos ----------
   let tToast;
   function aviso(msg, tipo) {
+    /* Un archivo que no entró en la carpeta se avisa en rojo y más tiempo. */
+    if (/NO en la carpeta/.test(msg)) tipo = 'err';
     const el = $('#toast'); el.textContent = msg; el.className = 'show' + (tipo === 'err' ? ' err' : '');
     clearTimeout(tToast); tToast = setTimeout(() => { el.className = ''; }, tipo === 'err' ? 6500 : 3200);
   }
@@ -65,7 +67,8 @@
   /* Todo lo que el app entrega pasa por aquí: si hay una carpeta elegida va
      directo ahí, y si no, a la carpeta de Descargas del navegador. */
   const descargar = (blob, nombre, tipo) => window.Archivo.guardar(blob, nombre, { tipo });
-  const donde = (r) => (r && r.modo === 'carpeta' ? ` en ${r.donde}` : '');
+  const donde = (r) => (r && r.modo === 'carpeta' ? ` en ${r.donde}`
+    : (r && r.fallo ? ` en Descargas, NO en la carpeta: ${r.fallo}` : ''));
 
   // ---------- estado del día ----------
   const reg = () => D.registro(ui.fecha);

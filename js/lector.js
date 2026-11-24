@@ -382,7 +382,8 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
           tipo: { description: 'Libro de Excel', accept: { [MIME]: ['.xlsx'] } },
         });
         if (r.modo === 'cancelado') return;
-        decir(`Guardado ${nombre}${r.modo === 'carpeta' ? ' en ' + r.donde : ''}.`);
+        decir(`Guardado ${nombre}${r.modo === 'carpeta' ? ' en ' + r.donde
+          : (r.fallo ? ' en Descargas, NO en la carpeta: ' + r.fallo : '')}.`, !!r.fallo);
       } catch (err) { decir('No se pudo guardar: ' + err.message, true); }
     }
 
