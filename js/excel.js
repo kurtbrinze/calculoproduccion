@@ -227,7 +227,7 @@
    * tener que convertir nada en la hoja.
    */
   function tablaPedidos(lista, nombre, titulo) {
-    const cols = ['FECHA ENTREGA', 'DIA', 'CLIENTE', 'CLAVE', 'VA A', 'UNIDADES', 'BOLSAS',
+    const cols = ['FECHA ENTREGA', 'DIA', 'CLIENTE', 'CLAVE', 'VA A', 'PEDIDO EN', 'UNIDADES', 'BOLSAS',
       'PARRILLAS', 'QQ', 'SUMA AL SUGERIDO', 'PRODUCIR ANTES DE', 'ESTADO', 'NOTA'];
     const r2 = (v) => Math.round(v * 100) / 100;
     const filas = lista.slice()
@@ -244,6 +244,7 @@
         return [
           p.fecha, D.nombreDia(p.fecha), p.cliente || '',
           p.codigo || p.clave || '', p.clave || '',
+          ({ uni: 'UNIDADES', parr: 'PARRILLAS' })[p.pidio] || 'BOLSAS',
           Number(p.unidades) || 0, bolsas,
           bxp ? r2(bolsas / bxp) : '',
           ficha.rend ? r2(bolsas / ficha.rend) : '',

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.58';
+  const VERSION = 'V.2026.59';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -730,14 +730,17 @@
 
   /** La pista bajo el formulario: en qué se convierte lo que se está pidiendo. */
   /**
-   * En qué puede venir la cantidad de ese producto. Las unidades sólo si la
-   * bolsa lleva más de una, y las parrillas sólo si el catálogo dice cuántas
-   * bolsas caben: ofrecer una unidad que no se puede convertir sería mentir.
+   * En qué puede venir la cantidad de ese producto. Las unidades van siempre:
+   * hay panes que se empacan de a uno (bolsa 1 × 1) y clientes que piden por
+   * pan aunque la bolsa lleve más. Las parrillas, sólo si el catálogo dice
+   * cuántas bolsas caben: ofrecer una unidad que no se puede convertir sería
+   * mentir. Cuando la bolsa lleva varios panes, las unidades van primero,
+   * como antes; si lleva uno, las bolsas siguen siendo lo de siempre.
    */
   function unidadesPedido(el) {
-    const out = [];
-    if (el && el.pres && el.uxb > 1) out.push(['uni', 'Unidades']);
-    out.push(['bol', 'Bolsas']);
+    const out = [['bol', 'Bolsas']];
+    if (el && el.uxb > 1) out.unshift(['uni', 'Unidades']);
+    else out.push(['uni', 'Unidades']);
     if (el && el.pres && el.pres.bxp > 0) out.push(['parr', 'Parrillas']);
     return out;
   }
@@ -789,7 +792,10 @@
       const dicho = { uni: `${n0(cant)} unidades`, bol: `${n0(cant)} bolsas`,
         parr: `${n2(cant)} parrillas` }[unidad];
       const resto = [];
-      if (unidad !== 'bol') resto.push(`<b>${n0(c.bolsas)} bolsas</b>`);
+      if (unidad !== 'bol') {
+        resto.push(c.uxb === 1 && unidad === 'uni'
+          ? `<b>${n0(c.bolsas)} bolsas</b> de un pan` : `<b>${n0(c.bolsas)} bolsas</b>`);
+      }
       if (unidad !== 'uni' && c.uxb > 1) resto.push(`${n0(c.unidades)} unidades`);
       if (unidad !== 'parr' && c.bxp > 0) resto.push(`${n2(C.redondea(c.bolsas / c.bxp, 2))} parrillas`);
       partes.push(resto.length ? `${dicho} = ${resto.join(' · ')}` : `<b>${dicho}</b>`);
@@ -881,7 +887,8 @@
         <td class="l clave">${esc(D.fechaCorta(p.fecha))}</td>
         <td class="l">${esc(p.cliente || '—')}</td>
         <td class="l clave">${esc(nombre)}${pie ? `<span class="mini">${esc(pie)}</span>` : ''}</td>
-        <td class="num dim">${p.unidades ? n0(p.unidades) : ''}</td>
+        <td class="num ${p.pidio === 'uni' ? '' : 'dim'}"${p.pidio === 'uni' ? ' title="El cliente lo pidió en unidades"' : ''}>${
+          p.unidades ? (p.pidio === 'uni' ? `<b>${n0(p.unidades)}</b>` : n0(p.unidades)) : ''}</td>
         <td><input class="inqq" style="width:90px" inputmode="numeric" data-pedb="${esc(p.id)}"
             value="${p.bolsas}" aria-label="Bolsas de ${esc(nombre)}"></td>
         <td class="num dim">${qq == null ? '' : n2(qq)}</td>
@@ -911,7 +918,8 @@
       const et = ETIQ_PED[e] || ETIQ_PED.pendiente;
       return `<tr>
         <td class="l">${esc(p.cliente || 'sin cliente')}</td>
-        <td class="num dim">${p.unidades ? n0(p.unidades) : ''}</td>
+        <td class="num ${p.pidio === 'uni' ? '' : 'dim'}">${
+          p.unidades ? (p.pidio === 'uni' ? `<b>${n0(p.unidades)}</b>` : n0(p.unidades)) : ''}</td>
         <td class="num"><b>${n0(Number(p.bolsas) || 0)}</b></td>
         <td class="num dim">${f.bxp ? n2(C.redondea((Number(p.bolsas) || 0) / f.bxp, 2)) : ''}</td>
         <td class="l">${p.cuenta ? '<span class="chip ped">SUMA</span>' : ''}</td>
@@ -1008,7 +1016,8 @@
           <td class="num dim">${f.unidades ? n0(f.unidades) : ''}</td>
           <td class="num"><b>${n0(f.bolsas)}</b></td>
           <td class="num">${parrilla(f)}</td>
-          <td class="l dim">${f.sinPres ? 'capturado en bolsas' : ''}</td></tr>`
+          <td class="l dim">${[f.sinPres ? 'capturado sin presentación' : '',
+            f.de.some((p) => p.pidio === 'uni') ? 'pedido en unidades' : ''].filter(Boolean).join(' · ')}</td></tr>`
           + (ab ? `<tr class="detalle"><td colspan="5">${quienPidio(f)}</td></tr>` : '');
         }).join('')}</tbody>
         <tfoot><tr class="totales"><td class="l">TOTAL</td>
@@ -3253,6 +3262,7 @@
         clave: el.clave,
         unidades: c.unidades,
         bolsas: c.bolsas,
+        pidio: unidad,
         cuenta: $('#pdCuenta').checked,
       });
       D.guardarPedidos();
@@ -3378,7 +3388,12 @@
       } else if (d.pedb) {
         const v = D.num(e.target.value);
         const p = D.estado.pedidos[d.pedb];
-        if (p && v != null && !Number.isNaN(v) && v > 0) p.bolsas = Math.round(v);
+        if (p && v != null && !Number.isNaN(v) && v > 0) {
+          p.bolsas = Math.round(v);
+          /* Con bolsa de un pan, unidades y bolsas son lo mismo: se mueven juntas. */
+          const pr = p.codigo ? D.presentacionDe(p.codigo) : null;
+          if (!pr || (Number(pr.uxb) || 1) === 1) p.unidades = p.bolsas;
+        }
         D.guardarPedidos(); pintarPedidos(); pintarProduccion();
       } else if (e.target.id === 'pedFecha') {
         ui.pedFecha = e.target.value || '';
