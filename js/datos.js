@@ -1267,7 +1267,7 @@
      forma de decir «esto es de más». */
   const nuevoId = () => 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-  function nuevoPedido({ fecha, cliente, clave, bolsas, nota, codigo, unidades, cuenta }) {
+  function nuevoPedido({ fecha, cliente, clave, bolsas, nota, codigo, unidades, cuenta, pidio }) {
     const id = nuevoId();
     const pres = codigo ? presentacionDe(codigo) : null;
     const uni = Math.max(0, Math.round(Number(unidades) || 0));
@@ -1283,6 +1283,9 @@
       codigo: String(codigo || '').trim(),
       unidades: uni,
       bolsas: bol,
+      /* En qué lo pidió el cliente (uni, bol o parr): así se le contesta en
+         su misma unidad aunque el app calcule en bolsas. */
+      pidio: ['uni', 'bol', 'parr'].includes(pidio) ? pidio : 'bol',
       cuenta: !!cuenta,
       estado: 'pendiente', nota: String(nota || '').trim(),
       creado: new Date().toISOString(),
