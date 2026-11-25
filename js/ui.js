@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.60';
+  const VERSION = 'V.2026.61';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -269,9 +269,34 @@
     const bSync = $('#btnSync');
     if (bSync) bSync.hidden = !window.Sync.activo();
 
-    const nd2 = Object.keys(D.estado.dias).filter((f) => D.estado.dias[f].cerrado).length;
-    $('#barInfo').innerHTML = `<b>${D.fechaCorta(ui.fecha)}</b> · ${n1(dec)} QQ decididos · `
-      + (nd2 === 1 ? '1 día guardado' : `${nd2} días guardados`);
+    ui.decQQ = dec;
+    pintarDiaTrab();
+  }
+
+  /**
+   * El día de trabajo, arriba y grande, en todas las pestañas. Lleva cuánto
+   * falta o pasó respecto a hoy: lo normal es producir para hoy o mañana, y
+   * cualquier otro día se pinta en amarillo para que salte a la vista.
+   */
+  function pintarDiaTrab() {
+    const el = $('#diaTrab');
+    if (!el || !ui.fecha) return;
+    const f = ui.fecha;
+    const [a, m, d] = f.split('-');
+    $('#diaTrabFecha').textContent = `${D.nombreDia(f).replace('MIERCOLES', 'MIÉRCOLES')
+      .replace('SABADO', 'SÁBADO')} ${d}/${m}/${a}`;
+    const dif = Math.round((D.desdeISO(f) - D.desdeISO(D.hoyISO())) / 86400000);
+    const txt = dif === 0 ? 'HOY' : dif === 1 ? 'MAÑANA' : dif === -1 ? 'AYER'
+      : dif > 1 ? `EN ${dif} DÍAS` : `HACE ${-dif} DÍAS`;
+    const normal = dif === 0 || dif === 1;
+    const rel = $('#diaTrabRel');
+    rel.textContent = txt;
+    rel.classList.toggle('lejos', !normal);
+    el.classList.toggle('otro', !normal);
+    const nd = Object.keys(D.estado.dias).filter((x) => D.estado.dias[x].cerrado).length;
+    $('#diaTrabDet').textContent = (ui.decQQ !== undefined ? `${n1(ui.decQQ)} QQ decididos · ` : '')
+      + (nd === 1 ? '1 día guardado' : `${nd} días guardados`);
+    el.setAttribute('aria-label', `Trabajando el ${$('#diaTrabFecha').textContent}, ${txt.toLowerCase()}. Tocar para cambiar el día.`);
   }
 
   const kpi = (t, v, cls = '') => `<div class="kpi ${cls}"><span>${esc(t)}</span><strong>${esc(v)}</strong></div>`;
@@ -3196,6 +3221,7 @@
       sec: '#tabSec', hist: '#tabHist', prom: '#tabProm', param: '#tabParam' };
     window.irA = (k) => {
       ui.tab = k;
+      pintarDiaTrab();
       Object.keys(paneles).forEach((x) => {
         $(paneles[x]).hidden = x !== k;
         $(tabs[x]).setAttribute('aria-selected', String(x === k));
@@ -3530,6 +3556,14 @@
     });
 
     // guardar / reiniciar
+    $('#diaTrab').onclick = () => {
+      /* Lleva a donde se cambia el día y abre el calendario de una vez. */
+      window.irA('prod');
+      const inp = $('#inFecha');
+      inp.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      inp.focus();
+      try { inp.showPicker(); } catch (_) { /* sin calendario emergente: queda el foco */ }
+    };
     $('#btnGuardarDia').onclick = () => {
       const r = reg(), t = calc();
       r.calc = {};
