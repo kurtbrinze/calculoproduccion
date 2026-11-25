@@ -513,9 +513,11 @@
   const COLS_ORDEN = [
     { k: 'nombre', t: 'CLAVE', p: 1.5, alinear: 'left' },
     { k: 'total',  t: 'A IMPRIMIR', p: 1.3 },
-    { k: 'oh',     t: 'OH', p: 0.7 },
-    { k: 'impAM',  t: 'IMPRIMIR AM', p: 1.22, vacia: true },
-    { k: 'impPM',  t: 'IMPRIMIR PM', p: 1.22, vacia: true },
+    /* El OH se escribe a mano en la mañana y lleva miles: necesita el espacio.
+       AM y PM se apuntan cortos, así que ceden el suyo. */
+    { k: 'oh',     t: 'OH', p: 1.6 },
+    { k: 'impAM',  t: 'AM', p: 0.78, vacia: true },
+    { k: 'impPM',  t: 'PM', p: 0.78, vacia: true },
     { k: 'suma',   t: 'TOTAL', p: 1.0, vacia: true },
   ];
 
