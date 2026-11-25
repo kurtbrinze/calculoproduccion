@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.62';
+  const VERSION = 'V.2026.63';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2688,6 +2688,7 @@
   /** Resumen de cómo va la sincronización. */
   function pintarSync() {
     const S = window.Sync;
+    avisoCentro();
     if (!$('#estadoSync')) return;
     const u = S.ultima();
     const n = S.escrituras();
@@ -4308,6 +4309,45 @@
     });
   }
 
+  /* Centro de Control. Ahí la app corre dentro de un marco y el navegador le
+     da un almacenamiento aparte: no ve la clave ni los datos de la app abierta
+     sola. Sin clave, lo que se capture ahí se quedaría sólo en ese marco, así
+     que se muestra un aviso fijo hasta que se encienda la sincronización.
+     Además, cambiar de app dentro del centro no dispara visibilitychange
+     (el marco sigue abierto): el centro manda 'cc:mostrar' cada vez que
+     vuelve a mostrar esta app, y con eso se trae lo último. */
+  const EMBEBIDA = (() => { try { return window.self !== window.top; } catch (_) { return true; } })();
+  function avisoCentro() {
+    let b = document.getElementById('avisoCentro');
+    const falta = EMBEBIDA && !window.Sync.activo();
+    if (!falta) { if (b) b.remove(); return; }
+    if (b) return;
+    b = document.createElement('div');
+    b.id = 'avisoCentro';
+    b.setAttribute('role', 'alert');
+    b.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:12px;max-width:calc(100% - 24px);padding:10px 12px 10px 16px;border-radius:12px;background:#3a2a06;border:1px solid #f5b301;color:#ffe9a8;font-size:13px;line-height:1.4;box-shadow:0 6px 24px rgba(0,0,0,.35)';
+    b.innerHTML = '<span>Sincronización apagada dentro del Centro de Control. Lo que captures aquí no llegará a tus otros equipos.</span>';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Activar';
+    btn.style.cssText = 'flex:none;padding:7px 14px;border-radius:8px;border:0;background:#f5b301;color:#2a1d00;font-weight:600;cursor:pointer';
+    btn.onclick = () => window.irA('param');
+    b.appendChild(btn);
+    document.body.appendChild(b);
+  }
+  let ultimoCentro = 0;
+  function escucharCentro() {
+    window.addEventListener('message', (ev) => {
+      if (!ev.data || ev.data.tipo !== 'cc:mostrar') return;
+      avisoCentro();
+      if (!window.Sync.activo()) return;
+      if (Date.now() - ultimoCentro < 15000) return;   // cambiar de app varias veces seguidas no repite la lectura
+      ultimoCentro = Date.now();
+      ultimoFoco = Date.now();
+      sincronizar(false);
+    });
+  }
+
   /* Al abrir: se mira si este despliegue sabe sincronizar y, si está encendida,
      se hace una pasada para arrancar con lo último. */
   async function arrancarSync() {
@@ -4328,7 +4368,7 @@
   // ---------- arranque ----------
   function iniciar() {
     $('#badgeVer').textContent = VERSION;
-    enlazar(); instalacion(); autodetectarLector(); arrancarSync(); vigilarFoco();
+    enlazar(); instalacion(); autodetectarLector(); arrancarSync(); vigilarFoco(); escucharCentro();
     let t = 'prod';
     try { t = localStorage.getItem('panprod_tab') || 'prod'; } catch (_) {}
     window.irA(['prod', 'inv', 'ped', 'hist', 'prom', 'param'].includes(t) ? t : 'prod');
