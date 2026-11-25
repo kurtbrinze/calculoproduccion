@@ -52,7 +52,24 @@ h1,h2,h3{letter-spacing:-.01em}
 
 /* ---------- barra superior ---------- */
 .topbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;row-gap:8px;padding:12px 0 0}
-.marca{display:flex;align-items:center;gap:10px;margin-right:auto}
+.marca{display:flex;align-items:center;gap:10px;margin-right:14px}
+/* El día de trabajo: lo primero que se lee de la pantalla. */
+.diaTrab{
+  margin-right:auto;display:flex;flex-direction:column;align-items:flex-start;gap:2px;
+  background:var(--surface-2,rgba(255,255,255,.04));border:1.5px solid var(--accent);
+  border-radius:14px;padding:7px 16px 8px;cursor:pointer;color:var(--ink);text-align:left;
+}
+.diaTrab:hover{background:rgba(74,222,155,.08)}
+.diaTrab .et{font-size:.64rem;letter-spacing:.2em;color:var(--muted);font-weight:700}
+.diaTrab .fila1{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.diaTrab .fila1 b{font-size:1.55rem;font-weight:800;letter-spacing:.01em;line-height:1.1;color:var(--accent)}
+.diaTrab .rel{font-size:.78rem;font-weight:800;letter-spacing:.06em;border-radius:999px;padding:3px 10px;
+  background:var(--ok-soft);color:var(--ok)}
+.diaTrab .rel.lejos{background:var(--warn-soft);color:var(--warn)}
+.diaTrab .det{font-size:.8rem;color:var(--muted)}
+.diaTrab.otro{border-color:var(--warn)}
+.diaTrab.otro .fila1 b{color:var(--warn)}
+@media (max-width:640px){.diaTrab .fila1 b{font-size:1.2rem}.diaTrab{padding:6px 12px}}
 .marca svg{width:30px;height:30px;flex:none}
 .marca .wm{display:flex;flex-direction:column;line-height:1}
 .marca .wm b{font-size:1rem;font-weight:700}
