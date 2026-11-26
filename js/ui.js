@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.64';
+  const VERSION = 'V.2026.65';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -1776,6 +1776,30 @@
   }
 
   // ================= AJUSTES =================
+  /** «LUNES 23/11/2026 · 10:32» para nombrar una copia de parámetros. */
+  function cuandoCopia(iso) {
+    const t = new Date(iso);
+    if (Number.isNaN(t.getTime())) return 'sin fecha';
+    const f = D.aISO(t);
+    const [a, m, d] = f.split('-');
+    return `${D.nombreDia(f)} ${d}/${m}/${a} · ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  }
+
+  /** Pone unos parámetros guardados como los de ahora, después de preguntar. */
+  async function aplicarCopiaParams(params, de) {
+    if (!params || typeof params !== 'object') { aviso('Esa copia no trae parámetros.', 'err'); return; }
+    const si = await preguntar('Volver a una copia de parámetros',
+      `<p>La configuración regresa a como estaba el <b>${esc(de)}</b>: turnos, topes, productos,
+         calendario, feriados y márgenes.</p>
+       <p>Inventario, pedidos, promedios e historial no se tocan. Antes de cambiar se guarda una
+         copia de lo que hay ahora, por si quieres regresar.</p>`, 'Volver');
+    if (!si) return;
+    D.guardarCopiaParams(`antes de volver al ${de}`);
+    D.estado.params = D.fusionarParams(params);
+    D.guardarParams(); pintarParametros(); pintarProduccion();
+    aviso(`Parámetros de vuelta al ${de}.`);
+  }
+
   function pintarParametros() {
     const P = D.estado.params;
     const cal = P.calendario.map((c, i) => `<tr>
@@ -2200,6 +2224,18 @@
           <button class="btn sec" id="btnResetParam" type="button">Volver a los de fábrica</button>
         </div>
         <p class="dim" style="font-size:.84rem;margin:11px 2px 0" id="estadoDef"></p>
+        <h4 class="subrot" style="margin-top:16px">Copias por fecha</h4>
+        <p class="dim" style="font-size:.84rem;margin:0 2px 10px">
+          Cada vez que sobrescribes queda una copia con su fecha y hora, sin borrar las anteriores.
+          Si elegiste carpeta, también queda un archivo en <b>Parametros</b>, que sobrevive aunque
+          se borre el navegador.
+        </p>
+        <div class="fila">
+          <select id="selCopiaParam" style="min-width:260px"></select>
+          <button class="btn sec" id="btnVolverCopia" type="button">Volver a esta copia</button>
+          <button class="btn ghost" id="btnAbrirCopia" type="button">Abrir copia de archivo</button>
+          <input type="file" id="fileCopiaParam" accept=".json,application/json" hidden>
+        </div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -2223,6 +2259,11 @@
         + '«Volver a mis valores» regresa a esa configuración.'
       : 'Todavía no has guardado ninguno: «Volver a mis valores» te deja los de fábrica.';
     $('#btnVolverDef').disabled = !g;
+    const copias = D.copiasParams();
+    $('#selCopiaParam').innerHTML = copias.length
+      ? copias.map((c, i) => `<option value="${i}">${esc(cuandoCopia(c.en))}${c.nota ? ` (${esc(c.nota)})` : ''}</option>`).join('')
+      : '<option value="">Todavía no hay copias</option>';
+    $('#btnVolverCopia').disabled = !copias.length;
     pintarMatriz();
     pintarLector();
     pintarFeriados();
@@ -4066,12 +4107,31 @@
             if (!si) return;
             D.estado.params.guardadoEn = new Date().toISOString();
             D.guardarParams();
-            aviso(D.fijarDefecto() ? 'Guardados como tus valores por defecto.'
-                                   : 'No se pudo guardar: el almacenamiento está lleno.', D.hayDefecto() ? '' : 'err');
+            const ok = D.fijarDefecto();
+            const copia = D.guardarCopiaParams();
             pintarParametros();
+            if (!ok) { aviso('No se pudo guardar: el almacenamiento está lleno.', 'err'); return; }
+            /* El archivo va sólo si hay carpeta: sin ella caería en Descargas
+               cada vez, y la copia del navegador ya quedó. */
+            window.Archivo.carpeta().then(async (c) => {
+              if (!c || !c.listo || !copia) {
+                aviso('Guardados como tus valores por defecto, con copia de hoy.'); return;
+              }
+              const t = new Date(copia.en);
+              const nombre = `Parametros_${D.aISO(t).replace(/-/g, '_')}_${String(t.getHours()).padStart(2, '0')}${String(t.getMinutes()).padStart(2, '0')}.json`;
+              const data = { tipo: 'parametros', version: VERSION, en: copia.en, params: copia.params };
+              const r = await window.Archivo.guardar(new Blob([JSON.stringify(data)], { type: 'application/json' }), nombre);
+              aviso('Guardados como tus valores por defecto, con copia de hoy' + donde(r) + '.');
+            }).catch(() => aviso('Guardados como tus valores por defecto, con copia de hoy.'));
           });
         return;
       }
+      if (e.target.closest('#btnVolverCopia')) {
+        const c = D.copiasParams()[Number($('#selCopiaParam').value)];
+        if (c) aplicarCopiaParams(c.params, cuandoCopia(c.en));
+        return;
+      }
+      if (e.target.closest('#btnAbrirCopia')) { $('#fileCopiaParam').click(); return; }
       if (e.target.closest('#btnVolverDef')) {
         if (!D.hayDefecto()) { aviso('Todavía no has guardado valores propios.', 'err'); return; }
         preguntar('Volver a mis valores',
@@ -4106,6 +4166,19 @@
       if (id === 'inKey') { F.setCfg('key', e.target.value.trim()); pintarLector(); aviso('Llave guardada en este dispositivo.'); return; }
       if (id === 'inUrl') { F.setCfg('url', e.target.value.trim()); pintarLector(); aviso('Dirección guardada.'); return; }
       if (id === 'inModelo') { F.setCfg('modelo', e.target.value.trim() || F.MODELO); return; }
+      if (id === 'fileCopiaParam') {
+        const f = e.target.files[0]; e.target.value = '';
+        if (!f) return;
+        f.text().then((txt) => {
+          const d = JSON.parse(txt);
+          /* Sirve una copia de parámetros o un respaldo completo: de este
+             sólo se toman los parámetros. */
+          const params = d && (d.tipo === 'parametros' || d.dias) ? d.params : null;
+          if (!params) throw new Error('el archivo no trae parámetros de esta app');
+          return aplicarCopiaParams(params, d.en || d.fecha ? cuandoCopia(d.en || d.fecha) : f.name);
+        }).catch((err) => aviso('No se pudo abrir: ' + err.message, 'err'));
+        return;
+      }
       if (id !== 'fileRend') return;
       importar(e, async (libro) => {
         const { rend, n } = await X.leerRendimientos(libro);

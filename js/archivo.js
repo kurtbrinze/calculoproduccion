@@ -139,6 +139,7 @@
     [/^Impresion Bolsa /i,      'Impresion Bolsa'],
     [/^Produccion /i,           'Produccion PDF'],
     [/^Respaldo_Produccion_/i,  'Respaldos'],
+    [/^Parametros_/i,           'Parametros'],
   ];
   const subcarpetaDe = (nombre) => {
     const r = SUBCARPETAS.find(([re]) => re.test(nombre));

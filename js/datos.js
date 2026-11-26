@@ -923,6 +923,22 @@
   const fijarDefecto = () => grabar('defecto', JSON.parse(JSON.stringify(estado.params)));
   const borrarDefecto = () => { try { localStorage.removeItem(K + 'defecto'); return true; } catch (_) { return false; } };
   const hayDefecto = () => !!misDefecto();
+
+  /* Copias con fecha de los parámetros: cada «Sobrescribir con lo que hay
+     ahora» deja una, sin borrar las anteriores, para poder volver a como
+     estaba un día cualquiera. Se guardan las más nuevas que quepan. */
+  const MAX_COPIAS = 30;
+  const copiasParams = () => {
+    const l = leer('copiasParams', []);
+    return Array.isArray(l) ? l : [];
+  };
+  function guardarCopiaParams(nota) {
+    const copia = { en: new Date().toISOString(), params: JSON.parse(JSON.stringify(estado.params)) };
+    if (nota) copia.nota = nota;
+    let l = [copia, ...copiasParams()].slice(0, MAX_COPIAS);
+    while (l.length && !grabar('copiasParams', l)) l = l.slice(0, -1);
+    return l.length ? copia : null;
+  }
   const guardarProm = () => grabar('prom', estado.prom);
   const guardarBolsa = () => grabar('bolsa', estado.bolsa);
   /* La clave vieja se conserva: es la hoja que ya tiene escrita la gente. */
@@ -1465,7 +1481,7 @@
     clientes, ANTICIPACION, migrarPedidos, archivarPedidos, pedidosViejos,
     PRESENTACIONES, presentaciones, presentacionDe, presentacionesPorUso, ORDEN_PREVENTA, DIAS_ARCHIVO,
     presentacionesActivas, equivalenciaDe, clavesSinEquivalencia, guardarPresentacion,
-    misDefecto, fijarDefecto, borrarDefecto, hayDefecto, ESQUEMA,
+    misDefecto, fijarDefecto, borrarDefecto, hayDefecto, copiasParams, guardarCopiaParams, ESQUEMA,
     hoyISO, desdeISO, aISO, sumarDias, indiceDia, nombreDia, fechaCorta,
     registro, registroVacio, migrar, diaPrevio, produccionDe, turnosDe, porTurnoDe, porPlantaDe,
     aplicarDiferenciados, piso,
