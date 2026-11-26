@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.62';
+  const VERSION = 'V.2026.64';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -80,6 +80,36 @@
      del día anterior. */
   const th2 = (titulo, sub, cls) =>
     `<th${cls ? ` class="${cls}"` : ''}>${esc(titulo)}${sub ? `<span class="sub2">${esc(sub)}</span>` : ''}</th>`;
+
+  /* Resumen del día para la tarjeta de Producción en el Centro de Control.
+     Se deja en localStorage (el centro sirve esta app desde su mismo sitio y
+     lo lee directo) y se avisa al centro por postMessage. Sólo lleva lo que
+     la tarjeta muestra: QQ por planta y, en cada una, por turno con sus
+     claves. Se reescribe sólo si cambió algo. */
+  let resumenPrevio = '';
+  function publicarResumen(t, sug, dec, faltan) {
+    try {
+      const plantas = D.PLANTAS.map((p) => {
+        const v = t.plantas[p.id];
+        const turnos = Object.values(t.turnos)
+          .filter((x) => x.planta === p.id && (x.usado > 0 || x.activo))
+          .map((x) => ({
+            nombre: x.nombre, momento: x.momento, usado: x.usado, tope: x.tope, activo: x.activo,
+            claves: t.filas.map((f) => ({ clave: f.clave, qq: Number(f.asign[x.id]) || 0 }))
+              .filter((c) => c.qq > 0).sort((a, b) => b.qq - a.qq),
+          }));
+        return { id: p.id, nombre: p.nombre, trabaja: v.trabaja, sugerido: v.sugerido,
+          decidido: v.decidido, tope: v.tope, turnos };
+      });
+      const datos = { fecha: ui.fecha, sugerido: sug, decidido: dec, faltantes: faltan, plantas };
+      const firma = JSON.stringify(datos);
+      if (firma === resumenPrevio) return;
+      resumenPrevio = firma;
+      const msg = { v: 1, app: 'produccion', actualizado: new Date().toISOString(), datos };
+      localStorage.setItem('cc.insight.produccion', JSON.stringify(msg));
+      if (window.parent !== window) window.parent.postMessage({ tipo: 'cc:insight', id: 'produccion', insight: msg }, '*');
+    } catch (_) { /* el resumen nunca debe romper la pantalla */ }
+  }
 
   function pintarProduccion() {
     const t = calc();
@@ -179,6 +209,7 @@
         ui.sinCupo.map((x) => `${x.clave} ${n2(x.qq)} qq`).join(' · ')
         + '. Se puede subir un tope en Parámetros, mover claves a otro turno, o dejarlo así y vigilar la cobertura.']);
     }
+    publicarResumen(t, sug, dec, faltan);
     $('#avisosProd').innerHTML = av.map(([c, h, p]) => `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p)}</p></div>`).join('');
 
     // --- una tabla por área de producción ---
@@ -2688,6 +2719,7 @@
   /** Resumen de cómo va la sincronización. */
   function pintarSync() {
     const S = window.Sync;
+    avisoCentro();
     if (!$('#estadoSync')) return;
     const u = S.ultima();
     const n = S.escrituras();
@@ -4308,6 +4340,45 @@
     });
   }
 
+  /* Centro de Control. Ahí la app corre dentro de un marco y el navegador le
+     da un almacenamiento aparte: no ve la clave ni los datos de la app abierta
+     sola. Sin clave, lo que se capture ahí se quedaría sólo en ese marco, así
+     que se muestra un aviso fijo hasta que se encienda la sincronización.
+     Además, cambiar de app dentro del centro no dispara visibilitychange
+     (el marco sigue abierto): el centro manda 'cc:mostrar' cada vez que
+     vuelve a mostrar esta app, y con eso se trae lo último. */
+  const EMBEBIDA = (() => { try { return window.self !== window.top; } catch (_) { return true; } })();
+  function avisoCentro() {
+    let b = document.getElementById('avisoCentro');
+    const falta = EMBEBIDA && !window.Sync.activo();
+    if (!falta) { if (b) b.remove(); return; }
+    if (b) return;
+    b = document.createElement('div');
+    b.id = 'avisoCentro';
+    b.setAttribute('role', 'alert');
+    b.style.cssText = 'position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:9999;display:flex;align-items:center;gap:12px;max-width:calc(100% - 24px);padding:10px 12px 10px 16px;border-radius:12px;background:#3a2a06;border:1px solid #f5b301;color:#ffe9a8;font-size:13px;line-height:1.4;box-shadow:0 6px 24px rgba(0,0,0,.35)';
+    b.innerHTML = '<span>Sincronización apagada dentro del Centro de Control. Lo que captures aquí no llegará a tus otros equipos.</span>';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = 'Activar';
+    btn.style.cssText = 'flex:none;padding:7px 14px;border-radius:8px;border:0;background:#f5b301;color:#2a1d00;font-weight:600;cursor:pointer';
+    btn.onclick = () => window.irA('param');
+    b.appendChild(btn);
+    document.body.appendChild(b);
+  }
+  let ultimoCentro = 0;
+  function escucharCentro() {
+    window.addEventListener('message', (ev) => {
+      if (!ev.data || ev.data.tipo !== 'cc:mostrar') return;
+      avisoCentro();
+      if (!window.Sync.activo()) return;
+      if (Date.now() - ultimoCentro < 15000) return;   // cambiar de app varias veces seguidas no repite la lectura
+      ultimoCentro = Date.now();
+      ultimoFoco = Date.now();
+      sincronizar(false);
+    });
+  }
+
   /* Al abrir: se mira si este despliegue sabe sincronizar y, si está encendida,
      se hace una pasada para arrancar con lo último. */
   async function arrancarSync() {
@@ -4328,7 +4399,7 @@
   // ---------- arranque ----------
   function iniciar() {
     $('#badgeVer').textContent = VERSION;
-    enlazar(); instalacion(); autodetectarLector(); arrancarSync(); vigilarFoco();
+    enlazar(); instalacion(); autodetectarLector(); arrancarSync(); vigilarFoco(); escucharCentro();
     let t = 'prod';
     try { t = localStorage.getItem('panprod_tab') || 'prod'; } catch (_) {}
     window.irA(['prod', 'inv', 'ped', 'hist', 'prom', 'param'].includes(t) ? t : 'prod');
