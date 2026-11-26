@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.63';
+  const VERSION = 'V.2026.64';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -80,6 +80,36 @@
      del día anterior. */
   const th2 = (titulo, sub, cls) =>
     `<th${cls ? ` class="${cls}"` : ''}>${esc(titulo)}${sub ? `<span class="sub2">${esc(sub)}</span>` : ''}</th>`;
+
+  /* Resumen del día para la tarjeta de Producción en el Centro de Control.
+     Se deja en localStorage (el centro sirve esta app desde su mismo sitio y
+     lo lee directo) y se avisa al centro por postMessage. Sólo lleva lo que
+     la tarjeta muestra: QQ por planta y, en cada una, por turno con sus
+     claves. Se reescribe sólo si cambió algo. */
+  let resumenPrevio = '';
+  function publicarResumen(t, sug, dec, faltan) {
+    try {
+      const plantas = D.PLANTAS.map((p) => {
+        const v = t.plantas[p.id];
+        const turnos = Object.values(t.turnos)
+          .filter((x) => x.planta === p.id && (x.usado > 0 || x.activo))
+          .map((x) => ({
+            nombre: x.nombre, momento: x.momento, usado: x.usado, tope: x.tope, activo: x.activo,
+            claves: t.filas.map((f) => ({ clave: f.clave, qq: Number(f.asign[x.id]) || 0 }))
+              .filter((c) => c.qq > 0).sort((a, b) => b.qq - a.qq),
+          }));
+        return { id: p.id, nombre: p.nombre, trabaja: v.trabaja, sugerido: v.sugerido,
+          decidido: v.decidido, tope: v.tope, turnos };
+      });
+      const datos = { fecha: ui.fecha, sugerido: sug, decidido: dec, faltantes: faltan, plantas };
+      const firma = JSON.stringify(datos);
+      if (firma === resumenPrevio) return;
+      resumenPrevio = firma;
+      const msg = { v: 1, app: 'produccion', actualizado: new Date().toISOString(), datos };
+      localStorage.setItem('cc.insight.produccion', JSON.stringify(msg));
+      if (window.parent !== window) window.parent.postMessage({ tipo: 'cc:insight', id: 'produccion', insight: msg }, '*');
+    } catch (_) { /* el resumen nunca debe romper la pantalla */ }
+  }
 
   function pintarProduccion() {
     const t = calc();
@@ -179,6 +209,7 @@
         ui.sinCupo.map((x) => `${x.clave} ${n2(x.qq)} qq`).join(' · ')
         + '. Se puede subir un tope en Parámetros, mover claves a otro turno, o dejarlo así y vigilar la cobertura.']);
     }
+    publicarResumen(t, sug, dec, faltan);
     $('#avisosProd').innerHTML = av.map(([c, h, p]) => `<div class="aviso ${c}"><h4>${esc(h)}</h4><p>${esc(p)}</p></div>`).join('');
 
     // --- una tabla por área de producción ---
