@@ -2,40 +2,40 @@
    de saturación, sobre azules profundos en vez de negro, para leer tablas largas
    sin cansar la vista. */
 :root{
-  --bg:#101823;
-  --surface:#18212E;
-  --surface-2:#212D3D;
-  --surface-3:#29374A;
-  --line:#263345;
-  --line-2:#33435C;
-  --ink:#DDE6F2;
-  --ink-2:#B7C6D9;
-  --muted:#8295AE;
-  --accent:#4ADE9B;
-  --accent-2:#56C9F0;
-  --grad:linear-gradient(135deg,#4ADE9B 0%,#56C9F0 100%);
-  --on-accent:#06281C;
-  /* Botones en tonos apagados: el mismo verde y cian, bajados de intensidad. */
-  --btn:linear-gradient(135deg,#2E8468 0%,#2F7795 100%);
-  --btn-ink:#E9F3EF;
-  --btn-borde:rgba(74,222,155,.22);
-  --btn-texto:#7CCDAC;
-  --warn:#EBB75F;
-  --warn-soft:rgba(235,183,95,.12);
-  --danger:#F08098;
-  --danger-soft:rgba(240,128,152,.12);
-  --ok:#4ADE9B;
-  --ok-soft:rgba(74,222,155,.12);
-  --info-soft:rgba(86,201,240,.12);
-  --r-lg:14px; --r-sm:9px;
+  /* Tema global Rinze (Grafito & Plata); los valores de respaldo son los mismos. */
+  --bg:var(--rz-bg,#0D0F12);
+  --surface:var(--rz-card,#16191E);
+  --surface-2:var(--rz-elev,#1F232B);
+  --surface-3:var(--rz-act,#262A32);
+  --line:var(--rz-card-borde,#262A32);
+  --line-2:var(--rz-elev-borde,#323741);
+  --ink:var(--rz-tx,#F3F4F6);
+  --ink-2:#D1D5DB;
+  --muted:var(--rz-tx2,#9CA3AF);
+  --accent:var(--rz-act-ind,#E5E7EB);
+  --accent-2:var(--rz-link,#D1D5DB);
+  --grad:var(--rz-pri,#F3F4F6);
+  --on-accent:var(--rz-pri-tx,#0D0F12);
+  --btn:var(--rz-pri,#F3F4F6);
+  --btn-ink:var(--rz-pri-tx,#0D0F12);
+  --btn-borde:var(--rz-elev-borde,#323741);
+  --btn-texto:var(--rz-link,#D1D5DB);
+  --warn:var(--rz-warn,#FBBF24);
+  --warn-soft:var(--rz-warn-bg,rgba(217,119,6,.15));
+  --danger:var(--rz-crit,#F87171);
+  --danger-soft:var(--rz-crit-bg,rgba(220,38,38,.15));
+  --ok:var(--rz-ok,#4ADE80);
+  --ok-soft:var(--rz-ok-bg,rgba(22,163,74,.15));
+  --info-soft:rgba(156,163,175,.10);
+  --r-lg:var(--rz-r-card,12px); --r-sm:var(--rz-r-btn,8px);
   color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
 body{
   background:
-    radial-gradient(1100px 520px at 10% -10%, rgba(74,222,155,.05), transparent 60%),
-    radial-gradient(900px 460px at 94% 2%, rgba(86,201,240,.05), transparent 62%),
+    radial-gradient(1100px 520px at 10% -10%, rgba(229,231,235,.05), transparent 60%),
+    radial-gradient(900px 460px at 94% 2%, rgba(209,213,219,.05), transparent 62%),
     var(--bg);
   background-attachment:fixed;
   color:var(--ink);
@@ -46,7 +46,7 @@ body{
 .wrap{max-width:1500px;margin:0 auto;padding:0 16px 24px}
 button,select,input,textarea{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
-::selection{background:rgba(86,201,240,.28)}
+::selection{background:rgba(209,213,219,.28)}
 h1,h2,h3{letter-spacing:-.01em}
 .num{font-variant-numeric:tabular-nums}
 
@@ -59,7 +59,7 @@ h1,h2,h3{letter-spacing:-.01em}
   background:var(--surface-2,rgba(255,255,255,.04));border:1.5px solid var(--accent);
   border-radius:12px;padding:5px 14px 6px;cursor:pointer;color:var(--ink);text-align:left;
 }
-.diaTrab:hover{background:rgba(74,222,155,.08)}
+.diaTrab:hover{background:rgba(229,231,235,.08)}
 .diaTrab .et{font-size:.58rem;letter-spacing:.2em;color:var(--muted);font-weight:700}
 .diaTrab .fila1{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .diaTrab .fila1 b{font-size:1.15rem;font-weight:800;letter-spacing:.01em;line-height:1.1;color:var(--accent)}
@@ -76,7 +76,7 @@ h1,h2,h3{letter-spacing:-.01em}
 .marca .wm span{font-size:.62rem;letter-spacing:.22em;color:var(--muted);margin-top:3px}
 .ver{
   font-size:.8rem;font-weight:700;color:var(--btn-texto);white-space:nowrap;
-  background:rgba(74,222,155,.07);border:1px solid var(--btn-borde);
+  background:rgba(229,231,235,.07);border:1px solid var(--btn-borde);
   border-radius:999px;padding:5px 12px;
 }
 
@@ -89,7 +89,7 @@ h1,h2,h3{letter-spacing:-.01em}
 .btn:not(.ghost){background:var(--btn);color:var(--btn-ink)}
 .btn:not(.ghost):hover{filter:brightness(1.14)}
 .btn.ghost{background:transparent;color:var(--btn-texto);border:1.5px solid var(--btn-borde)}
-.btn.ghost:hover{border-color:rgba(74,222,155,.45);background:rgba(74,222,155,.06);color:var(--accent)}
+.btn.ghost:hover{border-color:rgba(229,231,235,.45);background:rgba(229,231,235,.06);color:var(--accent)}
 .btn.sec{background:var(--surface-2);color:var(--ink);border:1px solid var(--line-2)}
 .btn.sec:hover{background:var(--surface-3)}
 .btn.mini{min-height:38px;padding:0 13px;font-size:.88rem}
@@ -105,11 +105,11 @@ h1,h2,h3{letter-spacing:-.01em}
    contenedor tiene 16 px de aire a los lados. */
 .tabs{display:flex;gap:4px;margin:16px 0 0;
   border-bottom:1px solid var(--line);overflow-x:auto;scrollbar-width:none;
-  position:sticky;top:0;z-index:30;background:rgba(24,33,46,.96);
+  position:sticky;top:0;z-index:30;background:rgba(22,25,30,.96);
   backdrop-filter:blur(8px);
   /* La sombra estira el fondo hasta el borde de la pantalla sin ensanchar la
      barra: con márgenes negativos la página se corría de lado en la tablet. */
-  box-shadow:-20px 0 0 rgba(24,33,46,.96), 20px 0 0 rgba(24,33,46,.96)}
+  box-shadow:-20px 0 0 rgba(22,25,30,.96), 20px 0 0 rgba(22,25,30,.96)}
 .tabs::-webkit-scrollbar{display:none}
 .tabs button{
   min-height:46px;padding:0 16px;border:0;background:transparent;color:var(--muted);
@@ -128,11 +128,11 @@ h1,h2,h3{letter-spacing:-.01em}
 .campo{display:flex;flex-direction:column;gap:5px}
 .campo label{font-size:.78rem;color:var(--muted);letter-spacing:.03em}
 input[type=text],input[type=number],input[type=date],input[type=url],input[type=password],select,textarea{
-  min-height:44px;padding:0 11px;background:#0D1522;border:1px solid var(--line-2);
+  min-height:44px;padding:0 11px;background:var(--rz-bg,#0D0F12);border:1px solid var(--line-2);
   border-radius:var(--r-sm);color:var(--ink);
 }
 textarea{padding:9px 11px;min-height:70px;resize:vertical}
-input:focus,select:focus,textarea:focus{border-color:var(--accent-2);outline:none;box-shadow:0 0 0 3px rgba(86,201,240,.15)}
+input:focus,select:focus,textarea:focus{border-color:var(--accent-2);outline:none;box-shadow:0 0 0 3px rgba(209,213,219,.15)}
 input[type=number]{text-align:right;font-variant-numeric:tabular-nums}
 input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
 .sw{display:inline-flex;align-items:center;gap:8px;min-height:40px;cursor:pointer}
@@ -148,10 +148,10 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
 .barra{height:6px;border-radius:99px;background:var(--surface-3);margin-top:9px;overflow:hidden}
 .barra i{display:block;height:100%;border-radius:99px;background:var(--btn);transition:width .25s}
 .turno.lleno .barra i{background:var(--warn)}
-.turno.excedido{border-color:rgba(240,128,152,.5)}
+.turno.excedido{border-color:rgba(248,113,113,.5)}
 .turno.excedido .barra i{background:var(--danger)}
 .turno.excedido .qq strong{color:var(--danger)}
-.turno.bajo{border-color:rgba(235,183,95,.4)}
+.turno.bajo{border-color:rgba(251,191,36,.4)}
 .turno.apagado{opacity:.45}
 
 /* ---------- tablas ---------- */
@@ -178,7 +178,7 @@ th{
 }
 th.l,td.l{text-align:left}
 td{padding:5px 10px;border-bottom:1px solid var(--line);text-align:right;vertical-align:middle}
-tbody tr:hover{background:rgba(86,201,240,.04)}
+tbody tr:hover{background:rgba(209,213,219,.04)}
 tr.fam td{
   background:var(--surface-2);font-weight:700;font-size:.76rem;letter-spacing:.07em;
   color:var(--ink-2);text-align:left;padding:7px 10px;position:sticky;top:33px;z-index:1;
@@ -188,9 +188,9 @@ td.clave .mini{display:block;font-weight:400;font-size:.74rem;color:var(--muted)
 .dim{color:var(--muted)}
 .inqq{
   width:72px;min-height:38px;padding:2px 7px;text-align:right;font-weight:700;
-  font-variant-numeric:tabular-nums;background:#0D1522;border:1px solid var(--line-2);border-radius:7px;
+  font-variant-numeric:tabular-nums;background:var(--rz-bg,#0D0F12);border:1px solid var(--line-2);border-radius:7px;
 }
-.inqq.puesto{border-color:rgba(74,222,155,.45);color:var(--accent)}
+.inqq.puesto{border-color:rgba(229,231,235,.45);color:var(--accent)}
 .inqq.na{opacity:.18;pointer-events:none}
 .sug{font-weight:700;color:var(--accent-2)}
 .sug.cero{color:var(--muted);font-weight:400}
@@ -238,7 +238,7 @@ tr.detalle td{background:#0E1621;padding:0;border-bottom:2px solid var(--line-2)
 
 /* ---------- barra inferior ---------- */
 .bar{
-  position:fixed;left:0;right:0;bottom:0;z-index:20;background:rgba(24,33,46,.96);
+  position:fixed;left:0;right:0;bottom:0;z-index:20;background:rgba(22,25,30,.96);
   backdrop-filter:blur(8px);border-top:1px solid var(--line-2);
   padding:10px 16px calc(10px + env(safe-area-inset-bottom));
 }
@@ -253,13 +253,13 @@ tr.detalle td{background:#0E1621;padding:0;border-bottom:2px solid var(--line-2)
   background:var(--surface-2);border:1px solid var(--line-2);box-shadow:0 8px 28px rgba(0,0,0,.4);
 }
 #toast.show{display:block}
-#toast.err{background:#2A1A22;border-color:rgba(240,128,152,.45);color:var(--danger)}
-#espera{position:fixed;inset:0;background:rgba(10,16,24,.72);backdrop-filter:blur(2px);display:none;place-items:center;z-index:50}
+#toast.err{background:#2A1A22;border-color:rgba(248,113,113,.45);color:var(--danger)}
+#espera{position:fixed;inset:0;background:rgba(13,15,18,.72);backdrop-filter:blur(2px);display:none;place-items:center;z-index:50}
 #espera.show{display:grid}
 #espera div{background:var(--surface);border:1px solid var(--line-2);padding:18px 24px;border-radius:var(--r-lg);font-weight:650;color:var(--accent)}
 
 /* ---------- diálogos ---------- */
-.modal{position:fixed;inset:0;z-index:45;background:rgba(10,16,24,.72);backdrop-filter:blur(2px);display:none;place-items:center;padding:16px}
+.modal{position:fixed;inset:0;z-index:45;background:rgba(13,15,18,.72);backdrop-filter:blur(2px);display:none;place-items:center;padding:16px}
 .modal.show{display:grid}
 .modal .caja{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--r-lg);padding:20px;max-width:480px;width:100%;max-height:86vh;overflow:auto}
 .modal h3{margin:0 0 8px}
@@ -367,7 +367,7 @@ table.tfer tr.emp td{background:rgba(255,255,255,.02)}
 .celfer{width:100%;min-height:34px;border:1px solid var(--line);border-radius:7px;
   background:transparent;color:inherit;font:inherit;font-size:.84rem;cursor:pointer;padding:0 6px}
 .celfer:hover{border-color:var(--btn-texto)}
-.celfer.no{color:var(--danger);border-color:rgba(240,128,152,.45);font-weight:600}
+.celfer.no{color:var(--danger);border-color:rgba(248,113,113,.45);font-weight:600}
 .celfer.x{color:var(--muted)}
 .celfer.normal{color:var(--ok)}
 
@@ -382,10 +382,10 @@ td.num .mini{display:block;font-weight:400;font-size:.72rem;color:var(--muted);m
 th .sub2{display:block;font-weight:400;font-size:.68rem;color:var(--muted);letter-spacing:.02em;margin-top:3px;text-transform:none}
 .inqq.auto{color:var(--muted)}
 .inqq.auto::placeholder{color:var(--ink-2);opacity:.75}
-.inqq.mal{border-color:rgba(240,128,152,.6);color:var(--danger)}
-td.tach{color:var(--muted);text-decoration:line-through;text-decoration-color:rgba(240,128,152,.6)}
+.inqq.mal{border-color:rgba(248,113,113,.6);color:var(--danger)}
+td.tach{color:var(--muted);text-decoration:line-through;text-decoration-color:rgba(248,113,113,.6)}
 td.clave .mini.neg{color:var(--danger)}
-tr.ojo td{background:rgba(235,183,95,.05)}
+tr.ojo td{background:rgba(251,191,36,.05)}
 
 /* partes de un producto diferenciado */
 .parte{display:inline-flex;align-items:center;gap:6px;margin:0 8px 6px 0;padding:4px 9px;
@@ -441,7 +441,7 @@ td.acc{white-space:nowrap}
 td.acc .btn{margin-right:5px}
 .inqq.mini3.cl{width:86px;text-align:left}
 .planta.apagado{opacity:.5;border-style:dashed}
-.chip.ped{background:rgba(86,201,240,.14);color:var(--accent-2);border:1px solid rgba(86,201,240,.3)}
+.chip.ped{background:rgba(209,213,219,.14);color:var(--accent-2);border:1px solid rgba(209,213,219,.3)}
 td.conped{color:var(--accent-2)}
 
 /* ---------- de dónde salen los quintales de la hoja de bolsa ---------- */
@@ -489,7 +489,7 @@ table.junta th:last-child,table.junta td:last-child{border-left:0}
 .diasf{gap:4px;margin:0;flex-wrap:nowrap}
 .diaf{min-height:32px;gap:4px;font-size:.8rem;color:var(--muted);
   border:1px solid var(--line);border-radius:7px;padding:2px 7px 2px 5px}
-.diaf:has(input:checked){border-color:rgba(74,222,155,.45);color:var(--accent)}
+.diaf:has(input:checked){border-color:rgba(229,231,235,.45);color:var(--accent)}
 .diaf input{margin:0}
 /* Encabezado de dos pisos de la hoja de bolsa. */
 #theadBolsa th.bloque{border-bottom:1px solid var(--line);font-size:.72rem;
@@ -504,3 +504,17 @@ table.junta th:last-child,table.junta td:last-child{border-left:0}
 /* Pedidos tomados de la app Pedidos: la pestaña es de sólo lectura. */
 #pPed.externo #pedCaptura{display:none}
 #pPed.externo #tbodyPed input,#pPed.externo #tbodyPed button{pointer-events:none;opacity:.5}
+
+/* ===================== Tema Rinze · Grafito & Plata =====================
+   Sólo apariencia: neutro en todo, color únicamente en estados y alertas. */
+html,body{font-family:var(--rz-font,Inter,system-ui,sans-serif)}
+table,td,th,.num,.inqq,input[type=number]{font-variant-numeric:tabular-nums}
+.ver{color:var(--muted)}
+.btn{border-radius:var(--rz-r-btn,8px)}
+.btn:not(.ghost):not(.sec):hover{filter:none;background:var(--rz-pri-hover,#fff)}
+.tabs button[aria-selected="true"]{color:var(--rz-act-tx,#fff);background:var(--rz-act,#262A32);border-bottom-color:var(--rz-act-ind,#E5E7EB);border-radius:8px 8px 0 0}
+.card{border-radius:var(--rz-r-card,12px);padding:var(--rz-pad-card,20px);box-shadow:var(--rz-sombra,none)}
+.chip{border-radius:var(--rz-r-badge,6px);border:1px solid transparent}
+.chip.ok{border-color:var(--rz-ok-borde)} .chip.falta{border-color:var(--rz-crit-borde)} .chip.exceso{border-color:var(--rz-warn-borde)}
+.chip.vida{border-color:rgba(156,163,175,.25);color:var(--ink)} .chip.nada{border-color:var(--line-2)}
+input:focus,select:focus,textarea:focus{border-color:var(--rz-foco,#9CA3AF)}
