@@ -125,7 +125,8 @@
 
   <!-- ============ PEDIDOS ESPECIALES ============ -->
   <section class="panel" id="pPed" role="tabpanel" aria-labelledby="tabPed" hidden>
-    <div class="card" style="margin-bottom:14px">
+    <div id="pedExtBanda"></div>
+    <div class="card" id="pedCaptura" style="margin-bottom:14px">
       <h3>Pedidos y preventa</h3>
       <p class="sub">
         Se captura como venga el pedido —en unidades, en bolsas o en parrillas— y el app hace la
@@ -415,6 +416,7 @@
 <script src="js/retratoprod.js"></script>
 <script src="js/secundarios.js"></script>
 <script src="js/sync.js"></script>
+<script src="js/pedidosext.js"></script>
 <script src="js/ui.js"></script>
 <script>
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

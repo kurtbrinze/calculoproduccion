@@ -915,7 +915,10 @@
   const areasUsadas = () => AREAS.filter((a) => clavesDeArea(a.id).length);
 
   const guardarParams = () => grabar('params', estado.params);
-  const guardarPedidos = () => grabar('pedidos', estado.pedidos);
+  /* Con los pedidos tomados de la app Pedidos (js/pedidosext.js) lo que hay
+     en memoria es de allá: no se escribe encima de los pedidos propios. */
+  const pedidosDeAfuera = () => (leer('pedExt', {}) || {}).activo === true;
+  const guardarPedidos = () => (pedidosDeAfuera() ? true : grabar('pedidos', estado.pedidos));
 
   /* Los parámetros que el usuario declaró como suyos. Mientras no guarde
      ninguno, "volver a los míos" devuelve los de fábrica. */
@@ -1329,6 +1332,7 @@
      equipo, aparte, fuera de la sincronización. */
   const DIAS_ARCHIVO = 8;
   function archivarPedidos(hoy) {
+    if (pedidosDeAfuera()) return 0;
     const corte = sumarDias(hoy || hoyISO(), -DIAS_ARCHIVO);
     const fuera = Object.values(estado.pedidos || {}).filter((p) => p && p.fecha
       && p.fecha < corte && (p.estado === 'entregado' || p.estado === 'cancelado'));
@@ -1478,7 +1482,8 @@
     estado, guardarParams, guardarProm, guardarDias, guardarPedidos, guardarBolsa, guardarSec,
     leer, grabar,
     nuevoPedido, pedidosLista, pedidosVivos, pedidosQueCuentan, estadoPedido,
-    clientes, ANTICIPACION, migrarPedidos, archivarPedidos, pedidosViejos,
+    clientes, ANTICIPACION, migrarPedidos, archivarPedidos, pedidosViejos, pedidosDeAfuera,
+    leerPedidosPropios: () => leer('pedidos', {}),
     PRESENTACIONES, presentaciones, presentacionDe, presentacionesPorUso, ORDEN_PREVENTA, DIAS_ARCHIVO,
     presentacionesActivas, equivalenciaDe, clavesSinEquivalencia, guardarPresentacion,
     misDefecto, fijarDefecto, borrarDefecto, hayDefecto, copiasParams, guardarCopiaParams, ESQUEMA,
