@@ -41,7 +41,7 @@
     { id: 'dias', nombre: 'El día', detalle: 'Producción, Inventario y el historial de días.' },
     { id: 'pedidos', nombre: 'Pedidos', detalle: 'Los pedidos y preventas.' },
     { id: 'bolsa', nombre: 'Impresión de bolsa', detalle: 'El OH, las claves que se cuentan a mano y las unidades de MU1 de cada día.' },
-    { id: 'sec', nombre: 'Cálculos', detalle: 'La hoja de conversiones de parrillas y perchas: especiales y dulces, S16, PL1, magdalenas, BELCA y CZ3 / CZ5.' },
+    { id: 'sec', nombre: 'Cálculos', detalle: 'La hoja de conversiones de parrillas y perchas: especiales y dulces, S16, PL1, magdalenas y CZ3 / CZ5.' },
     { id: 'prom', nombre: 'Promedios', detalle: 'La venta promedio por día de la semana.' },
     { id: 'params', nombre: 'Parámetros', detalle: 'Turnos, topes, productos, calendario y feriados.' },
   ];

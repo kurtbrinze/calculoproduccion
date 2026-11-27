@@ -976,3 +976,5 @@ equipo. La sincronización mantiene a los dos iguales, así que un borrado por e
 | `api/estado.js` | La sincronización, guardada en Vercel Blob |
 | `LECTOR.md` | Cómo conectar el lector de fotos |
 | `SINCRONIZAR.md` | Cómo encender la sincronización |
+
+- **V.2026.67** — Promedios desde los crudos semanales: la app Pedidos los calcula con los crudos de despacho y bodega (reglas de PROM_VD) y aquí se comparan y se aplican con un botón (Promedios). La tarjeta de BELCA se mudó a Pedidos (pestaña Preparación).

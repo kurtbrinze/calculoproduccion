@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.66';
+  const VERSION = 'V.2026.67';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -714,7 +714,50 @@
   }
 
   // ================= PROMEDIOS =================
+  /* Promedios que calcula Pedidos con los crudos semanales: se comparan con
+     los de aquí y se aplican con un botón. */
+  function pintarPromCrudos() {
+    const PC = window.PromCrudos, box = $('#promCrudos');
+    if (!PC || !box) return;
+    const { prom, madres, aplicado } = PC.guardado();
+    if (!prom) {
+      box.innerHTML = `<div class="card" style="margin-bottom:14px"><h3>Promedios de los crudos semanales</h3>
+        <p class="sub">${PC.estado.error === 'sin-clave' || !(window.PedidosExt && window.PedidosExt.clave())
+          ? 'Para recibirlos pon la clave de nube de Pedidos en Parámetros → «Pedidos en su propia app».'
+          : PC.estado.error ? 'No se pudo leer la nube de Pedidos: ' + esc(PC.estado.error)
+          : 'Todavía no hay. Se calculan en la app Pedidos (Ajustes → Crudos semanales) con los crudos de despacho y bodega.'}</p>
+        <div class="fila"><button class="btn sec" type="button" id="btnPromCrudosLeer">Buscar ahora</button></div></div>`;
+      return;
+    }
+    const { porClave, sin } = PC.calcular(prom, madres);
+    const claves = D.productos().filter((p) => porClave[p.clave]);
+    const nuevo = aplicado === prom._u;
+    const celda = (a, b) => { const d = b - a; return `<td class="num">${n0(b)}${a !== b ? `<span class="mini" style="color:${d > 0 ? 'var(--ok, #00d98a)' : 'var(--warn, #f5b301)'}">${d > 0 ? '+' : ''}${n0(d)}</span>` : ''}</td>`; };
+    const cambian = claves.filter((p) => (D.estado.prom[p.clave] || [0, 0, 0, 0, 0, 0, 0]).some((v, i) => Math.round(v || 0) !== porClave[p.clave].fila[i])).length;
+    box.innerHTML = `<div class="card" style="margin-bottom:14px"><h3>Promedios de los crudos semanales</h3>
+      <p class="sub">Despacho de ${esc(D.fechaCorta(prom.desde))} a ${esc(D.fechaCorta(prom.hasta))} (${esc((prom.archivos || []).join(', '))}), leído en Pedidos el
+        ${esc(new Date(prom.cargado).toLocaleString('es-GT'))}. Suma de las 4 semanas por día de «Verificado Fecha», con cambios y reposiciones,
+        ÷ días con despacho de ese día. Las presentaciones se juntan en su clave madre.</p>
+      <div class="fila"><button class="btn" type="button" id="btnPromCrudosAplicar" ${cambian ? '' : 'disabled'}>${nuevo && !cambian ? 'Aplicados' : `Aplicar a ${n0(cambian)} claves`}</button>
+        <button class="btn sec" type="button" id="btnPromCrudosLeer">Buscar ahora</button>
+        <span class="dim" style="font-size:12.5px">${sin.length ? `Sin clave en Producción: ${esc(sin.join(', '))}` : ''}</span></div>
+      <details style="margin-top:10px"><summary style="cursor:pointer">Comparar con los actuales (${n0(claves.length)} claves)</summary>
+      <div class="tablabox" style="margin-top:8px;max-height:420px"><table><thead><tr><th class="l">Clave</th><th class="l">Códigos</th>${D.DIAS.map((d) => `<th>${d.slice(0, 3)}</th>`).join('')}</tr></thead><tbody>
+        ${claves.map((p) => { const a = D.estado.prom[p.clave] || [0, 0, 0, 0, 0, 0, 0], b = porClave[p.clave]; return `<tr><td class="l clave">${esc(p.clave)}</td><td class="l dim" style="font-size:11.5px">${esc(b.cods.join(', '))}</td>${b.fila.map((v, i) => celda(Math.round(a[i] || 0), v)).join('')}</tr>`; }).join('')}
+      </tbody></table></div><p class="dim" style="font-size:12px;margin-top:6px">En chico, la diferencia contra el promedio actual.</p></details></div>`;
+  }
+  document.addEventListener('click', async (e) => {
+    if (e.target.id === 'btnPromCrudosLeer') { e.target.disabled = true; await window.PromCrudos.traer(); pintarPromCrudos(); }
+    if (e.target.id === 'btnPromCrudosAplicar') {
+      const { prom, madres } = window.PromCrudos.guardado();
+      const n = window.PromCrudos.aplicar(window.PromCrudos.calcular(prom, madres).porClave);
+      pintarPromedios(); aviso(`Promedios de ${n} claves actualizados con los crudos semanales.`);
+    }
+  });
+
   function pintarPromedios() {
+    pintarPromCrudos();
+    if (window.PromCrudos && !pintarPromedios.pedido) { pintarPromedios.pedido = true; window.PromCrudos.traer().then(pintarPromCrudos); }
     $('#theadProm').innerHTML = `<tr><th class="l">Clave</th>${D.DIAS.map((d) => `<th>${d.slice(0, 3)}</th>`).join('')}<th>Semana</th></tr>`;
     $('#tbodyProm').innerHTML = D.productos().map((p) => {
       const fila = D.estado.prom[p.clave] || [0, 0, 0, 0, 0, 0, 0];
@@ -1526,7 +1569,9 @@
     /* El orden de las tarjetas es el de la jornada, no el del código: el CZ3 /
        CZ5 ya salió arriba pegado al conteo, y el PL1 cierra. */
     const porId = Object.fromEntries(partes.map((h, i) => [S.TABLAS[i].id, h]));
-    $('#secCont').innerHTML = [porId.esp, porId.s16, belcaCard, porId.mg, porId.pl1]
+    /* BELCA se mudó a la app Pedidos (pestaña Preparación). */
+    void belcaCard;
+    $('#secCont').innerHTML = [porId.esp, porId.s16, porId.mg, porId.pl1]
       .filter(Boolean).join('');
     pintarCz5();
   }
