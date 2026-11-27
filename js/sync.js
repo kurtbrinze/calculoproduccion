@@ -50,6 +50,9 @@
     try { g = JSON.parse(cfg('syncPartes', '{}')) || {}; } catch (_) { g = {}; }
     const out = {};
     PARTES.forEach((p) => { out[p.id] = g[p.id] !== false; });
+    /* Con los pedidos en la app Pedidos, esta parte no viaja: allá tienen su
+       propia nube y lo de aquí es una copia de lectura. */
+    if (window.Datos && window.Datos.pedidosDeAfuera && window.Datos.pedidosDeAfuera()) out.pedidos = false;
     return out;
   }
   function fijarParte(id, valor) {

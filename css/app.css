@@ -500,3 +500,7 @@ table.junta th:last-child,table.junta td:last-child{border-left:0}
    en lo que queda. */
 .lector.resumen{padding:16px 0}
 .lector.resumen .lcaja{border:1px solid var(--line);border-radius:14px;overflow:hidden}
+
+/* Pedidos tomados de la app Pedidos: la pestaña es de sólo lectura. */
+#pPed.externo #pedCaptura{display:none}
+#pPed.externo #tbodyPed input,#pPed.externo #tbodyPed button{pointer-events:none;opacity:.5}

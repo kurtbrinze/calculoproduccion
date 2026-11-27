@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.65';
+  const VERSION = 'V.2026.66';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -869,6 +869,21 @@
   }
 
   function pintarPedidos() {
+    /* Con los pedidos en la app Pedidos, esta pestaña sólo muestra lo que se
+       tomó de allá: no se captura ni se edita aquí. */
+    const ext = window.PedidosExt && window.PedidosExt.activo();
+    $('#pPed').classList.toggle('externo', !!ext);
+    $('#pedExtBanda').innerHTML = ext ? `<div class="aviso"><h4>Los pedidos viven en la app Pedidos</h4>
+      <p>Aquí se ven los que se tomaron de allá (${esc(window.PedidosExt.estado.origen || 'copia guardada')}). Para capturar o cambiar un pedido, ábrelo en Pedidos.
+      <button class="btn mini" type="button" id="btnAbrirPedidos" style="margin-left:8px">Abrir Pedidos</button>
+      <button class="btn sec mini" type="button" id="btnLeerPedidos">Leer ahora</button></p></div>` : '';
+    if (ext) {
+      $('#btnAbrirPedidos').onclick = () => {
+        try { if (window.top !== window && window.top.location.pathname === '/') { window.top.location.hash = '#/pedidos'; return; } } catch (_) {}
+        window.open('https://centrocontrolpana.vercel.app/apps/pedidos/', '_blank', 'noopener');
+      };
+      $('#btnLeerPedidos').onclick = () => leerPedidosExt();
+    }
     const lista = D.pedidosLista();
     $('#pdClaves').innerHTML = opcionesPedido();
     $('#pdClientes').innerHTML = D.clientes().map((c) => `<option value="${esc(c)}">`).join('');
@@ -2186,6 +2201,25 @@
       </div>
 
       <div class="card" style="margin-bottom:14px">
+        <h3>Pedidos en su propia app</h3>
+        <p class="sub">
+          Los pedidos se mudaron a la app <b>Pedidos</b>. Encendido, Producción deja de capturarlos
+          y toma de allá los que suman al sugerido —los de este equipo y, con la clave de Pedidos,
+          los de la nube—. Se elige <b>por equipo</b>. Los pedidos que tenía Producción no se borran:
+          si lo apagas, vuelven tal como estaban. Antes de encenderlo, abre Pedidos desde el Centro de
+          Control y usa «Traer pedidos y catálogo».
+        </p>
+        <div class="fila">
+          <label class="sw"><input type="checkbox" id="chkPedExt"> Tomar los pedidos de la app Pedidos</label>
+          <div class="campo"><label for="inPedExtClave">Clave de Pedidos</label>
+            <input type="password" id="inPedExtClave" autocomplete="off" placeholder="la misma que en la app Pedidos" style="min-width:240px"></div>
+          <div class="campo"><label>&nbsp;</label>
+            <button class="btn ghost mini" type="button" id="btnPedExtYa">Leer ahora</button></div>
+        </div>
+        <p class="dim" style="font-size:.84rem;margin:11px 2px 0" id="estadoPedExt"></p>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
         <h3>Sincronizar entre equipos</h3>
         <p class="sub">
           Para que la laptop y la tablet trabajen sobre los mismos datos. Se mezcla por partes:
@@ -2251,6 +2285,9 @@
     $('#selFam').value = ui.famMatriz || '';
     $('#chkSync').checked = window.Sync.cfg('syncOn') === '1';
     $('#inSyncClave').value = window.Sync.clave();
+    $('#chkPedExt').checked = window.PedidosExt.activo();
+    $('#inPedExtClave').value = window.PedidosExt.clave();
+    pintarPedExt();
     pintarSync();
     pintarCarpeta();
     const g = D.misDefecto();
@@ -4149,6 +4186,15 @@
 
     function cambioEnSync(e) {
       const S = window.Sync, id0 = e.target.id;
+      if (id0 === 'chkPedExt' || id0 === 'inPedExtClave') {
+        const X = window.PedidosExt;
+        if (id0 === 'chkPedExt') X.fijar({ activo: e.target.checked });
+        else X.fijar({ clave: e.target.value.trim() });
+        if (X.activo()) leerPedidosExt();
+        else { D.estado.pedidos = D.leerPedidosPropios(); refrescarTodo(); }
+        pintarPedExt(); pintarSync();
+        return;
+      }
       if (id0 === 'chkSync') {
         S.setCfg('syncOn', e.target.checked ? '1' : '0');
         pintarSync();
@@ -4440,6 +4486,31 @@
     document.body.appendChild(b);
   }
   let ultimoCentro = 0;
+  /* Pedidos desde la app Pedidos (js/pedidosext.js): se leen al abrir, al
+     volver a la app y cuando Pedidos cambia algo en este mismo equipo. */
+  async function leerPedidosExt() {
+    if (!window.PedidosExt.activo()) return;
+    await window.PedidosExt.refrescar();
+    refrescarTodo();
+    pintarPedExt();
+  }
+  function pintarPedExt() {
+    const el = $('#estadoPedExt'); if (!el) return;
+    const X = window.PedidosExt, s = X.estado;
+    el.innerHTML = !X.activo() ? 'Apagado: los pedidos se capturan aquí, en la pestaña Pedidos.'
+      : (s.error ? `<span style="color:var(--danger,#e66)">${esc(s.error)}</span> · ` : '')
+        + `${n0(Object.keys(D.estado.pedidos || {}).length)} pedidos tomados de ${esc(s.origen || '—')}`
+        + (s.ultima ? ` · última lectura ${new Date(s.ultima).toLocaleTimeString('es-GT', { hour: 'numeric', minute: '2-digit' })}` : '');
+  }
+  function vigilarPedidosExt() {
+    let ultimo = 0;
+    const leer = () => { if (Date.now() - ultimo < 15000) return; ultimo = Date.now(); leerPedidosExt(); };
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') leer(); });
+    window.addEventListener('message', (ev) => { if (ev.data && ev.data.tipo === 'cc:mostrar') leer(); });
+    window.addEventListener('storage', (ev) => { if (ev.key === 'pedpana.col') { ultimo = 0; leer(); } });
+    leerPedidosExt();
+  }
+
   function escucharCentro() {
     window.addEventListener('message', (ev) => {
       if (!ev.data || ev.data.tipo !== 'cc:mostrar') return;
@@ -4472,7 +4543,7 @@
   // ---------- arranque ----------
   function iniciar() {
     $('#badgeVer').textContent = VERSION;
-    enlazar(); instalacion(); autodetectarLector(); arrancarSync(); vigilarFoco(); escucharCentro();
+    enlazar(); instalacion(); autodetectarLector(); arrancarSync(); vigilarFoco(); escucharCentro(); vigilarPedidosExt();
     let t = 'prod';
     try { t = localStorage.getItem('panprod_tab') || 'prod'; } catch (_) {}
     window.irA(['prod', 'inv', 'ped', 'hist', 'prom', 'param'].includes(t) ? t : 'prod');
