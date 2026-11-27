@@ -56,19 +56,23 @@
     return null;
   }
   /* Promedio por clave en el orden de Producción (lunes a domingo). */
+  /* Cada código se promedia con sus propios días (como AJ de PROM_VD: los días
+     de ese día de la semana en que salió ese código) y los códigos de una
+     misma clave madre se suman. */
   function calcular(prom, madres) {
     const suma = {}, sin = [];
     Object.entries(prom.porCodigo || {}).forEach(([cod, s]) => {
       const cl = claveDe(cod, madres);
       if (!cl) { sin.push(cod); return; }
-      const v = suma[cl] || (suma[cl] = { s: [0, 0, 0, 0, 0, 0, 0], cods: [] });
-      s.forEach((x, w) => { v.s[w] += Number(x) || 0; });
+      const dias = (prom.diasCod || {})[cod] || prom.dias;
+      const v = suma[cl] || (suma[cl] = { p: [0, 0, 0, 0, 0, 0, 0], cods: [] });
+      s.forEach((x, w) => { if (dias[w]) v.p[w] += (Number(x) || 0) / dias[w]; });
       v.cods.push(cod);
     });
     const out = {};
     Object.entries(suma).forEach(([cl, v]) => {
       // índice de Producción i (0 = lunes) → día de JS w = (i + 1) % 7
-      out[cl] = { fila: D.DIAS.map((_, i) => { const w = (i + 1) % 7; return prom.dias[w] ? Math.round(v.s[w] / prom.dias[w]) : 0; }), cods: v.cods };
+      out[cl] = { fila: D.DIAS.map((_, i) => Math.round(v.p[(i + 1) % 7])), cods: v.cods };
     });
     return { porClave: out, sin };
   }
