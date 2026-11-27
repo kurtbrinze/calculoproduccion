@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Producción">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🥖</text></svg>">
-<script>(function(){var h=document.documentElement,t='oscuro';try{if(window.top!==window.self)h.classList.add('rz-en-centro')}catch(_){h.classList.add('rz-en-centro')}try{t=localStorage.getItem('rz.tema')||t}catch(_){}try{if(window.top!==window.self)t=window.top.localStorage.getItem('rz.tema')||t}catch(_){}h.setAttribute('data-tema',t)})();</script>
+<script>(function(){var h=document.documentElement,t='oscuro';try{if(top!==self)h.classList.add('rz-en-centro')}catch(_){h.classList.add('rz-en-centro')}try{t=localStorage.getItem('rz.tema')||t}catch(_){}try{if(top!==self)t=top.localStorage.getItem('rz.tema')||t}catch(_){}function ap(x){h.setAttribute('data-tema',x);var m=document.querySelectorAll('style[data-rz-tema]');for(var i=0;i<m.length;i++)m[i].media=m[i].getAttribute('data-rz-tema')===x?'screen':'not all';var f=document.querySelectorAll('iframe');for(var j=0;j<f.length;j++){try{f[j].contentWindow.postMessage({tipo:'cc:tema',tema:x},'*')}catch(_){}}}window.rzTema=ap;ap(t);document.addEventListener('DOMContentLoaded',function(){ap(h.getAttribute('data-tema'))});addEventListener('message',function(e){if(e.data&&e.data.tipo==='cc:tema'&&(e.data.tema==='claro'||e.data.tema==='oscuro')){try{localStorage.setItem('rz.tema',e.data.tema)}catch(_){}ap(e.data.tema)}})})();</script>
 <link rel="stylesheet" href="https://centrocontrolpana.vercel.app/tema/rinze-tema.css">
 <link rel="stylesheet" href="css/app.css">
 </head>
