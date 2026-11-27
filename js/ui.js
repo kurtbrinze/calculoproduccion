@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   const D = window.Datos, C = window.Calculo, X = window.Excel;
-  const VERSION = 'V.2026.67';
+  const VERSION = 'V.2026.68';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => [...document.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -737,7 +737,7 @@
     box.innerHTML = `<div class="card" style="margin-bottom:14px"><h3>Promedios de los crudos semanales</h3>
       <p class="sub">Despacho de ${esc(D.fechaCorta(prom.desde))} a ${esc(D.fechaCorta(prom.hasta))} (${esc((prom.archivos || []).join(', '))}), leído en Pedidos el
         ${esc(new Date(prom.cargado).toLocaleString('es-GT'))}. Suma de las 4 semanas por día de «Verificado Fecha», con cambios y reposiciones,
-        ÷ días con despacho de ese día. Las presentaciones se juntan en su clave madre.</p>
+        ÷ días de ese día de la semana en que salió cada código (como AJ de PROM_VD). Las presentaciones se juntan en su clave madre.</p>
       <div class="fila"><button class="btn" type="button" id="btnPromCrudosAplicar" ${cambian ? '' : 'disabled'}>${nuevo && !cambian ? 'Aplicados' : `Aplicar a ${n0(cambian)} claves`}</button>
         <button class="btn sec" type="button" id="btnPromCrudosLeer">Buscar ahora</button>
         <span class="dim" style="font-size:12.5px">${sin.length ? `Sin clave en Producción: ${esc(sin.join(', '))}` : ''}</span></div>
