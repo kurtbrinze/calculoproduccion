@@ -224,7 +224,9 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
    * impresa; quien llama decide en qué día los escribe.
    */
   function abrir(alAplicar) {
-    const st = { dataUrl: null, b64: null, mime: null, fecha: null,
+    /* La fecha del conteo es la del campo «Fecha de la hoja»; arranca con la de hoy. */
+    const hoyLocal = () => { const d = new Date(), p = (n) => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+    const st = { dataUrl: null, b64: null, mime: null, fecha: hoyLocal(),
       vals: { pan_blanco: {}, pastel: {} }, crudos: {}, dudosas: new Set(), leido: false, blob: null };
 
     const m = document.createElement('div');
@@ -354,7 +356,8 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
         /* Cuando la respuesta viene mal formada se reintenta una vez: casi
            siempre sale a la segunda y evita tener que repetir la foto. */
         const data = await enviar(st, modo, null, decir);
-        st.fecha = (data.fecha && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) ? data.fecha : null;
+        /* La fecha que trae la foto sólo se informa: manda la del campo. */
+        const leida = (data.fecha && /^\d{4}-\d{2}-\d{2}$/.test(data.fecha)) ? data.fecha : null;
         st.dudosas = new Set((data.dudosas || []).map(String));
         HOJAS.forEach((h) => {
           const src = data[h.key] || {};
@@ -364,7 +367,8 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
         });
         st.leido = true; st.blob = null;
         pintar();
-        decir(st.fecha ? `Listo. Fecha leída: ${ddmmaaaa(st.fecha)}.` : 'Listo, pero no se leyó la fecha. Escríbela arriba.');
+        decir(`Listo. Fecha del conteo: ${st.fecha ? ddmmaaaa(st.fecha) : 'falta'} (la del campo «Fecha de la hoja»)`
+          + (leida && leida !== st.fecha ? `. Ojo: en la foto se lee ${ddmmaaaa(leida)}.` : '.'), !!(leida && leida !== st.fecha));
         if (!st.fecha) q('#lFecha').focus();
       } catch (err) {
         decir('No se pudo leer: ' + err.message, true);
@@ -374,8 +378,19 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
 
     const blobDe = async () => (st.blob || (st.blob = await construirXlsx(st)));
 
+    /* Antes de grabar: si la fecha de la hoja no es la de hoy, se avisa y se
+       puede cancelar para corregirla. */
+    function fechaOk() {
+      if (!st.fecha) { decir('Falta la fecha de la hoja.', true); q('#lFecha').focus(); return false; }
+      const hoy = hoyLocal();
+      if (st.fecha !== hoy && !confirm(`La fecha de la hoja es ${ddmmaaaa(st.fecha)} y hoy es ${ddmmaaaa(hoy)}.\n\n¿Grabar el conteo con fecha ${ddmmaaaa(st.fecha)}?\n\nCancelar para corregir la fecha.`)) {
+        decir('Corrige la «Fecha de la hoja» y vuelve a grabar.', true); q('#lFecha').focus(); return false;
+      }
+      return true;
+    }
+
     async function guardar() {
-      if (!st.fecha) { decir('Falta la fecha de la hoja.', true); q('#lFecha').focus(); return; }
+      if (!fechaOk()) return;
       const nombre = nombreArchivo(st);
       try {
         const r = await window.Archivo.guardar(await blobDe(), nombre, {
@@ -409,7 +424,7 @@ Incluye TODAS las claves de ambas listas, en el mismo orden, aunque su valor sea
     q('#lLeer').onclick = leer;
     q('#lGuardar').onclick = guardar;
     q('#lAplicar').onclick = async () => {
-      if (!st.fecha) { decir('Falta la fecha de la hoja.', true); q('#lFecha').focus(); return; }
+      if (!fechaOk()) return;
       let blob = null;
       try { blob = await blobDe(); } catch (_) { /* el Excel es opcional al pasar */ }
       const res = { fecha: st.fecha, crudo: crudoPlano(), dudosas: [...st.dudosas], blob, nombre: nombreArchivo(st) };
